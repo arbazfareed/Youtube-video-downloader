@@ -52,3 +52,13 @@ see [`desktop_downloader/SETUP.md`](./desktop_downloader/SETUP.md).
 
 - [Features, download options, and limitations](./desktop_downloader/README.md)
 - [New-computer setup, GitHub download/update, and troubleshooting](./desktop_downloader/SETUP.md)
+
+## Smart Downloader 10.0
+
+Version 10.0 is developed in the separate
+[`desktop_downloader_v10`](./desktop_downloader_v10/README.md) folder. It keeps
+the earlier `desktop_downloader` app and its setup files unchanged, and adds
+magnet URI and `.torrent` downloads through the external aria2 engine.
+
+- [Version 10.0 features and torrent support](./desktop_downloader_v10/README.md)
+- [Version 10.0 setup and aria2 installation](./desktop_downloader_v10/SETUP.md)
