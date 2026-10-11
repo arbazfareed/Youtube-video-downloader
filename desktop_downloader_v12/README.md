@@ -93,11 +93,23 @@ From this folder, run a download without opening the desktop window:
 ```
 
 The CLI supports `--source`, `--mode`, `--quality`, `--speed`, `--cap`,
-`--checksum`, `--playlist-scope`, `--proxy`, and `--cookies`. It also accepts
-`--source torrent/magnet` for BitTorrent links (aria2 must be installed). A
-checksum may be specified as `sha256:<hex>` or `md5:<hex>`. It returns exit
-code 0 on success, 1 on failure or checksum mismatch, and 130 when cancelled
-with Ctrl+C.
+`--checksum`, `--playlist-scope`, `--proxy`, `--cookies`, and repeatable
+`--header "Name: value"` options. `--retry-attempts`,
+`--retry-base-delay`, and `--retry-max-delay` configure retry attempts and
+exponential backoff. It also accepts `--source torrent/magnet` for BitTorrent
+links (aria2 must be installed). Custom HTTP headers and browser cookies are
+not supported for torrents. A checksum may be specified as `sha256:<hex>` or
+`md5:<hex>`. It returns exit code 0 on success, 1 on failure or checksum
+mismatch, and 130 when cancelled with Ctrl+C.
+
+For example, supply a site-specific header and retry settings without putting
+credentials directly in a shared script:
+
+```powershell
+.\.venv\Scripts\python.exe .\cli.py "https://example.com/file.zip" `
+  --header "Referer: https://example.com/" `
+  --retry-attempts 5 --retry-base-delay 2 --retry-max-delay 20
+```
 
 ## Optional tools
 
@@ -116,7 +128,9 @@ with Ctrl+C.
   printed in the server log. Set `SMART_DOWNLOADER_API_TOKEN` before starting
   to use your own token. Do not expose the API to a network without a strong
   token and network encryption. Endpoints include `POST /jobs`, `GET /jobs`,
-  `GET /jobs/{id}`, and `POST /jobs/{id}/cancel|pause|resume`.
+  `GET /jobs/{id}`, and `POST /jobs/{id}/cancel|pause|resume`. `POST /jobs`
+  accepts a `headers` object and `retry_attempts`, `retry_base_delay`, and
+  `retry_max_delay` settings.
 - **Browser extension:** Load unpacked from `browser_extension` in Chrome, or
   load `manifest.firefox.json` as a temporary Firefox add-on. Start `launch_api.py`
   and configure the printed API token in the extension popup. Right-click a
@@ -262,7 +276,10 @@ would need a separate application and platform-specific packaging.
   `https://site.example/img_{:03d}.jpg`. Gallery scanning only finds common
   HTML image attributes; it does not bypass sign-in, scripts, or site protections.
 - **Image tools:** Right-click a completed image to convert it to PNG, JPEG,
-  WebP, or AVIF, or resize it to maximum width and height. JPEG conversion
+  WebP, or AVIF, or resize it to maximum width and height. Use the **Image
+  tools** sidebar button to choose an image from your computer even when it
+  was not downloaded by Smart Downloader. The **Image gallery** sidebar button
+  selects gallery-scan mode. JPEG conversion
   composites transparent pixels on white. AVIF depends on the Pillow build.
 - **EXIF privacy:** Right-click a completed image and choose **Strip EXIF** to
   save a metadata-free copy beside it. The original is kept unchanged; animated
@@ -272,6 +289,15 @@ would need a separate application and platform-specific packaging.
 - **Proxy and cookies:** In **More settings** > **Connection**, set a
   per-download proxy or opt in to cookies from
   Chrome, Firefox, Edge, or Brave. These options are not available for torrents.
+- **Custom HTTP headers:** In **More settings** > **Connection**, add one
+  `Name: value` header per line. The same headers are used for direct-file
+  requests, supported-site downloads, and image-gallery scans. Header values
+  are kept in memory and are not written into download history. Requests may
+  follow redirects; only use credentials with destinations you trust.
+- **Retry policy:** In **More settings** > **Connection**, set 1-20 attempts,
+  an initial delay from 0-60 seconds, and a maximum backoff delay up to 300
+  seconds. Delays grow exponentially and stop at the configured maximum.
+  Values are remembered locally and restored when retrying a saved job.
 - **Archive extraction:** Enable **Auto-extract archives** in **More settings**
   > **Schedule & files** to unpack supported
   archives after download. Extraction uses a separate folder, refuses to
@@ -281,7 +307,8 @@ would need a separate application and platform-specific packaging.
 - **Plugins:** The `plugins` folder loads non-underscore Python modules that
   expose `register()` with a name and event-handler dictionary. Hooks include
   `on_start(job_id, url)`, `on_progress(job_id, percent)`,
-  `on_complete(job_id, filepath)`, `on_error(job_id, error)`, and
+  `on_complete(job_id, filepath)` (the post-download hook),
+  `on_error(job_id, error)`, and
   `on_cancel(job_id)`. An `on_complete` handler may return a replacement file
   path. The bundled example lowercases completed filenames; rename its file to
   `_example_plugin.py` to disable it. Portable releases also load custom `.py`

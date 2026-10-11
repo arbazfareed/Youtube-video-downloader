@@ -3,12 +3,15 @@ from __future__ import annotations
 import email.message
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
 import threading
 import time
+from collections.abc import Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Callable
 from urllib.parse import unquote, urljoin, urlsplit
@@ -84,6 +87,75 @@ QUALITY_HEIGHTS = {
 
 class DownloadCancelled(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class RetryPolicy:
+    attempts: int = 10
+    base_delay: float = 1.0
+    max_delay: float = 30.0
+
+    def __post_init__(self) -> None:
+        if isinstance(self.attempts, bool) or not isinstance(self.attempts, int):
+            raise ValueError("Retry attempts must be a whole number from 1 to 20.")
+        if not 1 <= self.attempts <= 20:
+            raise ValueError("Retry attempts must be between 1 and 20.")
+        if (
+            not math.isfinite(self.base_delay)
+            or not 0 <= self.base_delay <= 60
+        ):
+            raise ValueError("Retry base delay must be between 0 and 60 seconds.")
+        if (
+            not math.isfinite(self.max_delay)
+            or not self.base_delay <= self.max_delay <= 300
+        ):
+            raise ValueError(
+                "Retry maximum delay must be at least the base delay and no more than 300 seconds."
+            )
+
+    def delay(self, retry_number: int) -> float:
+        return min(self.base_delay * (2 ** max(0, retry_number - 1)), self.max_delay)
+
+
+def parse_custom_headers(
+    headers: Mapping[str, str] | Iterable[str] | None,
+) -> dict[str, str]:
+    if headers is None:
+        return {}
+    if isinstance(headers, Mapping):
+        entries = headers.items()
+    else:
+        entries = []
+        for entry in headers:
+            if not isinstance(entry, str) or ":" not in entry:
+                raise ValueError("Enter each custom header as 'Name: value'.")
+            entries.append(entry.split(":", 1))
+    parsed: dict[str, str] = {}
+    seen: set[str] = set()
+    total_size = 0
+    token = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
+    reserved = {"connection", "content-length", "cookie", "host", "range", "transfer-encoding"}
+    for name, value in entries:
+        if not isinstance(name, str) or not isinstance(value, str):
+            raise ValueError("HTTP header names and values must be text.")
+        name, value = name.strip(), value.strip()
+        if not token.fullmatch(name):
+            raise ValueError(f"Invalid HTTP header name: {name!r}.")
+        if name.casefold() in reserved:
+            raise ValueError(f"The {name} header is managed by Smart Downloader.")
+        if not value or any(ord(character) < 32 and character != "\t" for character in value) or "\x7f" in value:
+            raise ValueError(f"Invalid value for the {name} header.")
+        normalized = name.casefold()
+        if normalized in seen:
+            raise ValueError(f"HTTP header {name} is specified more than once.")
+        if len(name) + len(value) > 8192:
+            raise ValueError(f"HTTP header {name} exceeds the supported size.")
+        total_size += len(name) + len(value)
+        seen.add(normalized)
+        parsed[name] = value
+    if len(parsed) > 100 or total_size > 65536:
+        raise ValueError("Custom HTTP headers exceed the supported count or total size.")
+    return parsed
 
 
 def _clean_terminal_text(value: object) -> str:
@@ -738,12 +810,16 @@ def _download_direct(
     bandwidth_limiter: GlobalBandwidthLimiter | None = None,
     proxy: str = "",
     browser_cookies: str = "none",
+    custom_headers: Mapping[str, str] | None = None,
+    retry_policy: RetryPolicy = RetryPolicy(),
 ) -> str:
     directory.mkdir(parents=True, exist_ok=True)
     cookie_jar = load_cookies(browser_cookies)
     session = requests.Session()
     if cookie_jar:
         session.cookies.update(cookie_jar)
+    if custom_headers:
+        session.headers.update(custom_headers)
     proxy_rotator = ProxyRotator(proxy)
     target: Path | None = None
     last_error: Exception | None = None
@@ -850,7 +926,7 @@ def _download_direct(
                 cookie_jar,
             )
 
-        for attempt in range(10):
+        for attempt in range(retry_policy.attempts):
             _wait_until_resumed(cancel_event, resume_event)
             headers = {}
             partial = target.with_name(target.name + ".part") if target else None
@@ -937,11 +1013,11 @@ def _download_direct(
                 last_error = error
                 if error.response is not None and 400 <= error.response.status_code < 500:
                     raise RuntimeError(f"Direct download was rejected: {error}") from error
-                if attempt == 9:
+                if attempt + 1 >= retry_policy.attempts:
                     break
-                delay = min(2 ** attempt, 30)
+                delay = retry_policy.delay(attempt + 1)
                 progress(
-                    f"Connection lost - retry {attempt + 1}/10 in {delay}s",
+                    f"Connection lost - retry {attempt + 1}/{retry_policy.attempts} in {delay:g}s",
                     None,
                     _progress_details(
                         str(target) if target else suggested_name,
@@ -953,7 +1029,9 @@ def _download_direct(
                     raise DownloadCancelled("Download cancelled.") from error
 
         if last_error:
-            raise RuntimeError(f"Direct download failed after 10 attempts: {last_error}") from last_error
+            raise RuntimeError(
+                f"Direct download failed after {retry_policy.attempts} attempts: {last_error}"
+            ) from last_error
         raise RuntimeError("Direct download failed.")
     finally:
         try:
@@ -976,6 +1054,8 @@ def _download_with_ytdlp(
     bandwidth_limiter: GlobalBandwidthLimiter | None = None,
     proxy: str | None = None,
     browser_cookies: str = "none",
+    custom_headers: Mapping[str, str] | None = None,
+    retry_policy: RetryPolicy = RetryPolicy(),
 ) -> str:
     ffmpeg_directory = _ffmpeg_directory()
     if mode == "mp3 audio" and ffmpeg_directory is None:
@@ -1046,16 +1126,18 @@ def _download_with_ytdlp(
         "noplaylist": playlist_scope == "single video",
         "continuedl": True,
         "overwrites": False,
-        "retries": 20,
-        "fragment_retries": 20,
-        "extractor_retries": 5,
-        "file_access_retries": 5,
+        "retries": retry_policy.attempts,
+        "fragment_retries": retry_policy.attempts,
+        "extractor_retries": retry_policy.attempts,
+        "file_access_retries": retry_policy.attempts,
         "socket_timeout": 60,
         "concurrent_fragment_downloads": _fragment_workers(speed_mode),
         "progress_hooks": [progress_hook],
         "quiet": True,
         "no_warnings": False,
     }
+    if custom_headers:
+        options["http_headers"] = dict(custom_headers)
     if proxy:
         options["proxy"] = proxy
     if browser_cookies.lower() not in {"", "none", "off"}:
@@ -1125,7 +1207,12 @@ def download_url(
     job_id: str = "",
     proxy: str = "",
     browser_cookies: str = "none",
+    custom_headers: Mapping[str, str] | Iterable[str] | None = None,
+    retry_policy: RetryPolicy = RetryPolicy(),
 ) -> str:
+    custom_headers = parse_custom_headers(custom_headers)
+    if not isinstance(retry_policy, RetryPolicy):
+        raise ValueError("Retry policy must be a RetryPolicy instance.")
     parsed = urlsplit(url)
     selected_source = source.lower()
     torrent_selected = selected_source in {"torrent/magnet", "torrent"}
@@ -1138,8 +1225,10 @@ def download_url(
     if torrent_selected or (selected_source == "auto" and torrent_link):
         if not torrent_link:
             raise ValueError("Enter a magnet URI or a direct HTTP(S) .torrent link.")
-        if proxy or browser_cookies.lower() not in {"", "none", "off"}:
-            raise ValueError("Proxies and browser cookies are not supported for torrent links.")
+        if proxy or browser_cookies.lower() not in {"", "none", "off"} or custom_headers:
+            raise ValueError(
+                "Proxies, browser cookies, and custom headers are not supported for torrent links."
+            )
     elif parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
         raise ValueError("Enter a valid HTTP or HTTPS URL.")
 
@@ -1175,6 +1264,8 @@ def download_url(
                     result = _download_direct(
                         url, directory, cancel_event, report, resume_event, max_speed,
                         speed_mode, bandwidth_limiter, proxy, browser_cookies,
+                        custom_headers=custom_headers,
+                        retry_policy=retry_policy,
                     )
                 else:
                     result = ""
@@ -1194,6 +1285,8 @@ def download_url(
                                 bandwidth_limiter,
                                 proxy_rotator.next_url(),
                                 browser_cookies,
+                                custom_headers=custom_headers,
+                                retry_policy=retry_policy,
                             )
                             break
                         except DownloadCancelled:
@@ -1210,7 +1303,12 @@ def download_url(
                 if not _is_transient_network_error(error):
                     raise RuntimeError(_clean_terminal_text(error)) from error
                 network_attempt += 1
-                delay = min(5 * (2 ** min(network_attempt - 1, 4)), 60)
+                if network_attempt >= retry_policy.attempts:
+                    raise RuntimeError(
+                        f"Download failed after {retry_policy.attempts} network attempts: "
+                        f"{_clean_terminal_text(error)}"
+                    ) from error
+                delay = retry_policy.delay(network_attempt)
                 detail = _clean_terminal_text(error)
                 report(
                     "Waiting for connection",

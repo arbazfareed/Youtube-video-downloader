@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
@@ -10,11 +11,18 @@ from bs4 import BeautifulSoup
 IMAGE_EXTENSIONS = {".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
 
 
-def scrape_image_urls(page_url: str, timeout: float = 20) -> list[str]:
+def scrape_image_urls(
+    page_url: str,
+    timeout: float = 20,
+    headers: Mapping[str, str] | None = None,
+) -> list[str]:
     """Collect unique image links from common public HTML image attributes."""
+    request_headers = {"User-Agent": "SmartDownloader/1.0"}
+    if headers:
+        request_headers.update(headers)
     response = requests.get(
         page_url,
-        headers={"User-Agent": "SmartDownloader/1.0"},
+        headers=request_headers,
         timeout=timeout,
     )
     response.raise_for_status()

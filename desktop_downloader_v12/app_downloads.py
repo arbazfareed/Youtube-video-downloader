@@ -23,6 +23,8 @@ from app_support import (
     download_url,
     generate_sequence_urls,
     parse_proxy_list,
+    parse_custom_headers,
+    RetryPolicy,
     is_torrent_url,
     MAX_SPEEDS,
 )
@@ -178,6 +180,18 @@ class DownloadsMixin:
             quality = self._quality_key()
             checksum_algorithm, expected_checksum = self._checksum_options()
             parse_proxy_list(proxy_value)
+            custom_headers = parse_custom_headers(
+                self.custom_headers_text.get("1.0", "end-1c").splitlines()
+                if hasattr(self, "custom_headers_text")
+                else ()
+            )
+            retry_policy = RetryPolicy(
+                int(self.retry_attempts.get()) if hasattr(self, "retry_attempts") else 10,
+                float(self.retry_base_delay.get()) if hasattr(self, "retry_base_delay") else 1.0,
+                float(self.retry_max_delay.get()) if hasattr(self, "retry_max_delay") else 30.0,
+            )
+            if (torrent_selected or torrent_url) and custom_headers:
+                raise ValueError("Custom HTTP headers are not supported for torrent downloads.")
         except ValueError as error:
             messagebox.showerror("Invalid download option", str(error))
             return
@@ -228,12 +242,17 @@ class DownloadsMixin:
             "expected_checksum": expected_checksum,
             "proxy": proxy_value,
             "browser_cookies": browser_cookies,
+            "custom_headers": custom_headers,
+            "retry_policy": retry_policy,
             "auto_extract": getattr(self, "auto_extract", None).get()
             if getattr(self, "auto_extract", None)
             else False,
             "cloud_provider": cloud_provider,
             "cloud_folder": cloud_folder,
         }
+        self.history.set_setting("retry_attempts", str(retry_policy.attempts))
+        self.history.set_setting("retry_base_delay", str(retry_policy.base_delay))
+        self.history.set_setting("retry_max_delay", str(retry_policy.max_delay))
         details = (
             datetime.fromtimestamp(start_at).astimezone().strftime("Starts %Y-%m-%d %H:%M")
             if start_at is not None
@@ -290,6 +309,8 @@ class DownloadsMixin:
             job_id,
             options["proxy"],
             options["browser_cookies"],
+            custom_headers=options.get("custom_headers", {}),
+            retry_policy=options.get("retry_policy", RetryPolicy()),
         )
         future.add_done_callback(lambda result: self._job_finished(job_id, result))
 

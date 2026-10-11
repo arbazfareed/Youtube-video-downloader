@@ -116,9 +116,9 @@ class UiStartupWiringTests(unittest.TestCase):
             "create_zip_from_file",
             "create_zip_from_folder",
             "open_selected_image_tools",
+            "_select_image_gallery_mode",
             "open_batch_dialog",
             "open_sequence_dialog",
-            "_select_image_gallery_mode",
             "convert_local_file_to_mp3",
             "convert_docx_file_to_pdf",
             "convert_pdf_file_to_docx",
@@ -161,6 +161,46 @@ class UiStartupWiringTests(unittest.TestCase):
         result = app._scroll_sidebar(SimpleNamespace(delta=120, x_root=5, y_root=5))
         self.assertIsNone(result)
         self.assertEqual(app.sidebar_canvas.scrolls, [1])
+
+    def test_image_tools_allow_choosing_a_local_image_without_a_queue_selection(self):
+        source = Path("local-photo.jpg")
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.root = Mock()
+        app.root.winfo_rootx.return_value = 0
+        app.root.winfo_rooty.return_value = 0
+        app._selected_output_path = Mock(return_value=None)
+        app._style_context_menu = Mock()
+        app._add_image_tools = Mock()
+        menu = Mock()
+
+        with (
+            patch("app.filedialog.askopenfilename", return_value=str(source)) as picker,
+            patch("app.tk.Menu", return_value=menu),
+        ):
+            app.open_selected_image_tools()
+
+        picker.assert_called_once()
+        self.assertEqual(picker.call_args.kwargs["title"], "Choose an image to edit")
+        app._add_image_tools.assert_called_once_with(menu, source)
+        menu.tk_popup.assert_called_once()
+
+    def test_image_tools_reject_unsupported_local_file_selection(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.root = Mock()
+        app._selected_output_path = Mock(return_value=None)
+
+        with (
+            patch(
+                "app.filedialog.askopenfilename",
+                return_value="local-document.pdf",
+            ),
+            patch("app.messagebox.showerror") as show_error,
+            patch("app.tk.Menu") as make_menu,
+        ):
+            app.open_selected_image_tools()
+
+        show_error.assert_called_once()
+        make_menu.assert_not_called()
 
 
 if __name__ == "__main__":

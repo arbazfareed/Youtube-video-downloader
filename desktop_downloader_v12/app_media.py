@@ -25,6 +25,7 @@ from app_support import (
     PLAYABLE_MEDIA_EXTENSIONS,
     _convert_media_to_mp3,
     create_zip_archive,
+    parse_custom_headers,
 )
 
 class MediaMixin:
@@ -175,8 +176,17 @@ class MediaMixin:
         if self.expected_checksum.get().strip():
             messagebox.showerror("Checksum unavailable", "A single checksum cannot verify an image gallery.")
             return
+        try:
+            headers = parse_custom_headers(
+                self.custom_headers_text.get("1.0", "end-1c").splitlines()
+                if hasattr(self, "custom_headers_text")
+                else ()
+            )
+        except ValueError as error:
+            messagebox.showerror("Invalid HTTP headers", str(error), parent=self.root)
+            return
         self.progress_summary.set("Scanning the page for image links…")
-        future = self.executor.submit(scrape_image_urls, page_url)
+        future = self.executor.submit(scrape_image_urls, page_url, headers=headers)
 
         def check_result() -> None:
             if not future.done():
@@ -289,12 +299,26 @@ class MediaMixin:
             or path.suffix.lower()
             not in {".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
         ):
-            messagebox.showinfo(
-                "Select a downloaded image",
-                "Select a completed image in the queue before choosing image tools.",
+            image_name = filedialog.askopenfilename(
                 parent=self.root,
+                title="Choose an image to edit",
+                filetypes=(
+                    ("Images", "*.avif *.gif *.jpeg *.jpg *.png *.webp"),
+                    ("All files", "*.*"),
+                ),
             )
-            return
+            if not image_name:
+                return
+            path = Path(image_name)
+            if path.suffix.lower() not in {
+                ".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp",
+            }:
+                messagebox.showerror(
+                    "Unsupported image",
+                    "Choose an AVIF, GIF, JPEG, PNG, or WebP image.",
+                    parent=self.root,
+                )
+                return
         menu = tk.Menu(self.root, tearoff=False)
         self._style_context_menu(menu)
         self._add_image_tools(menu, path)

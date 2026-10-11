@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app_support import (
     Path,
+    RetryPolicy,
     messagebox,
     normalize_url,
     FINISHED_STATUSES,
@@ -200,6 +201,10 @@ class QueueMixin:
             if key in options
         }
         saved["destination"] = str(options["destination"])
+        retry_policy = options.get("retry_policy", RetryPolicy())
+        saved["retry_attempts"] = retry_policy.attempts
+        saved["retry_base_delay"] = retry_policy.base_delay
+        saved["retry_max_delay"] = retry_policy.max_delay
         if output_path is not None:
             saved["output_path"] = str(output_path)
         return saved
@@ -228,6 +233,12 @@ class QueueMixin:
             "expected_checksum": saved.get("expected_checksum", ""),
             "proxy": self.proxy_list.get().strip(),
             "browser_cookies": self.browser_cookies.get().lower(),
+            "custom_headers": {},
+            "retry_policy": RetryPolicy(
+                saved.get("retry_attempts", 10),
+                saved.get("retry_base_delay", 1.0),
+                saved.get("retry_max_delay", 30.0),
+            ),
             "auto_extract": saved.get("auto_extract", False),
             "cloud_provider": cloud_provider,
             "cloud_folder": saved.get("cloud_folder", ""),

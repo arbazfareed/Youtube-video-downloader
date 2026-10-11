@@ -241,6 +241,50 @@ class ApiTests(unittest.TestCase):
             409,
         )
 
+    def test_api_passes_custom_headers_and_retry_policy_to_download(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            api, "download_url", return_value="saved.bin"
+        ) as download:
+            response = self.client.post(
+                "/jobs",
+                headers=self.headers,
+                json={
+                    "url": "https://example.test/file.bin",
+                    "output": directory,
+                    "source": "direct file",
+                    "headers": {"X-Api-Key": "test-token"},
+                    "retry_attempts": 3,
+                    "retry_base_delay": 0.5,
+                    "retry_max_delay": 2,
+                },
+            )
+            self.assertEqual(response.status_code, 202)
+            job_id = response.json()["id"]
+            for _ in range(50):
+                record = self.client.get(f"/jobs/{job_id}", headers=self.headers).json()
+                if record["status"] == "completed":
+                    break
+                threading.Event().wait(0.01)
+        self.assertEqual(record["status"], "completed")
+        self.assertEqual(download.call_args.kwargs["custom_headers"], {"X-Api-Key": "test-token"})
+        policy = download.call_args.kwargs["retry_policy"]
+        self.assertEqual((policy.attempts, policy.base_delay, policy.max_delay), (3, 0.5, 2))
+
+    def test_api_rejects_unsafe_headers_and_invalid_retry_policy(self):
+        for body in (
+            {"headers": {"Range": "bytes=0-"}},
+            {"headers": {"X-Test": "safe\r\nInjected: value"}},
+            {"retry_attempts": 0},
+            {"retry_base_delay": 3, "retry_max_delay": 2},
+        ):
+            with self.subTest(body=body):
+                response = self.client.post(
+                    "/jobs",
+                    headers=self.headers,
+                    json={"url": "https://example.test/file", **body},
+                )
+                self.assertEqual(response.status_code, 422)
+
     def test_api_pause_resume_and_cancel_controls(self):
         with patch.object(api._EXECUTOR, "submit"):
             response = self.client.post(

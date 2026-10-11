@@ -102,6 +102,15 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         self.checksum_algorithm = tk.StringVar(value="SHA256")
         self.proxy_list = tk.StringVar(value="")
         self.browser_cookies = tk.StringVar(value="None")
+        self.retry_attempts = tk.StringVar(
+            value=self.history.get_setting("retry_attempts", "10")
+        )
+        self.retry_base_delay = tk.StringVar(
+            value=self.history.get_setting("retry_base_delay", "1")
+        )
+        self.retry_max_delay = tk.StringVar(
+            value=self.history.get_setting("retry_max_delay", "30")
+        )
         self.auto_extract = tk.BooleanVar(
             value=self.history.get_setting("auto_extract", "0") == "1"
         )

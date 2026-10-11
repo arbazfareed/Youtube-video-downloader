@@ -36,6 +36,22 @@ class ImageEngineTests(unittest.TestCase):
         )
         get.assert_called_once()
 
+    @patch("image_engine.requests.get")
+    def test_gallery_scan_sends_custom_headers(self, get):
+        get.return_value.text = '<img src="/photo.jpg">'
+
+        self.assertEqual(
+            scrape_image_urls(
+                "https://example.org/gallery",
+                headers={"X-Gallery-Key": "private-token"},
+            ),
+            ["https://example.org/photo.jpg"],
+        )
+        self.assertEqual(
+            get.call_args.kwargs["headers"]["X-Gallery-Key"],
+            "private-token",
+        )
+
     def test_generates_padded_sequence_and_rejects_invalid_pattern(self):
         self.assertEqual(
             generate_sequence_urls("https://example.org/img_{:03d}.jpg", 1, 3),

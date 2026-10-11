@@ -32,6 +32,14 @@ class CliAndPluginTests(unittest.TestCase):
                             "1024",
                             "--speed",
                             "balanced",
+                            "--header",
+                            "X-Api-Key: test-token",
+                            "--retry-attempts",
+                            "3",
+                            "--retry-base-delay",
+                            "0.5",
+                            "--retry-max-delay",
+                            "2",
                         ]
                     )
             self.assertEqual(result, 0)
@@ -40,6 +48,12 @@ class CliAndPluginTests(unittest.TestCase):
             self.assertEqual(download.call_args.args[10], 1024)
             self.assertEqual(download.call_args.args[-3], "cli")
             self.assertEqual(download.call_args.args[-2:], ("", "none"))
+            self.assertEqual(
+                download.call_args.kwargs["custom_headers"],
+                {"X-Api-Key": "test-token"},
+            )
+            policy = download.call_args.kwargs["retry_policy"]
+            self.assertEqual((policy.attempts, policy.base_delay, policy.max_delay), (3, 0.5, 2))
 
     def test_cli_returns_failure_for_download_error_and_cancel_for_interrupt(self):
         with tempfile.TemporaryDirectory() as directory:

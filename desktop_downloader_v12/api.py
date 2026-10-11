@@ -21,7 +21,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from bandwidth import GlobalBandwidthLimiter
-from download_engine import DownloadCancelled, download_url
+from download_engine import (
+    DownloadCancelled,
+    RetryPolicy,
+    download_url,
+    parse_custom_headers,
+)
 from handoff import make_qr_png, mobile_handoff_url
 try:
     from torrent_engine import is_torrent_url
@@ -70,6 +75,10 @@ class JobRequest(BaseModel):
     cap: int | None = Field(default=None, gt=0)
     proxy: str = ""
     cookies: str = "none"
+    headers: dict[str, str] = Field(default_factory=dict)
+    retry_attempts: int = Field(default=10, ge=1, le=20)
+    retry_base_delay: float = Field(default=1.0, ge=0, le=60)
+    retry_max_delay: float = Field(default=30.0, ge=0, le=300)
     auto_extract: bool = False
     cloud_provider: str = "local"
     cloud_folder: str = ""
@@ -148,6 +157,12 @@ def _run_job(job: ApiJob) -> None:
             f"api:{job.id}",
             request.proxy,
             request.cookies,
+            custom_headers=request.headers,
+            retry_policy=RetryPolicy(
+                request.retry_attempts,
+                request.retry_base_delay,
+                request.retry_max_delay,
+            ),
         )
         if request.auto_extract:
             from extract import extract_archive
@@ -193,10 +208,17 @@ def _validate_request(request: JobRequest) -> None:
     except ValueError as error:
         raise HTTPException(status_code=422, detail="Enter a valid download URL.") from error
     if torrent:
-        if request.proxy or request.cookies.lower() not in {"", "none", "off"}:
+        if (
+            request.proxy
+            or request.cookies.lower() not in {"", "none", "off"}
+            or request.headers
+        ):
             raise HTTPException(
                 status_code=422,
-                detail="Proxy and browser cookies are not supported for torrent jobs.",
+                detail=(
+                    "Proxy, browser cookies, and custom headers are not supported "
+                    "for torrent jobs."
+                ),
             )
     elif (
         source in {"torrent", "torrent/magnet"}
@@ -233,6 +255,15 @@ def _validate_request(request: JobRequest) -> None:
             parse_proxy_list(request.proxy)
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
+    try:
+        request.headers = parse_custom_headers(request.headers)
+        RetryPolicy(
+            request.retry_attempts,
+            request.retry_base_delay,
+            request.retry_max_delay,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.get("/jobs", dependencies=[Depends(_authorized)])

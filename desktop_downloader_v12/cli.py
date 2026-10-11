@@ -10,7 +10,12 @@ from requests.exceptions import RequestException
 from yt_dlp.utils import DownloadError
 
 from checksum import verify_checksum
-from download_engine import DownloadCancelled, download_url
+from download_engine import (
+    DownloadCancelled,
+    RetryPolicy,
+    download_url,
+    parse_custom_headers,
+)
 
 
 def _positive_rate(value: str) -> int:
@@ -21,6 +26,16 @@ def _positive_rate(value: str) -> int:
     if rate <= 0:
         raise argparse.ArgumentTypeError("cap must be greater than zero")
     return rate
+
+
+def _nonnegative_delay(value: str) -> float:
+    try:
+        delay = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("retry delay must be a non-negative number of seconds") from error
+    if not 0 <= delay <= 300:
+        raise argparse.ArgumentTypeError("retry delay must be between 0 and 300 seconds")
+    return delay
 
 
 def _parse_checksum(value: str) -> tuple[str, str]:
@@ -49,6 +64,26 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--cap", type=_positive_rate, help="per-download byte-per-second cap")
     parser.add_argument("--proxy", default="", help="proxy URL(s), comma-separated for retries")
     parser.add_argument(
+        "--header",
+        action="append",
+        default=[],
+        metavar="NAME: VALUE",
+        help="add an HTTP request header; may be specified more than once",
+    )
+    parser.add_argument("--retry-attempts", type=int, default=10, help="maximum network attempts (1-20)")
+    parser.add_argument(
+        "--retry-base-delay",
+        type=_nonnegative_delay,
+        default=1.0,
+        help="initial retry delay in seconds",
+    )
+    parser.add_argument(
+        "--retry-max-delay",
+        type=_nonnegative_delay,
+        default=30.0,
+        help="maximum exponential-backoff delay in seconds",
+    )
+    parser.add_argument(
         "--cookies",
         choices=("none", "chrome", "firefox", "edge", "brave"),
         default="none",
@@ -64,7 +99,17 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args = parser.parse_args(argv)
+    try:
+        headers = parse_custom_headers(args.header)
+        retry_policy = RetryPolicy(
+            args.retry_attempts,
+            args.retry_base_delay,
+            args.retry_max_delay,
+        )
+    except ValueError as error:
+        parser.error(str(error))
     cancel_event = threading.Event()
     resume_event = threading.Event()
     resume_event.set()
@@ -91,6 +136,8 @@ def main(argv: list[str] | None = None) -> int:
             "cli",
             args.proxy,
             args.cookies,
+            custom_headers=headers,
+            retry_policy=retry_policy,
         )
         print(file=sys.stderr)
         if args.checksum:

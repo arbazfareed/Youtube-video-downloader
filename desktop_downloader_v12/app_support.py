@@ -35,9 +35,11 @@ from cookies import SUPPORTED_BROWSERS
 from document_engine import convert_docx_to_pdf, convert_pdf_to_docx
 from download_engine import (
     DownloadCancelled,
+    RetryPolicy,
     _clean_terminal_text,
     _ffmpeg_directory,
     download_url,
+    parse_custom_headers,
 )
 from extract import extract_archive
 from history_store import DownloadHistory, normalize_url
@@ -142,9 +144,11 @@ __all__ = [
     'convert_docx_to_pdf',
     'convert_pdf_to_docx',
     'DownloadCancelled',
+    'RetryPolicy',
     '_clean_terminal_text',
     '_ffmpeg_directory',
     'download_url',
+    'parse_custom_headers',
     'extract_archive',
     'DownloadHistory',
     'normalize_url',

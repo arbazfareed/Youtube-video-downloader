@@ -119,10 +119,18 @@ class UiMixin:
             sidebar, text="Convert to MP3", style="Navigation.TButton",
             command=self.convert_local_file_to_mp3,
         ).grid(row=8, column=0, sticky="ew", pady=2)
+        ttk.Button(
+            sidebar, text="Image tools", style="Navigation.TButton",
+            command=self.open_selected_image_tools,
+        ).grid(row=9, column=0, sticky="ew", pady=2)
+        ttk.Button(
+            sidebar, text="Image gallery", style="Navigation.TButton",
+            command=self._select_image_gallery_mode,
+        ).grid(row=10, column=0, sticky="ew", pady=2)
         ttk.Label(
             sidebar, text="Download and organize\nlocal media", style="SidebarHint.TLabel",
             justify="left",
-        ).grid(row=9, column=0, sticky="sw", padx=8, pady=(24, 0))
+        ).grid(row=11, column=0, sticky="sw", padx=8, pady=(24, 0))
 
         frame = ttk.Frame(outer, padding=16)
         frame.grid(row=0, column=1, sticky="nsew")
@@ -459,6 +467,49 @@ class UiMixin:
             values=("None", "Chrome", "Firefox", "Edge", "Brave"),
             state="readonly", width=18,
         ).grid(row=2, column=1, sticky="w", padx=10, pady=7)
+        ttk.Label(connection, text="Custom HTTP headers").grid(
+            row=3, column=0, sticky="nw", pady=7
+        )
+        header_frame = ttk.Frame(connection)
+        header_frame.grid(row=3, column=1, sticky="ew", padx=10, pady=7)
+        header_frame.columnconfigure(0, weight=1)
+        self.custom_headers_text = tk.Text(
+            header_frame, height=4, wrap="none", undo=True,
+        )
+        self.custom_headers_text.grid(row=0, column=0, sticky="ew")
+        header_scrollbar = ttk.Scrollbar(
+            header_frame, orient="vertical", command=self.custom_headers_text.yview,
+        )
+        header_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.custom_headers_text.configure(yscrollcommand=header_scrollbar.set)
+        ttk.Label(
+            connection,
+            text="One Name: value header per line. Headers may be sent to redirected hosts.",
+            wraplength=540,
+        ).grid(row=4, column=1, sticky="w", padx=10, pady=(0, 8))
+        ttk.Label(connection, text="Retry attempts").grid(
+            row=5, column=0, sticky="w", pady=7
+        )
+        retry_controls = ttk.Frame(connection)
+        retry_controls.grid(row=5, column=1, sticky="ew", padx=10, pady=7)
+        ttk.Spinbox(
+            retry_controls, from_=1, to=20, textvariable=self.retry_attempts, width=6,
+        ).pack(side="left")
+        ttk.Label(retry_controls, text="Base delay (sec)").pack(
+            side="left", padx=(12, 4)
+        )
+        ttk.Entry(
+            retry_controls, textvariable=self.retry_base_delay, width=7,
+        ).pack(side="left")
+        ttk.Label(retry_controls, text="Maximum").pack(side="left", padx=(12, 4))
+        ttk.Entry(
+            retry_controls, textvariable=self.retry_max_delay, width=7,
+        ).pack(side="left")
+        ttk.Label(
+            connection,
+            text="Exponential backoff; attempts 1-20, base delay 0-60 seconds, maximum at most 300.",
+            wraplength=540,
+        ).grid(row=6, column=1, sticky="w", padx=10, pady=(0, 8))
 
         automation = ttk.Frame(notebook, padding=16)
         automation.columnconfigure(1, weight=1)

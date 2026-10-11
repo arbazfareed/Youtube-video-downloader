@@ -17,6 +17,7 @@ from history_store import DownloadHistory
 from download_engine import (
     ACTIVE_TARGETS,
     DownloadCancelled,
+    RetryPolicy,
     TARGET_LOCK,
     _claim_target,
     _download_direct,
@@ -31,6 +32,7 @@ from download_engine import (
     download_url,
     _progress_details,
     _wait_until_resumed,
+    parse_custom_headers,
 )
 from torrent_engine import _find_aria2, download_torrent, is_torrent_url
 import requests
@@ -86,6 +88,84 @@ class _FakeEntry:
 
     def insert(self, _index, value):
         self.value = value
+
+
+class RequestOptionTests(unittest.TestCase):
+    def test_custom_header_parser_rejects_invalid_or_conflicting_headers(self):
+        self.assertEqual(
+            parse_custom_headers(["X-Api-Key: test-token", "Accept: image/*"]),
+            {"X-Api-Key": "test-token", "Accept": "image/*"},
+        )
+        with self.assertRaisesRegex(ValueError, "managed"):
+            parse_custom_headers({"Range": "bytes=0-"})
+        with self.assertRaisesRegex(ValueError, "more than once"):
+            parse_custom_headers(["X-Key: first", "x-key: second"])
+        with self.assertRaisesRegex(ValueError, "Name: value"):
+            parse_custom_headers(["not a header"])
+        with self.assertRaisesRegex(ValueError, "Invalid value"):
+            parse_custom_headers(["X-Key: safe\r\nInjected: yes"])
+
+    def test_retry_policy_validates_bounds_and_caps_exponential_backoff(self):
+        policy = RetryPolicy(attempts=4, base_delay=2, max_delay=5)
+        self.assertEqual(
+            [policy.delay(attempt) for attempt in range(1, 5)],
+            [2, 4, 5, 5],
+        )
+        for values in (
+            {"attempts": 0},
+            {"attempts": 21},
+            {"base_delay": -1},
+            {"base_delay": 4, "max_delay": 3},
+            {"max_delay": 301},
+        ):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                RetryPolicy(**values)
+
+    def test_direct_download_uses_custom_headers_and_configured_attempt_count(self):
+        session = Mock()
+        session.headers = {}
+        session.get.side_effect = requests.ConnectionError("connection reset")
+        policy = RetryPolicy(attempts=2, base_delay=0, max_delay=0)
+        with (
+            TemporaryDirectory() as folder,
+            patch("download_engine.requests.Session", return_value=session),
+            patch("download_engine._wait_for_retry", return_value=False),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "after 2 attempts"):
+                _download_direct(
+                    "https://example.org/file.bin",
+                    Path(folder),
+                    threading.Event(),
+                    lambda *_args: None,
+                    custom_headers={"X-Api-Key": "test-token"},
+                    retry_policy=policy,
+                )
+        self.assertEqual(session.headers["X-Api-Key"], "test-token")
+        self.assertEqual(session.get.call_count, 3)
+
+    def test_supported_site_download_passes_headers_and_retry_policy_to_ytdlp(self):
+        policy = RetryPolicy(attempts=3, base_delay=0.5, max_delay=2)
+        with TemporaryDirectory() as folder, patch(
+            "download_engine.yt_dlp.YoutubeDL"
+        ) as youtube_dl:
+            downloader = youtube_dl.return_value.__enter__.return_value
+            downloader.extract_info.return_value = {"_filename": "video.mp4"}
+            _download_with_ytdlp(
+                "https://example.org/video",
+                Path(folder),
+                "video",
+                "1080p",
+                "single video",
+                threading.Event(),
+                lambda *_args: None,
+                custom_headers={"X-Api-Key": "test-token"},
+                retry_policy=policy,
+            )
+        options = youtube_dl.call_args.args[0]
+        self.assertEqual(options["http_headers"], {"X-Api-Key": "test-token"})
+        self.assertEqual(options["retries"], 3)
+        self.assertEqual(options["fragment_retries"], 3)
+        self.assertEqual(options["extractor_retries"], 3)
 
 
 class _FakeHistory:
