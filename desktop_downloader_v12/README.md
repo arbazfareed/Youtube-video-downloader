@@ -41,6 +41,28 @@ video embeds that match its `telegram:embed` extractor; it is not a Telegram
 client for private chats or channels. Extractor support is URL-specific and can
 change when sites change. No downloader can promise every link or every site.
 
+## Portable releases
+
+The **SmartDownloader12-Windows.zip** and **SmartDownloader12-Linux.zip**
+release assets are self-contained for their named operating system. Extract the
+matching ZIP and start its executable; Python and the app's Python packages do
+not need to be installed, and launching the packaged app does not need internet.
+A Windows executable will not run on Linux, or vice versa. Linux portable builds
+target x86-64 distributions with glibc 2.35 or newer.
+
+The same portable executable also supports command-line downloads and the REST
+API. In PowerShell, use `.\SmartDownloader12.exe --cli --help` or
+`.\SmartDownloader12.exe --api`; in a Linux terminal, use
+`./SmartDownloader12 --cli --help` or `./SmartDownloader12 --api`. The ZIP
+includes the unpacked browser extension and a `plugins` folder for trusted
+additional plugins. Keep the API on localhost unless you configure a strong
+token before exposing it to a trusted network.
+
+Downloads, website scans, cloud uploads, and phone/API connections need network
+access by nature. ZIP creation/extraction and other local-file operations work
+offline. FFmpeg, LibreOffice, and aria2 remain optional external tools for
+media conversion, DOCX-to-PDF conversion, and BitTorrent respectively.
+
 ## Launch on Windows
 
 1. Install Python 3.10 or newer, including Tcl/Tk and the Python launcher.
@@ -60,11 +82,7 @@ change when sites change. No downloader can promise every link or every site.
    in `startup-error.log`.
 
 For a no-Python-install option, download the **SmartDownloader12-Windows.zip**
-asset from a GitHub Release, extract it, and double-click
-`SmartDownloader12.exe`. The release is built by pushing a version tag; see
-the repository's portable Windows build instructions. DOCX-to-PDF conversion
-still requires LibreOffice, local media conversion requires FFmpeg, and torrent
-downloads require aria2.
+asset from a GitHub Release, extract it, and double-click `SmartDownloader12.exe`.
 
 ## Command-line use
 
@@ -92,7 +110,8 @@ with Ctrl+C.
   explicitly selected. The browser may need to be closed if its cookie database
   is locked. Only download content you are authorized to access.
 - **REST API:** Start with `python api.py` or
-  `uvicorn api:app --host 127.0.0.1 --port 8765` from this folder. The API
+  `uvicorn api:app --host 127.0.0.1 --port 8765` from this folder, or run
+  the matching portable executable with `--api`. The API
   listens on localhost and requires a Bearer token; the generated token is
   printed in the server log. Set `SMART_DOWNLOADER_API_TOKEN` before starting
   to use your own token. Do not expose the API to a network without a strong
@@ -124,7 +143,15 @@ with Ctrl+C.
 - **Archive extraction:** Turn on **Auto-extract archives** to extract ZIP, TAR,
   and TGZ files after successful downloads. Extraction rejects unsafe paths and
   links and will not overwrite an existing folder. RAR requires a compatible
-  UnRAR tool. 7z archives are downloaded normally but must be extracted manually.
+  UnRAR tool. Use **Tools & utilities** > **Extract an archive…** to select a
+  local archive, or extract the selected queue item. 7z archives are downloaded
+  normally but must be extracted manually.
+- **Create ZIP archives:** In **Tools & utilities**, choose **Create ZIP from a
+  file…** or **Create ZIP from a folder…**. The archive is written beside the
+  selected source by default; existing files are only replaced after the save
+  dialog confirms it. Folder contents retain their relative paths, and symbolic
+  links are skipped. Creating ZIPs and extracting supported archives are local
+  operations and work without internet.
 
 For MP3 conversion and merging separate video/audio streams, install FFmpeg:
 
@@ -257,8 +284,9 @@ would need a separate application and platform-specific packaging.
   `on_complete(job_id, filepath)`, `on_error(job_id, error)`, and
   `on_cancel(job_id)`. An `on_complete` handler may return a replacement file
   path. The bundled example lowercases completed filenames; rename its file to
-  `_example_plugin.py` to disable it. Plugins run Python code with the same
-  permissions as the app, so install only plugins you trust.
+  `_example_plugin.py` to disable it. Portable releases also load custom `.py`
+  plugins placed in their adjacent `plugins` folder. Plugins run Python code
+  with the same permissions as the app, so install only plugins you trust.
 - **Clear finished:** In the **History** menu, hide completed, failed, cancelled,
   and interrupted rows
   without deleting persistent history or downloaded files. Use Show hidden and
@@ -310,6 +338,15 @@ See [SETUP.md](./SETUP.md) for system prerequisites, first-time setup, and
 troubleshooting. The download engines do not require a separate accelerator
 package; direct-file parallel ranges and yt-dlp's media fragment concurrency
 are built into the app.
+
+The v12 implementation covers the supplied priority matrix: shared bandwidth
+limits, duplicate detection, notifications, dark mode, checksums, clipboard
+watching, batch links, speed graph, image gallery/sequences/conversion/resize/
+EXIF/preview, CLI, plugins, per-download proxies, browser cookies, REST API,
+auto-extraction, torrents, browser extension, cloud destinations, phone handoff,
+live recording, and server-advertised Delta Sync. The test suite includes
+coverage for the download engines, images, API/mobile controls, archive
+traversal protection, and local ZIP creation.
 
 The platform-routing tests verify that representative public video-site links
 are sent through yt-dlp and that the installed Telegram embed extractor

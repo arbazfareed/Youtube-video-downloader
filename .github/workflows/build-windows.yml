@@ -1,4 +1,4 @@
-name: Build Windows downloads
+name: Build desktop downloads
 
 on:
   push:
@@ -11,17 +11,31 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - app-directory: desktop_downloader
             executable: SmartDownloader
+            platform: Windows
+            runner: windows-latest
+            data-separator: ';'
           - app-directory: desktop_downloader_v11
             executable: SmartDownloader11
+            platform: Windows
+            runner: windows-latest
+            data-separator: ';'
           - app-directory: desktop_downloader_v12
             executable: SmartDownloader12
+            platform: Windows
+            runner: windows-latest
+            data-separator: ';'
+          - app-directory: desktop_downloader_v12
+            executable: SmartDownloader12
+            platform: Linux
+            runner: ubuntu-22.04
+            data-separator: ':'
     defaults:
       run:
         working-directory: ${{ matrix.app-directory }}
@@ -32,6 +46,11 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: ${{ matrix.app-directory }}/requirements.txt
+      - name: Install Linux display and ZIP utilities
+        if: matrix.platform == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes python3-tk xvfb zip
       - name: Install app and packaging dependencies
         run: |
           python -m pip install --disable-pip-version-check -r requirements.txt
@@ -44,10 +63,12 @@ jobs:
           --name "${{ matrix.executable }}"
           --paths .
           --hidden-import app
+          --add-data "mobile.html${{ matrix.data-separator }}."
           --collect-all yt_dlp
           --collect-submodules plugins
           launch.py
       - name: Verify packaged GUI initializes
+        if: matrix.platform == 'Windows'
         shell: pwsh
         run: |
           $process = Start-Process `
@@ -65,25 +86,140 @@ jobs:
           if ($process.ExitCode -ne 0) {
             throw "Packaged app GUI initialization failed with code $($process.ExitCode)."
           }
-      - name: Package executable
+          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v12") {
+            & "dist\${{ matrix.executable }}.exe" --cli --help
+            if ($LASTEXITCODE -ne 0) {
+              throw "Packaged command-line interface failed with code $LASTEXITCODE."
+            }
+          }
+      - name: Verify packaged Linux GUI initializes
+        if: matrix.platform == 'Linux'
+        run: timeout 60s xvfb-run --auto-servernum dist/${{ matrix.executable }} --smoke-test
+      - name: Verify packaged Linux command-line interface
+        if: matrix.platform == 'Linux'
+        run: dist/${{ matrix.executable }} --cli --help
+      - name: Verify packaged Windows REST API
+        if: matrix.platform == 'Windows' && matrix.app-directory == 'desktop_downloader_v12'
         shell: pwsh
         run: |
-          $packageName = "${{ matrix.executable }}-Windows"
+          $previousHost = $env:SMART_DOWNLOADER_API_HOST
+          $previousPort = $env:SMART_DOWNLOADER_API_PORT
+          $process = $null
+          $apiLog = Join-Path $env:RUNNER_TEMP "v12-api-stderr.log"
+          try {
+            $env:SMART_DOWNLOADER_API_HOST = "127.0.0.1"
+            $env:SMART_DOWNLOADER_API_PORT = "18765"
+            $process = Start-Process `
+              -FilePath "dist\${{ matrix.executable }}.exe" `
+              -ArgumentList "--api" -PassThru `
+              -RedirectStandardError $apiLog
+            $deadline = (Get-Date).AddSeconds(180)
+            $response = $null
+            do {
+              $process.Refresh()
+              if ($process.HasExited) {
+                throw "Packaged REST API exited with code $($process.ExitCode)."
+              }
+              try {
+                $response = Invoke-WebRequest `
+                  -UseBasicParsing `
+                  -Uri "http://127.0.0.1:18765/mobile" `
+                  -TimeoutSec 2
+              } catch {
+                Start-Sleep -Milliseconds 500
+              }
+            } until ($response -or (Get-Date) -ge $deadline)
+            if (-not $response -or $response.StatusCode -ne 200) {
+              throw "Packaged REST API did not serve /mobile before timing out. Log: $apiLog"
+            }
+          } finally {
+            if ($process) {
+              $process.Refresh()
+              if (-not $process.HasExited) {
+                $processIds = @([int]$process.Id)
+                $pendingProcessIds = $processIds
+                while ($pendingProcessIds.Count -gt 0) {
+                  $childProcessIds = @(
+                    Get-CimInstance Win32_Process |
+                      Where-Object {
+                        $pendingProcessIds -contains [int]$_.ParentProcessId -and
+                        $processIds -notcontains [int]$_.ProcessId
+                      } |
+                      Select-Object -ExpandProperty ProcessId
+                  )
+                  $processIds += $childProcessIds
+                  $pendingProcessIds = $childProcessIds
+                }
+                for ($index = $processIds.Count - 1; $index -ge 0; $index--) {
+                  Stop-Process -Id $processIds[$index] -Force -ErrorAction SilentlyContinue
+                }
+                $process.WaitForExit(10000) | Out-Null
+              }
+            }
+            if ($null -eq $previousHost) {
+              Remove-Item Env:\SMART_DOWNLOADER_API_HOST -ErrorAction SilentlyContinue
+            } else {
+              $env:SMART_DOWNLOADER_API_HOST = $previousHost
+            }
+            if ($null -eq $previousPort) {
+              Remove-Item Env:\SMART_DOWNLOADER_API_PORT -ErrorAction SilentlyContinue
+            } else {
+              $env:SMART_DOWNLOADER_API_PORT = $previousPort
+            }
+          }
+      - name: Package portable Windows ZIP
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $packageName = "${{ matrix.executable }}-${{ matrix.platform }}"
           $packageDirectory = Join-Path $env:RUNNER_TEMP $packageName
           New-Item -ItemType Directory -Path $packageDirectory | Out-Null
           Copy-Item "dist\${{ matrix.executable }}.exe" $packageDirectory
           Copy-Item README.md $packageDirectory
-          $setupPath = Join-Path $packageDirectory "PORTABLE-SETUP.txt"
-          @(
+          $setupLines = @(
             "Extract this ZIP file, then double-click ${{ matrix.executable }}.exe."
             "Python and the app's Python packages are bundled; no Python installation is required."
             "Optional external tools are listed in README.md."
-          ) | Set-Content -Path $setupPath -Encoding utf8
+          )
+          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v12") {
+            Copy-Item browser_extension $packageDirectory -Recurse
+            Copy-Item plugins $packageDirectory -Recurse
+            $setupLines += @(
+              "Use .\${{ matrix.executable }}.exe --cli <arguments> for CLI downloads."
+              "Use .\${{ matrix.executable }}.exe --api in a terminal for the REST API."
+              "Load the included browser_extension folder as an unpacked browser extension."
+              "Add trusted Python plugin files to the included plugins folder."
+            )
+          }
+          $setupPath = Join-Path $packageDirectory "PORTABLE-SETUP.txt"
+          $setupLines | Set-Content -Path $setupPath -Encoding utf8
           Compress-Archive -Path "$packageDirectory\*" -DestinationPath "$env:RUNNER_TEMP\$packageName.zip"
+      - name: Package portable Linux ZIP
+        if: matrix.platform == 'Linux'
+        shell: bash
+        run: |
+          package_name="${{ matrix.executable }}-${{ matrix.platform }}"
+          package_directory="$RUNNER_TEMP/$package_name"
+          mkdir -p "$package_directory"
+          cp "dist/${{ matrix.executable }}" "$package_directory/"
+          cp README.md "$package_directory/"
+          cp -R browser_extension "$package_directory/"
+          cp -R plugins "$package_directory/"
+          cat > "$package_directory/PORTABLE-SETUP.txt" <<EOF
+          Extract this ZIP file and run ./${{ matrix.executable }}.
+          Python and the app's Python packages are bundled; no Python installation is required.
+          Use ./${{ matrix.executable }} --cli <arguments> for CLI downloads.
+          Use ./${{ matrix.executable }} --api in a terminal for the REST API.
+          Load the included browser_extension folder as an unpacked browser extension.
+          Add trusted Python plugin files to the included plugins folder.
+          Optional external tools are listed in README.md.
+          EOF
+          cd "$RUNNER_TEMP"
+          zip -qr "$package_name.zip" "$package_name"
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.executable }}-Windows
-          path: ${{ runner.temp }}/${{ matrix.executable }}-Windows.zip
+          name: ${{ matrix.executable }}-${{ matrix.platform }}
+          path: ${{ runner.temp }}/${{ matrix.executable }}-${{ matrix.platform }}.zip
           if-no-files-found: error
 
   release:
@@ -101,8 +237,8 @@ jobs:
         run: |
           $assets = Get-ChildItem -Path release-artifacts -Filter "*.zip" -Recurse |
             ForEach-Object { $_.FullName }
-          if ($assets.Count -ne 3) {
-            throw "Expected three portable ZIP files, found $($assets.Count)."
+          if ($assets.Count -ne 4) {
+            throw "Expected four portable ZIP files, found $($assets.Count)."
           }
           gh release create "$env:GITHUB_REF_NAME" $assets `
             --repo "${{ github.repository }}" --verify-tag --generate-notes

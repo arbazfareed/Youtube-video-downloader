@@ -4,10 +4,12 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import cli
 import download_engine
+import plugins
 from download_engine import DownloadCancelled
 from plugins import load_plugins
 from plugins.example_plugin import rename_lowercase
@@ -88,6 +90,30 @@ class CliAndPluginTests(unittest.TestCase):
 
     def test_plugin_folder_discovers_example_plugin(self):
         self.assertIn("example-lowercase-filenames", load_plugins())
+
+    def test_portable_app_loads_user_plugins_from_next_to_executable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            executable_directory = Path(directory)
+            plugin_directory = executable_directory / "plugins"
+            plugin_directory.mkdir()
+            (plugin_directory / "custom_plugin.py").write_text(
+                "def register():\n"
+                "    return {'name': 'portable-custom', 'events': {}}\n",
+                encoding="utf-8",
+            )
+            system_modules = __import__("sys").modules
+            portable_sys = SimpleNamespace(
+                frozen=True,
+                executable=str(executable_directory / "SmartDownloader12.exe"),
+                modules=system_modules,
+            )
+            with (
+                patch.object(plugins, "sys", portable_sys),
+                patch.object(plugins, "_loaded", False),
+                patch.object(plugins, "_plugins", []),
+            ):
+                self.assertIn("portable-custom", plugins.load_plugins())
+            system_modules.pop("plugins.custom_plugin", None)
 
 
 if __name__ == "__main__":

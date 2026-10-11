@@ -39,6 +39,10 @@ and extract a newer ZIP or use the Git method above.
   the system `python3-tk` package if it is missing.
 - Git only if you want to clone or update the project using Git.
 - Internet access for initial package installation and downloading.
+- Or use the matching **SmartDownloader12-Windows.zip** or
+  **SmartDownloader12-Linux.zip** release for an offline app launch without
+  installing Python or the app's Python packages. Download operations and other
+  network features still require connectivity.
 - Native desktop notifications use Plyer, which is installed from
   `requirements.txt`; notification support depends on the operating system.
 - FFmpeg is optional. Install it only for MP3 conversion or merging separate
@@ -121,6 +125,15 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python launch.py
 ```
+
+For a no-Python-install option, download **SmartDownloader12-Linux.zip** from a
+GitHub Release, extract it, and run `./SmartDownloader12`. The packaged Linux
+build targets x86-64 distributions with glibc 2.35 or newer. Use
+**SmartDownloader12-Windows.zip** only on Windows; executable bundles are
+operating-system-specific. The same executable provides `--cli` and `--api`
+modes. The release ZIP also contains `browser_extension` for loading as an
+unpacked extension and a `plugins` folder for trusted custom plugins;
+API/browser/mobile features need network access.
 
 ## Optional FFmpeg
 

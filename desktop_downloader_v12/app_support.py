@@ -52,6 +52,7 @@ from notifications import notify
 from plugins import load_plugins
 from proxy import parse_proxy_list
 from torrent_engine import is_torrent_url
+from zip_archive import create_zip_archive
 
 
 MAX_SPEEDS = {
@@ -152,6 +153,7 @@ __all__ = [
     'resize_image',
     'scrape_image_urls',
     'strip_exif',
+    'create_zip_archive',
     'notify',
     'load_plugins',
     'parse_proxy_list',

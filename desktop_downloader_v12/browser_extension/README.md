@@ -7,7 +7,9 @@ controls. Site support depends on yt-dlp and the specific URL.
 
 ## Start the API
 
-From the Smart Downloader 12 folder, run `launch_api.py`. The API prints its
+From the source folder, run `launch_api.py`. From a portable Windows release,
+run `.\SmartDownloader12.exe --api` in PowerShell; from Linux, run
+`./SmartDownloader12 --api` in a terminal. The API prints its
 Bearer token in the terminal. Keep the API bound to `127.0.0.1` for extension
 use on this computer. The extension refuses to send that token to a non-local
 server.
@@ -19,7 +21,7 @@ server.
 3. Open the extension popup. Paste the API token from the API terminal and set
    the save folder on the PC, then choose **Save settings**.
 4. Right-click a page, link, or video/audio element and choose the Smart
-   Downloader 11 action. Use **Download detected media** for a media element
+   Downloader 12 action. Use **Download detected media** for a media element
    found on the page. For sites such as YouTube, send the page URL so yt-dlp can
    use its site extractor.
 

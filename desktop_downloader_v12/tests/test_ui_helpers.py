@@ -2,6 +2,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from app import DownloaderApp, _convert_media_to_mp3
@@ -111,6 +112,9 @@ class UiStartupWiringTests(unittest.TestCase):
             "play_selected_media",
             "open_selected_location",
             "extract_selected_archive",
+            "extract_local_archive",
+            "create_zip_from_file",
+            "create_zip_from_folder",
             "open_selected_image_tools",
             "open_batch_dialog",
             "open_sequence_dialog",
@@ -127,6 +131,36 @@ class UiStartupWiringTests(unittest.TestCase):
             if not callable(getattr(DownloaderApp, name, None))
         ]
         self.assertEqual(missing, [])
+
+    def test_sidebar_wheel_scrolls_only_when_pointer_is_inside_it(self):
+        class FakeWidget:
+            def __init__(self, name):
+                self.name = name
+
+            def __str__(self):
+                return self.name
+
+        class FakeCanvas(FakeWidget):
+            def __init__(self):
+                super().__init__(".app.sidebar")
+                self.scrolls = []
+
+            def yview_scroll(self, units, _kind):
+                self.scrolls.append(units)
+
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.sidebar_canvas = FakeCanvas()
+        app.root = Mock()
+        app.root.winfo_containing.return_value = FakeWidget(".app.sidebar.content.button")
+
+        result = app._scroll_sidebar(SimpleNamespace(num=5, x_root=5, y_root=5))
+
+        self.assertEqual(result, "break")
+        self.assertEqual(app.sidebar_canvas.scrolls, [1])
+        app.root.winfo_containing.return_value = FakeWidget(".app.queue")
+        result = app._scroll_sidebar(SimpleNamespace(delta=120, x_root=5, y_root=5))
+        self.assertIsNone(result)
+        self.assertEqual(app.sidebar_canvas.scrolls, [1])
 
 
 if __name__ == "__main__":

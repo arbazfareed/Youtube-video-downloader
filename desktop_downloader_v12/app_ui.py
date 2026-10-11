@@ -12,8 +12,34 @@ class UiMixin:
         outer.pack(fill="both", expand=True)
         outer.columnconfigure(1, weight=1)
         outer.rowconfigure(0, weight=1)
-        sidebar = ttk.Frame(outer, style="Sidebar.TFrame", padding=(10, 14))
-        sidebar.grid(row=0, column=0, sticky="ns")
+        sidebar_host = ttk.Frame(outer, style="Sidebar.TFrame")
+        sidebar_host.grid(row=0, column=0, sticky="nsew")
+        sidebar_host.rowconfigure(0, weight=1)
+        sidebar_host.columnconfigure(0, weight=1)
+        self.sidebar_canvas = tk.Canvas(
+            sidebar_host,
+            width=220,
+            borderwidth=0,
+            highlightthickness=0,
+            background="#151519" if self.dark_mode.get() else "#e9eef4",
+        )
+        self.sidebar_canvas.grid(row=0, column=0, sticky="nsew")
+        self.sidebar_scrollbar = ttk.Scrollbar(
+            sidebar_host,
+            orient="vertical",
+            command=self.sidebar_canvas.yview,
+        )
+        self.sidebar_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.sidebar_canvas.configure(yscrollcommand=self.sidebar_scrollbar.set)
+        sidebar = ttk.Frame(self.sidebar_canvas, style="Sidebar.TFrame", padding=(10, 14))
+        self.sidebar_window = self.sidebar_canvas.create_window(
+            (0, 0), window=sidebar, anchor="nw"
+        )
+        sidebar.bind("<Configure>", self._update_sidebar_scroll_region)
+        self.sidebar_canvas.bind("<Configure>", self._resize_sidebar_content)
+        self.root.bind_all("<MouseWheel>", self._scroll_sidebar, add="+")
+        self.root.bind_all("<Button-4>", self._scroll_sidebar, add="+")
+        self.root.bind_all("<Button-5>", self._scroll_sidebar, add="+")
         sidebar.columnconfigure(0, weight=1)
         ttk.Label(
             sidebar, text="SMART\nDOWNLOADER", style="SidebarTitle.TLabel",
@@ -53,6 +79,15 @@ class UiMixin:
         )
         self.tools_menu.add_command(
             label="Extract selected archive", command=self.extract_selected_archive,
+        )
+        self.tools_menu.add_command(
+            label="Extract an archive…", command=self.extract_local_archive,
+        )
+        self.tools_menu.add_command(
+            label="Create ZIP from a file…", command=self.create_zip_from_file,
+        )
+        self.tools_menu.add_command(
+            label="Create ZIP from a folder…", command=self.create_zip_from_folder,
         )
         self.tools_menu.add_command(
             label="Image tools for selected image",
@@ -317,6 +352,41 @@ class UiMixin:
         more_menu.add_command(label="Help", command=self.show_help)
         more_button.configure(menu=more_menu)
         more_button.pack(side="left", padx=(6, 0))
+
+    def _resize_sidebar_content(self, event) -> None:
+        self.sidebar_canvas.itemconfigure(self.sidebar_window, width=event.width)
+
+    def _update_sidebar_scroll_region(self, _event=None) -> None:
+        canvas = self.sidebar_canvas
+        canvas.configure(scrollregion=canvas.bbox("all"))
+        bounds = canvas.bbox("all")
+        if bounds and bounds[3] - bounds[1] > canvas.winfo_height():
+            self.sidebar_scrollbar.grid()
+        else:
+            self.sidebar_scrollbar.grid_remove()
+
+    def _scroll_sidebar(self, event):
+        widget = self.root.winfo_containing(event.x_root, event.y_root)
+        canvas_name = str(self.sidebar_canvas)
+        if widget is None or (
+            widget != self.sidebar_canvas
+            and not str(widget).startswith(f"{canvas_name}.")
+        ):
+            return None
+
+        if getattr(event, "num", None) == 4:
+            scroll_units = -1
+        elif getattr(event, "num", None) == 5:
+            scroll_units = 1
+        else:
+            delta = getattr(event, "delta", 0)
+            if not delta:
+                return None
+            scroll_units = -max(1, round(abs(delta) / 120)) if delta > 0 else max(
+                1, round(abs(delta) / 120)
+            )
+        self.sidebar_canvas.yview_scroll(scroll_units, "units")
+        return "break"
 
     def _build_settings_ui(self) -> None:
         container = ttk.Frame(self.settings_window, padding=14)

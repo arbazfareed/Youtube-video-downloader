@@ -192,6 +192,7 @@ class ThemeMixin:
             arrowcolor=foreground,
         )
         self.root.configure(background=background)
+        self.sidebar_canvas.configure(background=sidebar_background)
         self._style_menu(self.history_menu, surface, foreground, muted, accent)
         self._style_menu(self.tools_menu, surface, foreground, muted, accent)
         self.settings_window.configure(background=background)

@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import launch
 from launch import _ensure_dependencies, _smoke_test_app
 
 
@@ -94,6 +95,32 @@ class PackagedSmokeTestTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "did not become visible"):
                 _smoke_test_app(lambda _root: None)
         self.assertTrue(hidden_root.destroyed)
+
+
+class PortableLauncherModeTests(unittest.TestCase):
+    def test_cli_mode_forwards_arguments_and_returns_the_cli_status(self):
+        with (
+            patch.object(sys, "argv", ["launch.py", "--cli", "--help"]),
+            patch("launch._attach_console") as attach_console,
+            patch("launch._ensure_dependencies") as ensure_dependencies,
+            patch("cli.main", return_value=7) as run_cli,
+        ):
+            self.assertEqual(launch.main(), 7)
+        attach_console.assert_called_once_with()
+        ensure_dependencies.assert_called_once_with()
+        run_cli.assert_called_once_with(["--help"])
+
+    def test_api_mode_starts_the_rest_server_without_opening_the_gui(self):
+        with (
+            patch.object(sys, "argv", ["launch.py", "--api"]),
+            patch("launch._attach_console") as attach_console,
+            patch("launch._ensure_dependencies") as ensure_dependencies,
+            patch("api.main") as run_api,
+        ):
+            self.assertEqual(launch.main(), 0)
+        attach_console.assert_called_once_with()
+        ensure_dependencies.assert_called_once_with()
+        run_api.assert_called_once_with()
 
 
 if __name__ == "__main__":

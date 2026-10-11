@@ -24,6 +24,7 @@ from app_support import (
     strip_exif,
     PLAYABLE_MEDIA_EXTENSIONS,
     _convert_media_to_mp3,
+    create_zip_archive,
 )
 
 class MediaMixin:
@@ -324,6 +325,72 @@ class MediaMixin:
             lambda: extract_archive(path),
             "Extract archive",
             parent=path.parent,
+        )
+
+    def extract_local_archive(self) -> None:
+        archive_name = filedialog.askopenfilename(
+            parent=self.root,
+            title="Choose an archive to extract",
+            filetypes=(
+                (
+                    "Supported archives",
+                    "*.zip *.rar *.tar *.tgz *.tar.gz *.tar.bz2 *.tar.xz",
+                ),
+                ("All files", "*.*"),
+            ),
+        )
+        if not archive_name:
+            return
+        archive_path = Path(archive_name)
+        self._run_local_file_action(
+            lambda: extract_archive(archive_path),
+            "Extract archive",
+            parent=archive_path.parent,
+        )
+
+    def create_zip_from_file(self) -> None:
+        source_name = filedialog.askopenfilename(
+            parent=self.root,
+            title="Choose a file to add to a ZIP archive",
+            filetypes=(("All files", "*.*"),),
+        )
+        if source_name:
+            self._save_zip_archive(Path(source_name))
+
+    def create_zip_from_folder(self) -> None:
+        source_name = filedialog.askdirectory(
+            parent=self.root,
+            title="Choose a folder to add to a ZIP archive",
+            mustexist=True,
+        )
+        if source_name:
+            self._save_zip_archive(Path(source_name))
+
+    def _save_zip_archive(self, source: Path) -> None:
+        default_name = f"{source.stem if source.is_file() else source.name}.zip"
+        destination_name = filedialog.asksaveasfilename(
+            parent=self.root,
+            title="Save ZIP archive",
+            initialdir=str(source.parent),
+            initialfile=default_name,
+            defaultextension=".zip",
+            filetypes=(("ZIP archives", "*.zip"),),
+            confirmoverwrite=True,
+        )
+        if not destination_name:
+            return
+        destination = Path(destination_name)
+        if destination.suffix.lower() != ".zip":
+            messagebox.showerror(
+                "Choose a ZIP filename",
+                "The output filename must end in .zip.",
+                parent=self.root,
+            )
+            return
+        self._run_local_file_action(
+            lambda: create_zip_archive(source, destination, overwrite=True),
+            "Create ZIP archive",
+            parent=destination.parent,
         )
 
     def _run_local_file_action(self, operation, title: str, parent: Path) -> None:
