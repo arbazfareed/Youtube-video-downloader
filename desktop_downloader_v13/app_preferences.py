@@ -305,9 +305,15 @@ class PreferencesMixin:
         if self.clipboard_autofill.get():
             try:
                 clipboard = self.root.clipboard_get().strip()
-            except tk.TclError:
-                clipboard = ""
-            if clipboard != self._last_clipboard:
+            except (tk.TclError, OSError) as error:
+                clipboard = None
+                message = f"Clipboard temporarily unavailable: {error}"
+                if getattr(self, "_last_clipboard_error", None) != message:
+                    self.progress_summary.set(message)
+                self._last_clipboard_error = message
+            else:
+                self._last_clipboard_error = None
+            if clipboard is not None and clipboard != self._last_clipboard:
                 self._last_clipboard = clipboard
                 try:
                     parsed = urlsplit(clipboard)

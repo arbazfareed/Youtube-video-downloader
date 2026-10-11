@@ -805,9 +805,14 @@ class MediaMixin:
         try:
             from PIL import Image, ImageTk
 
-            with Image.open(path) as image:
-                image.thumbnail((200, 200), Image.Resampling.LANCZOS)
-                thumbnail = image.copy()
+            try:
+                with Image.open(path) as image:
+                    image.thumbnail((200, 200), Image.Resampling.LANCZOS)
+                    thumbnail = image.copy()
+            except Image.DecompressionBombError as error:
+                raise ValueError(
+                    "Image dimensions exceed the safe preview limit."
+                ) from error
             photo = ImageTk.PhotoImage(thumbnail, master=self.root)
         except (OSError, ValueError, RuntimeError, tk.TclError) as error:
             self._clear_thumbnail(f"Preview unavailable:\n{error}")

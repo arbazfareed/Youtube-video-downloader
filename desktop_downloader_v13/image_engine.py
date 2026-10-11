@@ -84,15 +84,18 @@ def convert_image(path: str | Path, target_format: str, quality: int = 90) -> Pa
         raise ValueError("Image quality must be between 1 and 100.")
     extension = ".jpg" if output_format == "JPEG" else f".{output_format.lower()}"
     target = source.with_name(f"{source.stem}_converted{extension}")
-    with Image.open(source) as image:
-        if output_format == "JPEG" and image.mode in {"RGBA", "LA", "P"}:
-            image = image.convert("RGBA")
-            background = Image.new("RGB", image.size, "white")
-            background.paste(image, mask=image.getchannel("A"))
-            image = background
-        elif output_format in {"JPEG", "WEBP"} and image.mode not in {"RGB", "L"}:
-            image = image.convert("RGB")
-        image.save(target, format=output_format, quality=quality)
+    try:
+        with Image.open(source) as image:
+            if output_format == "JPEG" and image.mode in {"RGBA", "LA", "P"}:
+                image = image.convert("RGBA")
+                background = Image.new("RGB", image.size, "white")
+                background.paste(image, mask=image.getchannel("A"))
+                image = background
+            elif output_format in {"JPEG", "WEBP"} and image.mode not in {"RGB", "L"}:
+                image = image.convert("RGB")
+            image.save(target, format=output_format, quality=quality)
+    except Image.DecompressionBombError as error:
+        raise ValueError("Image dimensions exceed the safe processing limit.") from error
     return target
 
 
@@ -103,11 +106,14 @@ def resize_image(path: str | Path, max_width: int, max_height: int) -> Path:
         raise ValueError("Width and height must be greater than zero.")
     source = Path(path)
     target = source.with_name(f"{source.stem}_resized{source.suffix}")
-    with Image.open(source) as image:
-        image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
-        if source.suffix.lower() in {".jpg", ".jpeg"} and image.mode not in {"RGB", "L"}:
-            image = image.convert("RGB")
-        image.save(target)
+    try:
+        with Image.open(source) as image:
+            image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+            if source.suffix.lower() in {".jpg", ".jpeg"} and image.mode not in {"RGB", "L"}:
+                image = image.convert("RGB")
+            image.save(target)
+    except Image.DecompressionBombError as error:
+        raise ValueError("Image dimensions exceed the safe processing limit.") from error
     return target
 
 
@@ -121,20 +127,23 @@ def strip_exif(path: str | Path) -> Path:
     while target.exists():
         target = source.with_name(f"{source.stem}_no_exif ({suffix}){source.suffix}")
         suffix += 1
-    with Image.open(source) as image:
-        if getattr(image, "n_frames", 1) > 1:
-            raise ValueError("Animated images are not supported for EXIF removal.")
-        image.load()
-        image_format = image.format
-        mode = image.mode
-        if mode not in {"1", "L", "LA", "P", "RGB", "RGBA", "I", "F"}:
-            image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+    try:
+        with Image.open(source) as image:
+            if getattr(image, "n_frames", 1) > 1:
+                raise ValueError("Animated images are not supported for EXIF removal.")
+            image.load()
+            image_format = image.format
             mode = image.mode
-        clean = Image.new(mode, image.size)
-        clean.paste(image)
-        if mode == "P":
-            clean.putpalette(image.getpalette())
-        if image_format == "JPEG" and mode not in {"RGB", "L"}:
-            clean = clean.convert("RGB")
-        clean.save(target, format=image_format)
+            if mode not in {"1", "L", "LA", "P", "RGB", "RGBA", "I", "F"}:
+                image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+                mode = image.mode
+            clean = Image.new(mode, image.size)
+            clean.paste(image)
+            if mode == "P":
+                clean.putpalette(image.getpalette())
+            if image_format == "JPEG" and mode not in {"RGB", "L"}:
+                clean = clean.convert("RGB")
+            clean.save(target, format=image_format)
+    except Image.DecompressionBombError as error:
+        raise ValueError("Image dimensions exceed the safe processing limit.") from error
     return target

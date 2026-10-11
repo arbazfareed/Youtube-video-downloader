@@ -13,6 +13,7 @@ from app_support import (
     hashlib,
     tk,
     datetime,
+    Future,
     Path,
     filedialog,
     messagebox,
@@ -299,8 +300,8 @@ class DownloadsMixin:
             options["quality"],
             options["playlist_scope"],
             cancel_event,
-            lambda status, percent, details: self.events.put(
-                ("progress", job_id, status, percent, details)
+            lambda status, percent, details: self._emit_download_progress(
+                job_id, status, percent, details
             ),
             options["speed_mode"],
             resume_event,
@@ -312,7 +313,33 @@ class DownloadsMixin:
             custom_headers=options.get("custom_headers", {}),
             retry_policy=options.get("retry_policy", RetryPolicy()),
         )
-        future.add_done_callback(lambda result: self._job_finished(job_id, result))
+        self._download_futures[job_id] = future
+        future.add_done_callback(
+            lambda result: self._download_future_finished(job_id, result)
+        )
+
+    def _emit_download_progress(
+        self,
+        job_id: str,
+        status: str,
+        percent: float | None,
+        details: str,
+    ) -> None:
+        now = time.monotonic()
+        with self._progress_lock:
+            previous = self._last_progress_update.get(job_id)
+            if previous and status == previous[1] and now - previous[0] < 0.05:
+                return
+            self._last_progress_update[job_id] = (now, status)
+        self.events.put(("progress", job_id, status, percent, details))
+
+    def _download_future_finished(self, job_id: str, future: Future[str]) -> None:
+        if future.cancelled():
+            self.events.put(
+                ("finished", job_id, "Cancelled", "Cancelled before starting")
+            )
+            return
+        self._job_finished(job_id, future)
 
     def _record_speed_sample(self, job_id: str, details: str) -> None:
         speed_match = re.search(r"([\d.]+)\s*(KiB/s|MiB/s|KB/s|MB/s)", details, re.I)
@@ -579,6 +606,9 @@ class DownloadsMixin:
             resume_event = self.resume_events.get(job_id)
             if resume_event:
                 resume_event.set()
+            future = getattr(self, "_download_futures", {}).get(job_id)
+            if future:
+                future.cancel()
             timer = self.schedule_timers.pop(job_id, None)
             if timer:
                 timer.cancel()

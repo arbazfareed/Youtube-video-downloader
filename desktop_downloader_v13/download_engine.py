@@ -160,7 +160,16 @@ def parse_custom_headers(
 
 def _clean_terminal_text(value: object) -> str:
     text = ANSI_ESCAPE.sub("", str(value))
-    return "".join(character for character in text if character in "\t\n\r" or ord(character) >= 32)
+    text = "".join(
+        character
+        for character in text
+        if character in "\t\n\r" or ord(character) >= 32
+    )
+    return re.sub(
+        r"(?i)(https?://)[^/@\s]+@",
+        r"\1[redacted]@",
+        text,
+    )
 
 
 def _is_transient_network_error(error: Exception) -> bool:
@@ -251,13 +260,16 @@ def _safe_filename(filename: str) -> str:
         filename = "download"
     base_name, separator, extension = filename.partition(".")
     base_name = base_name.rstrip(" .")
-    filename = f"{base_name}{separator}{extension}"
     if base_name.upper() in {
         "CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)),
         *(f"LPT{i}" for i in range(1, 10)),
     }:
-        filename = f"_{filename}"
-    return filename[:180].rstrip(" .") or "download"
+        base_name = f"_{base_name}"
+    extension = f"{separator}{extension}" if separator else ""
+    if len(extension) >= 180:
+        extension = extension[-179:]
+    base_name = base_name[: max(1, 180 - len(extension))].rstrip(" .")
+    return f"{base_name or 'download'}{extension}".rstrip(" .") or "download"
 
 
 def _video_format_selector(quality: str) -> str:
@@ -405,6 +417,17 @@ def _progress_details(
     return " | ".join(parts)
 
 
+def _ensure_disk_space(directory: Path, required_bytes: int) -> None:
+    if required_bytes <= 0:
+        return
+    free_bytes = shutil.disk_usage(directory).free
+    if free_bytes < required_bytes:
+        raise OSError(
+            "Insufficient disk space: "
+            f"need {required_bytes} bytes but only {free_bytes} bytes are available."
+        )
+
+
 def _response_filename(response: requests.Response) -> str:
     disposition = response.headers.get("Content-Disposition", "")
     message = email.message.Message()
@@ -413,8 +436,11 @@ def _response_filename(response: requests.Response) -> str:
     if filename:
         return _safe_filename(filename)
 
-    path_name = PurePosixPath(unquote(urlsplit(response.url).path)).name
-    return _safe_filename(path_name or "download")
+    response_path = unquote(urlsplit(response.url).path)
+    path_name = PurePosixPath(response_path).name
+    if not path_name or response_path.endswith("/"):
+        path_name = "index.html"
+    return _safe_filename(path_name)
 
 
 def _delta_sync_existing_file(
@@ -557,7 +583,7 @@ def _delta_sync_existing_file(
                 )
 
         _check_cancelled(cancel_event)
-        os.replace(partial, target)
+        _replace_with_retry(partial, target, cancel_event, resume_event)
         progress("Download complete", 100.0, str(target))
         return str(target)
     except Exception as error:
@@ -615,6 +641,24 @@ def _final_target(target: Path) -> Path:
                 ACTIVE_TARGETS.add(_target_key(candidate))
                 return candidate
             counter += 1
+
+
+def _replace_with_retry(
+    source: Path,
+    destination: Path,
+    cancel_event: threading.Event,
+    resume_event: threading.Event | None = None,
+) -> None:
+    for attempt in range(5):
+        try:
+            source.replace(destination)
+            return
+        except PermissionError:
+            if attempt == 4:
+                raise
+            _wait_until_resumed(cancel_event, resume_event)
+            if cancel_event.wait(min(0.1 * (2**attempt), 1.0)):
+                raise DownloadCancelled("Download cancelled during file assembly.")
 
 
 def _parallel_metadata_path(target: Path) -> Path:
@@ -782,19 +826,27 @@ def _parallel_range_download(
             for segment in segments:
                 segment_path = _parallel_segment_path(target, segment["index"])
                 with segment_path.open("rb") as input_file:
-                    shutil.copyfileobj(input_file, output, length=DIRECT_CHUNK_SIZE)
+                    while True:
+                        _wait_until_resumed(cancel_event, resume_event)
+                        chunk = input_file.read(DIRECT_CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        output.write(chunk)
         if partial.stat().st_size != total:
             partial.unlink(missing_ok=True)
             raise RuntimeError("Parallel download did not produce the expected file size.")
 
         final_target = _final_target(target)
         target = final_target
-        partial.replace(final_target)
+        _replace_with_retry(partial, final_target, cancel_event, resume_event)
         for segment in segments:
             _parallel_segment_path(segment_target, segment["index"]).unlink(missing_ok=True)
         metadata_path.unlink(missing_ok=True)
         progress("Download complete", 100.0, str(final_target))
         return str(final_target)
+    except DownloadCancelled:
+        partial.unlink(missing_ok=True)
+        raise
     finally:
         _release_target(target)
 
@@ -816,13 +868,17 @@ def _download_direct(
     directory.mkdir(parents=True, exist_ok=True)
     cookie_jar = load_cookies(browser_cookies)
     session = requests.Session()
+    session_headers = getattr(session, "headers", None)
     if cookie_jar:
         session.cookies.update(cookie_jar)
-    if custom_headers:
-        session.headers.update(custom_headers)
+    if session_headers is not None:
+        if custom_headers:
+            session_headers.update(custom_headers)
+        session_headers.update({"Accept-Encoding": "identity"})
     proxy_rotator = ProxyRotator(proxy)
     target: Path | None = None
     last_error: Exception | None = None
+    required_space: int | None = None
     suggested_name = PurePosixPath(unquote(urlsplit(url).path)).name
     if suggested_name:
         suggested_name = _safe_filename(suggested_name)
@@ -877,6 +933,9 @@ def _download_direct(
                                 urljoin(probe.url, manifest_path),
                                 validator,
                             )
+                        partial = candidate.with_name(candidate.name + ".part")
+                        existing = partial.stat().st_size if partial.is_file() else 0
+                        required_space = max(0, total - existing)
                         metadata_path = _parallel_metadata_path(candidate)
                         partial = candidate.with_name(candidate.name + ".part")
                         if (
@@ -908,6 +967,9 @@ def _download_direct(
             )
             if delta_result:
                 return delta_result
+
+        if required_space is not None:
+            _ensure_disk_space(directory, required_space)
 
         if parallel_info:
             candidate_name, total, validator = parallel_info
@@ -948,7 +1010,9 @@ def _download_direct(
                         match = re.fullmatch(r"bytes \*/(\d+)", content_range, re.IGNORECASE)
                         if match and int(match.group(1)) == existing:
                             target = _final_target(target)
-                            partial.replace(target)
+                            _replace_with_retry(
+                                partial, target, cancel_event, resume_event
+                            )
                             return str(target)
                     response.raise_for_status()
 
@@ -964,16 +1028,43 @@ def _download_direct(
                         partial = target.with_name(target.name + ".part")
 
                     append = existing > 0 and response.status_code == 206
+                    expected_response_bytes: int | None = None
                     if append:
                         content_range = response.headers.get("Content-Range", "")
                         match = CONTENT_RANGE.match(content_range)
                         if not match or int(match.group(1)) != existing:
                             raise ValueError("The server returned an invalid range for resume.")
+                        range_end = int(match.group(2))
+                        range_total = match.group(3)
+                        if range_total == "*" or range_end + 1 != int(range_total):
+                            raise ValueError(
+                                "The server returned an incomplete range for resume."
+                            )
+                        expected_response_bytes = range_end - existing + 1
+                        if expected_response_bytes <= 0:
+                            raise ValueError("The server returned an invalid range for resume.")
+                        total = int(range_total)
+                        if (
+                            content_length := response.headers.get("Content-Length")
+                        ) and content_length.isdigit() and int(content_length) != expected_response_bytes:
+                            raise ValueError(
+                                "The server returned a mismatched content length for resume."
+                            )
                     else:
                         existing = 0
 
                     content_length = response.headers.get("Content-Length")
-                    total = existing + int(content_length) if content_length and content_length.isdigit() else None
+                    if not append:
+                        total = (
+                            existing + int(content_length)
+                            if content_length and content_length.isdigit()
+                            else None
+                        )
+                    if content_length and content_length.isdigit():
+                        _ensure_disk_space(
+                            directory,
+                            int(content_length),
+                        )
                     downloaded = existing
                     progress(
                         "Downloading direct file",
@@ -1004,14 +1095,35 @@ def _download_direct(
                                     _progress_details(str(target), downloaded, total),
                                 )
 
+                    if content_length and content_length.isdigit():
+                        received = downloaded - existing
+                        expected = int(content_length)
+                        if received != expected:
+                            raise requests.ConnectionError(
+                                "Response ended with an incorrect byte count: "
+                                f"received {received} of {expected} bytes."
+                            )
+                    elif (
+                        expected_response_bytes is not None
+                        and downloaded - existing != expected_response_bytes
+                    ):
+                        raise requests.ConnectionError(
+                            "The resumed range ended with an incorrect byte count: "
+                            f"received {downloaded - existing} of "
+                            f"{expected_response_bytes} bytes."
+                        )
                     _check_cancelled(cancel_event)
                     target = _final_target(target)
-                    partial.replace(target)
+                    _replace_with_retry(partial, target, cancel_event, resume_event)
                     progress("Download complete", 100.0, str(target))
                     return str(target)
             except requests.RequestException as error:
                 last_error = error
-                if error.response is not None and 400 <= error.response.status_code < 500:
+                if (
+                    error.response is not None
+                    and 400 <= error.response.status_code < 500
+                    and error.response.status_code != 429
+                ):
                     raise RuntimeError(f"Direct download was rejected: {error}") from error
                 if attempt + 1 >= retry_policy.attempts:
                     break

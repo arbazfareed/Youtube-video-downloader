@@ -216,6 +216,8 @@ class EventsMixin:
                             )
                             messagebox.showwarning("Notification unavailable", warning)
                 self.cancel_events.pop(job_id, None)
+                getattr(self, "_download_futures", {}).pop(job_id, None)
+                getattr(self, "_last_progress_update", {}).pop(job_id, None)
                 resume_event = self.resume_events.pop(job_id, None)
                 if resume_event:
                     resume_event.set()

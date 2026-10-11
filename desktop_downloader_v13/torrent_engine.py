@@ -20,6 +20,7 @@ from download_engine import DownloadCancelled, ProgressCallback
 
 
 RPC_START_TIMEOUT = 15.0
+RPC_FAILURE_TIMEOUT = 15.0
 POLL_INTERVAL = 0.5
 RPC_FIELDS = [
     "gid",
@@ -219,6 +220,7 @@ def download_torrent(
             gid: str | None = None
             latest_status: dict | None = None
             previous_completed = 0
+            rpc_failure_since: float | None = None
 
             while True:
                 if cancel_event.is_set():
@@ -258,8 +260,15 @@ def download_torrent(
                 except (urllib.error.URLError, TimeoutError, ConnectionError):
                     if process.poll() is not None:
                         raise RuntimeError(_aria2_process_error(process, log_file))
+                    if rpc_failure_since is None:
+                        rpc_failure_since = time.monotonic()
+                    elif time.monotonic() - rpc_failure_since >= RPC_FAILURE_TIMEOUT:
+                        raise RuntimeError(
+                            "aria2 stopped responding to RPC requests."
+                        )
                     time.sleep(POLL_INTERVAL)
                     continue
+                rpc_failure_since = None
 
                 status_name = latest_status.get("status", "")
                 completed = int(latest_status.get("completedLength") or 0)

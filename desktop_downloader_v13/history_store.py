@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
 from contextlib import closing
 from dataclasses import dataclass, field
@@ -47,6 +48,51 @@ class DownloadHistory:
             database_path = Path(data_root) / "SmartDownloader13" / "history.sqlite3"
         self.database_path = database_path
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        self.recovery_backup_path: Path | None = None
+        try:
+            self._initialize_database()
+        except sqlite3.DatabaseError as error:
+            if not self._is_corrupt_database_error(error):
+                raise
+            self.recovery_backup_path = self._backup_corrupt_database()
+            self._initialize_database()
+
+    @staticmethod
+    def _is_corrupt_database_error(error: sqlite3.DatabaseError) -> bool:
+        message = str(error).casefold()
+        return any(
+            marker in message
+            for marker in ("database disk image is malformed", "file is not a database")
+        )
+
+    def _backup_corrupt_database(self) -> Path:
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        backup_path = self.database_path.with_suffix(
+            f".{timestamp}.corrupt.bak"
+        )
+        suffix = 1
+        while backup_path.exists() or any(
+            Path(f"{backup_path}{sidecar_suffix}").exists()
+            for sidecar_suffix in ("-wal", "-shm")
+        ):
+            backup_path = self.database_path.with_suffix(
+                f".{timestamp}.{suffix}.corrupt.bak"
+            )
+            suffix += 1
+        shutil.copy2(self.database_path, backup_path)
+        sidecars: list[tuple[Path, Path]] = []
+        for sidecar_suffix in ("-wal", "-shm"):
+            original_sidecar = Path(f"{self.database_path}{sidecar_suffix}")
+            if original_sidecar.exists():
+                backup_sidecar = Path(f"{backup_path}{sidecar_suffix}")
+                shutil.copy2(original_sidecar, backup_sidecar)
+                sidecars.append((original_sidecar, backup_sidecar))
+        self.database_path.unlink()
+        for original_sidecar, _backup_sidecar in sidecars:
+            original_sidecar.unlink()
+        return backup_path
+
+    def _initialize_database(self) -> None:
         with closing(self._connect()) as connection:
             connection.execute(
                 """

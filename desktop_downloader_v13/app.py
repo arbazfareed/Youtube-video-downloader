@@ -78,6 +78,8 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
 
         self.events: queue.Queue[tuple] = queue.Queue()
         self.executor = ThreadPoolExecutor(max_workers=3)
+        self._progress_lock = threading.Lock()
+        self._last_progress_update: dict[str, tuple[float, str]] = {}
         self.history = DownloadHistory()
         load_plugins()
         self.history.mark_unfinished_interrupted()
@@ -85,6 +87,7 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         self.cancel_events: dict[str, threading.Event] = {}
         self.resume_events: dict[str, threading.Event] = {}
         self.schedule_timers: dict[str, threading.Timer] = {}
+        self._download_futures: dict[str, Future[str]] = {}
         self.download_options: dict[str, dict] = {}
         self.bandwidth_limiter = GlobalBandwidthLimiter()
         self.verified_checksums: dict[str, tuple[str, str]] = {}
@@ -147,6 +150,7 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         )
         self._last_clipboard = ""
         self._last_autofilled_clipboard = ""
+        self._last_clipboard_error: str | None = None
         self.show_hidden = tk.BooleanVar(value=False)
         self.scheduled_start = tk.StringVar(value="")
         self._download_paths: dict[str, Path] = {}
@@ -162,6 +166,15 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         self._build_ui()
         self._apply_theme()
         self._restore_history()
+        if self.history.recovery_backup_path is not None:
+            messagebox.showwarning(
+                "Download history recovered",
+                "The saved history database was corrupted. A copy was preserved at:\n"
+                f"{self.history.recovery_backup_path}\n\n"
+                "The app created a new history database; the previous history "
+                "was not deleted.",
+                parent=self.root,
+            )
         self.global_max_speed.trace_add("write", self._update_global_bandwidth)
         self.root.after(100, self._process_events)
         self.root.after(800, self._watch_clipboard)

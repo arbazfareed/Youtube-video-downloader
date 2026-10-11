@@ -39,7 +39,10 @@ Version 13.0 retains v12's fixes for finished-row destination updates, direct-fi
 bandwidth limits before writing each chunk, sanitizes Windows device filenames,
 and releases claimed output targets reliably. Its pause/resume event is named
 for the resume behavior it signals. The v13 app stores download history
-separately from earlier versions.
+separately from earlier versions. If SQLite reports that this history is
+corrupt, v13 preserves the original database in a timestamped `.corrupt.bak`
+file, creates a fresh history database, and shows the backup path. A database
+that is merely locked is not replaced; the startup error explains the lock.
 
 It cannot download every URL. Sign-in, DRM, paywall, private, and other protected
 streams are not supported. Only download content you have permission to save and
@@ -418,6 +421,12 @@ See [SETUP.md](./SETUP.md) for system prerequisites, first-time setup, and
 troubleshooting. The download engines do not require a separate accelerator
 package; direct-file parallel ranges and yt-dlp's media fragment concurrency
 are built into the app.
+The [behavior checklist](./TESTING.md) records the automated regression
+coverage for Sections 1–20, the changes made for issues found, and the
+environment-specific checks that still require manual verification. Recent
+hardening includes bounded UI progress updates, safe filename truncation,
+retries for temporary file locks, and recovery from malformed parallel
+download state.
 
 The v13 implementation covers the supplied priority matrix: shared bandwidth
 limits, duplicate detection, notifications, dark mode, checksums, clipboard

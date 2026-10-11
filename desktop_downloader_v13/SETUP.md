@@ -275,6 +275,11 @@ change, but no version guarantees that every URL will work.
 
 - **App does not open:** check `startup-error.log` in this folder. Confirm
   Python and Tkinter are installed, then rerun the launcher.
+- **History database is corrupt:** v13 preserves the damaged file as a
+  timestamped `.corrupt.bak`, creates a clean history database, and displays
+  where the backup was saved. Keep that backup if you need to recover records.
+- **History database is locked:** close other apps using `history.sqlite3`
+  (including SQLite browsers) and retry. A locked database is not overwritten.
 - **Package installation fails:** check internet access and run the pip install
   command above from this folder. Avoid deleting `.venv` while the app is open.
 - **MP3 or merged output fails:** install FFmpeg, restart the app, and retry.

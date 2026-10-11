@@ -5,6 +5,13 @@ downloader application. The app is documented in
 [`desktop_downloader/README.md`](./desktop_downloader/README.md); it does not
 replace or modify the notebooks.
 
+The versioned desktop apps provide queued direct-file and public-media
+downloads, retry/resume support, local history, and media/file utilities.
+Version 13 adds an optional VLC-powered in-app player and has its own
+automated/manual test coverage guide, which tracks behavior checks for Sections
+1–20 and distinguishes automated regression tests from environment-dependent
+manual verification.
+
 ## Repository layout
 
 ```text
@@ -109,6 +116,7 @@ unchanged.
 
 - [Version 13.0 features and refreshed interface](./desktop_downloader_v13/README.md)
 - [Version 13.0 setup and aria2 installation](./desktop_downloader_v13/SETUP.md)
+- [Version 13.0 test coverage and manual verification checklist](./desktop_downloader_v13/TESTING.md)
 
 ## Smart Downloader 10.0
 
