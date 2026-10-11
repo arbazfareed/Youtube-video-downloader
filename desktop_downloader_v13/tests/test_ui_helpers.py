@@ -373,6 +373,7 @@ class MediaPlaybackTests(unittest.TestCase):
                     vlc_instance = Mock()
                     vlc_player = vlc_instance.media_player_new.return_value
                     vlc_player.get_state.return_value = 0
+                    vlc_player.audio_get_track_description.return_value = []
                     vlc_module = SimpleNamespace(
                         Instance=Mock(return_value=vlc_instance),
                         State=SimpleNamespace(Ended=1, Error=2),
@@ -380,23 +381,139 @@ class MediaPlaybackTests(unittest.TestCase):
                     video_surface = Mock()
                     video_surface.winfo_id.return_value = 42
                     window = Mock()
+                    window.winfo_screenwidth.return_value = 1280
+                    window.winfo_screenheight.return_value = 720
                     volume = Mock()
                     volume.get.return_value = 80
+                    volume_label = Mock()
+                    track_variable = Mock()
                     with (
                         patch("app_media.sys.platform", "win32"),
                         patch.dict("sys.modules", {"vlc": vlc_module}),
                         patch("app_media.tk.Toplevel", return_value=window),
                         patch("app_media.tk.Frame", return_value=video_surface),
                         patch("app_media.tk.IntVar", return_value=volume),
+                        patch(
+                            "app_media.tk.StringVar",
+                            side_effect=[volume_label, track_variable],
+                        ),
                         patch("app_media.ttk.Frame"),
                         patch("app_media.ttk.Button"),
                         patch("app_media.ttk.Label"),
                         patch("app_media.ttk.Scale"),
+                        patch("app_media.ttk.Combobox"),
                     ):
                         MediaMixin.play_selected_media(app)
                     vlc_instance.media_new.assert_called_once_with(str(path))
                     vlc_player.set_hwnd.assert_called_once_with(42)
                     vlc_player.play.assert_called_once_with()
+                    window.geometry.assert_any_call("1100x640+90+40")
+                    window.resizable.assert_called_once_with(True, True)
+                    self.assertIn(
+                        unittest.mock.call("<F11>", app._toggle_in_app_fullscreen),
+                        window.bind.call_args_list,
+                    )
+                    self.assertIn(
+                        unittest.mock.call("<Escape>", app._exit_in_app_fullscreen),
+                        window.bind.call_args_list,
+                    )
+
+    def test_volume_control_updates_vlc_and_displays_rounded_percentage(self):
+        app = MediaMixin()
+        app._in_app_player = Mock()
+        app._in_app_volume_label = Mock()
+
+        MediaMixin._set_in_app_volume(app, "63.7")
+
+        app._in_app_player.audio_set_volume.assert_called_once_with(64)
+        app._in_app_volume_label.set.assert_called_once_with("64%")
+
+    def test_audio_track_selector_lists_tracks_and_selects_chosen_track(self):
+        app = MediaMixin()
+        app._in_app_player = Mock()
+        app._in_app_player.audio_get_track_description.return_value = [
+            (1, "English"),
+            (2, b"Urdu"),
+        ]
+        app._in_app_player.audio_get_track.return_value = 2
+        app._in_app_audio_track_combo = Mock()
+        app._in_app_audio_track = Mock()
+        app._in_app_audio_tracks = {}
+        app._t = lambda text: text
+
+        MediaMixin._refresh_in_app_audio_tracks(app)
+
+        app._in_app_audio_track_combo.configure.assert_called_once_with(
+            values=("English", "Urdu"),
+            state="readonly",
+        )
+        app._in_app_audio_track.set.assert_called_once_with("Urdu")
+        app._in_app_audio_track.get.return_value = "English"
+        app._in_app_player.audio_set_track.return_value = 0
+        MediaMixin._select_in_app_audio_track(app)
+        app._in_app_player.audio_set_track.assert_called_once_with(1)
+
+    def test_audio_track_selector_disables_when_vlc_has_no_tracks(self):
+        app = MediaMixin()
+        app._in_app_player = Mock()
+        app._in_app_player.audio_get_track_description.return_value = None
+        app._in_app_audio_track_combo = Mock()
+        app._in_app_audio_track = Mock()
+        app._in_app_audio_tracks = {}
+        app._t = lambda text: text
+
+        MediaMixin._refresh_in_app_audio_tracks(app)
+
+        app._in_app_audio_track_combo.configure.assert_called_once_with(
+            values=(),
+            state="disabled",
+        )
+        app._in_app_audio_track.set.assert_called_once_with("No audio tracks available")
+
+    def test_fullscreen_toggle_restores_window_geometry_and_escape_exits(self):
+        app = MediaMixin()
+        app._in_app_player_window = Mock()
+        app._in_app_player_window.geometry.return_value = "900x600+40+30"
+        app._in_app_fullscreen_button = Mock()
+        app._in_app_fullscreen = False
+        app._t = lambda text: text
+
+        self.assertEqual(MediaMixin._toggle_in_app_fullscreen(app), "break")
+        app._in_app_player_window.attributes.assert_called_once_with(
+            "-fullscreen",
+            True,
+        )
+        app._in_app_fullscreen_button.configure.assert_called_once_with(
+            text="Exit full screen"
+        )
+
+        self.assertEqual(MediaMixin._exit_in_app_fullscreen(app), "break")
+        app._in_app_player_window.attributes.assert_called_with(
+            "-fullscreen",
+            False,
+        )
+        app._in_app_player_window.geometry.assert_called_with("900x600+40+30")
+        app._in_app_fullscreen_button.configure.assert_called_with(
+            text="Full screen"
+        )
+
+    def test_player_help_explains_resize_fullscreen_volume_and_audio_tracks(self):
+        app = MediaMixin()
+        app._t = lambda text: text
+        app._in_app_player_window = Mock()
+
+        with patch("app_media.messagebox.showinfo") as show_info:
+            MediaMixin._show_in_app_player_help(app)
+
+        title, help_text = show_info.call_args.args
+        self.assertEqual(title, "Media player help")
+        self.assertIn("window edges", help_text)
+        self.assertIn("F11", help_text)
+        self.assertIn("Escape", help_text)
+        self.assertIn("percentage", help_text)
+        self.assertIn("audio track", help_text)
+        self.assertIn("scales", help_text)
+        self.assertEqual(show_info.call_args.kwargs["parent"], app._in_app_player_window)
 
     def test_copy_selected_link_uses_clipboard_and_reports_success(self):
         app = SimpleNamespace(

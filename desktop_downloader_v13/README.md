@@ -95,6 +95,14 @@ Larger text and a high-contrast palette are also available. Screen-reader
 announcements and Urdu text shaping depend on the operating system, screen
 reader, fonts, and Tk version; verify those combinations manually.
 
+The VLC in-app player opens at a size fitted to the current display and remains
+resizable. Its video area expands with the window; use **Full screen** or **F11**
+to fill the display, and **Escape** to leave full screen. The volume control
+shows its current percentage. When VLC reports multiple audio tracks, select
+one from the **Audio track** list. Player **Help** explains resizing and these
+controls. Actual resolution/codec playback depends on the media, VLC build,
+hardware, and display and must be checked with representative files.
+
 For completed local downloads, v13 saves a SHA-256 baseline in download history.
 Before opening, playing, editing, or extracting a selected download, the app
 checks the file against that baseline and blocks the action if the file changed

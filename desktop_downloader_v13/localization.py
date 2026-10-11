@@ -108,6 +108,52 @@ TRANSLATIONS = {
         "es": "Reproductor multimedia", "ur": "میڈیا پلیئر",
         "ar": "مشغل الوسائط", "hi": "मीडिया प्लेयर", "bn": "মিডিয়া প্লেয়ার",
     },
+    "Full screen": {
+        "es": "Pantalla completa", "ur": "مکمل اسکرین",
+        "ar": "ملء الشاشة", "hi": "पूर्ण स्क्रीन", "bn": "পূর্ণ পর্দা",
+    },
+    "Exit full screen": {
+        "es": "Salir de pantalla completa", "ur": "مکمل اسکرین سے باہر",
+        "ar": "الخروج من ملء الشاشة", "hi": "पूर्ण स्क्रीन से बाहर निकलें",
+        "bn": "পূর্ণ পর্দা থেকে বের হন",
+    },
+    "Audio track": {
+        "es": "Pista de audio", "ur": "آڈیو ٹریک",
+        "ar": "المسار الصوتي", "hi": "ऑडियो ट्रैक", "bn": "অডিও ট্র্যাক",
+    },
+    "No audio tracks available": {
+        "es": "No hay pistas de audio disponibles",
+        "ur": "کوئی آڈیو ٹریک دستیاب نہیں",
+        "ar": "لا توجد مسارات صوتية متاحة",
+        "hi": "कोई ऑडियो ट्रैक उपलब्ध नहीं",
+        "bn": "কোনো অডিও ট্র্যাক উপলভ্য নেই",
+    },
+    "Audio track unavailable": {
+        "es": "Pista de audio no disponible", "ur": "آڈیو ٹریک دستیاب نہیں",
+        "ar": "المسار الصوتي غير متاح", "hi": "ऑडियो ट्रैक उपलब्ध नहीं",
+        "bn": "অডিও ট্র্যাক উপলভ্য নয়",
+    },
+    "VLC could not select this audio track.": {
+        "es": "VLC no pudo seleccionar esta pista de audio.",
+        "ur": "VLC یہ آڈیو ٹریک منتخب نہیں کر سکا۔",
+        "ar": "تعذر على VLC تحديد هذا المسار الصوتي.",
+        "hi": "VLC इस ऑडियो ट्रैक को चुन नहीं सका।",
+        "bn": "VLC এই অডিও ট্র্যাক নির্বাচন করতে পারেনি।",
+    },
+    "Media player help": {
+        "es": "Ayuda del reproductor multimedia", "ur": "میڈیا پلیئر کی مدد",
+        "ar": "مساعدة مشغل الوسائط", "hi": "मीडिया प्लेयर सहायता",
+        "bn": "মিডিয়া প্লেয়ার সহায়তা",
+    },
+    "Resize the player using its window edges, or choose Full screen or press F11. Press Escape to leave full screen. Use the volume slider to change sound; the percentage is shown beside it. Choose an audio track from the track list when the media provides multiple tracks. Video scales to the available player area.": {
+        "ur": (
+            "پلیئر کا سائز بدلنے کے لیے ونڈو کے کنارے کھینچیں، یا مکمل اسکرین "
+            "منتخب کریں یا F11 دبائیں۔ مکمل اسکرین سے نکلنے کے لیے Escape دبائیں۔ "
+            "آواز بدلنے کے لیے والیوم سلائیڈر استعمال کریں؛ اس کے ساتھ فیصد دکھائی "
+            "جاتی ہے۔ اگر میڈیا میں متعدد ٹریک ہوں تو فہرست سے آڈیو ٹریک منتخب کریں۔ "
+            "ویڈیو دستیاب پلیئر حصے کے مطابق ہو جائے گی۔"
+        ),
+    },
     "Pause": {
         "es": "Pausar", "ur": "روکیں", "ar": "إيقاف مؤقت",
         "hi": "रोकें", "bn": "বিরতি",

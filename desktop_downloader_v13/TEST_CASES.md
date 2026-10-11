@@ -75,6 +75,25 @@ the manual or environment-dependent cases below.
 | 4.20 | Return HTTP 200 with an empty body / zero-byte file. | Valid zero-byte responses complete safely when permitted; no division-by-zero or false positive for a non-empty advertised file. | Automated — zero-byte and size mismatch test coverage. |
 | 4.21 | Serve a gzip-encoded response while range offsets are in use. | Byte offsets remain correct; client requests identity encoding for range transfers or otherwise decodes safely without corrupt output. | Partial — requests use `Accept-Encoding: identity`; an actual gzip/range server integration test remains pending. |
 
+## VLC player — sizing, resolutions, and audio controls
+
+Run these manual cases with the packaged app or source app and an installed VLC
+runtime. Use media you are permitted to play. The automated tests mock VLC:
+they verify control wiring and geometry but cannot certify decoding/rendering
+on a real display.
+
+| ID | Scenario and action | Expected result | Current evidence |
+| --- | --- | --- | --- |
+| PV-1 | Open a local supported video on a standard display. | Player opens inside the available display bounds, shows title-bar controls, and video scales into the expanding play area. | Automated geometry setup plus Tk smoke; actual video rendering manual. |
+| PV-2 | Resize the player narrower, wider, shorter, and taller; move it horizontally and vertically. | Window remains user-resizable/movable; controls remain visible; video adapts without being clipped by a fixed-size window. | Automated resizable configuration; real resizing/movement manual. |
+| PV-3 | Play available clips at 240p, 360p, 480p, 720p, 1080p, 1440p, and 2160p/4K. | Every resolution supported by the source device and VLC build plays; aspect ratio is preserved and the app does not crop the player controls. Record unsupported resolutions as hardware/codec limitations, not passes. | Manual — pending. Unit tests do not decode video. |
+| PV-4 | Play portrait and ultrawide media, then resize the window. | Video maintains its source aspect ratio within the available video surface; letterboxing is acceptable, unintended cropping is not. | Manual — pending. |
+| PV-5 | Move volume through 0%, intermediate values, and 100%. | VLC receives a value in the 0–100 range and the displayed integer percentage matches the slider. | Automated callback test; real output loudness/mute verification manual. |
+| PV-6 | Open media with multiple audio tracks; switch between tracks during playback. | Track names are listed, the chosen VLC track becomes active, and playback continues. Media with no tracks shows a disabled track selector. | Automated list/selection/no-track tests; real multi-track playback manual. |
+| PV-7 | Enter fullscreen using the button and F11; press Escape, then enter/exit again. | Video fills the display in fullscreen; Escape and the button restore the prior windowed size and position. | Automated fullscreen state/geometry tests; real display rendering manual. |
+| PV-8 | Open player Help. | Help describes resizing, fullscreen/F11/Escape, volume percentage, audio-track selection, and video scaling. | Automated help-text test. |
+| PV-9 | Repeat PV-1 through PV-7 with audio-only media. | Playback works without requiring a video surface; volume works; audio track list is available when VLC exposes tracks; fullscreen controls remain safe to use. | Existing audio open test plus mocked controls; real audio playback manual. |
+
 ## Failure report template
 
 Use this template for every failed, blocked, or manually executed case:
@@ -98,7 +117,7 @@ Retest result:
 
 ## Results and limitations
 
-The v13 unit suite previously passed 191 tests. That result is evidence for
+The current v13 unit suite passes 200 tests. That result is evidence for
 those automated tests only. Cases labelled manual, partial, or not separately
 evidenced above remain open for their stated environment or scenario. Update
 the evidence label only after running and recording the exact case; do not infer

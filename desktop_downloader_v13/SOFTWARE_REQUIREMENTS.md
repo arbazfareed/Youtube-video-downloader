@@ -70,6 +70,9 @@ version-specific README and SETUP guide for supported prerequisites.
 | FR-A11Y-01 | Core download actions shall be reachable by keyboard using documented shortcuts and ordinary Tab/Shift+Tab traversal. | Shortcut registration and focus tests; manual interaction test. |
 | FR-A11Y-02 | The download queue shall support keyboard focus and selection; Space shall toggle pause/resume for the selected job while the queue has focus. | Automated shortcut callback tests; manual keyboard/screen-reader check. |
 | FR-A11Y-03 | Progress status and progress controls shall be keyboard-focusable so users can move focus to read current state through assistive technology. | UI construction and manual platform-specific screen-reader validation. |
+| FR-MEDIA-01 | The in-app VLC player shall open in a display-fitted, user-resizable window with an expanding video surface and a fullscreen toggle; F11 enters/toggles fullscreen and Escape exits it. | Automated window setup and fullscreen state tests; manual media playback/resolution matrix. |
+| FR-MEDIA-02 | The player shall display the current volume as a percentage and apply slider changes from 0–100 to VLC. | Automated volume callback test; real sound-level check is manual. |
+| FR-MEDIA-03 | When VLC provides audio-track descriptions, the player shall list the tracks and select the chosen VLC track; unavailable tracks shall be visibly disabled. | Automated track-listing/selection and no-track tests; multi-track media validation is manual. |
 
 ## 5. Non-functional requirements
 
@@ -105,7 +108,9 @@ resume, real authentication, memory/CPU thresholds, cross-platform execution,
 long-duration stability, real subprocess cleanup, and screen-reader/Urdu font
 behavior on supported operating systems require separate runs. The app does not
 claim automatic live-region announcements across every Tk and screen-reader
-combination.
+combination. VLC codec/resolution combinations and audio-track switching also
+depend on installed VLC, the media file, graphics hardware, and output device;
+the unit tests do not certify actual playback.
 See [TESTING.md](./TESTING.md) for the current list of these limitations.
 
 ## 7. Traceability and test reports

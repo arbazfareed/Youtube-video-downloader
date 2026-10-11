@@ -34,6 +34,7 @@ only material you are allowed to save and follow the source service's terms.
 | US-08 | Understand when an external server, network, or device still needs a real-world check. | Test results are honest and I know what has not been certified. | TEST_CASES.md and TESTING.md |
 | US-09 | Choose Urdu and navigate common download actions with the keyboard. | I can use the main interface and important actions in my language without relying only on a mouse. | SOFTWARE_REQUIREMENTS.md FR-I18N-01 and FR-A11Y-01 |
 | US-10 | Focus the download list or progress status with a shortcut and have the screen reader read the focused control. | I can inspect download state with assistive technology where my OS and Tk build expose it. | SOFTWARE_REQUIREMENTS.md FR-A11Y-02 and FR-A11Y-03 |
+| US-11 | Resize or maximize the VLC player, check the volume percentage, and select an audio track when available. | I can fit playback to my screen and understand/control the audio. | TEST_CASES.md PV-1–PV-9 |
 
 ## How to read the test results
 
@@ -57,7 +58,7 @@ system, fonts, screen reader, and Tk version; test these directly rather than
 assuming every combination behaves the same. The whole window layout is not
 automatically mirrored for right-to-left reading.
 
-The current automated v13 suite passes 195 tests. That count does **not**
+The current automated v13 suite passes 200 tests. That count does **not**
 mean every real-device or environment-specific check passed. In particular,
 offline packaged launches, 10,000-row startup time, actual network changes,
 sleep/wake behavior, real authentication, long-duration stability, measured
