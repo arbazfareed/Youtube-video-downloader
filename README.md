@@ -47,24 +47,26 @@ data, not source files to publish.
 4. Open **Smart Downloader** from the desktop shortcut. VS Code is not needed.
 
 For a new computer, macOS/Linux steps, manual installation, and troubleshooting,
-see [`desktop_downloader/SETUP.md`](./desktop_downloader/SETUP.md).
+see [`desktop_downloader/SETUP.md`](./desktop_downloader/SETUP.md). Separate
+versioned apps are maintained in `desktop_downloader_v10/`,
+`desktop_downloader_v11/`, and `desktop_downloader_v12/`.
 
 ## Portable Windows download
 
-The GitHub Actions workflow builds a portable Windows ZIP for the original
-desktop app and Smart Downloader 11.0. To publish the ZIPs, create and push a
-version tag from the repository root:
+The GitHub Actions workflow builds portable Windows ZIPs for the original
+desktop app and Smart Downloader 11.0 and 12.0. To publish the ZIPs, create and
+push a new version tag from the repository root:
 
 ```powershell
-git tag v11.0.1
-git push origin v11.0.1
+git tag v12.0.0
+git push origin v12.0.0
 ```
 
-After the **Build Windows downloads** workflow succeeds, both ZIP files appear
-as assets on that GitHub Release. On another Windows PC, download and extract
-the ZIP, then double-click the `.exe`; Python and the app's Python packages do
-not need to be installed. Some optional integrations still use external
-programs; see the version-specific README for those limitations.
+After the **Build Windows downloads** workflow succeeds, all three ZIP files
+appear as assets on that GitHub Release. On another Windows PC, download and
+extract the ZIP, then double-click the `.exe`; Python and the app's Python
+packages do not need to be installed. Some optional integrations still use
+external programs; see the version-specific README for those limitations.
 
 ## App documentation
 
@@ -84,6 +86,16 @@ unchanged.
 
 - [Version 11.0 features and fixes](./desktop_downloader_v11/README.md)
 - [Version 11.0 setup and aria2 installation](./desktop_downloader_v11/SETUP.md)
+
+## Smart Downloader 12.0
+
+Version 12.0 is a separate copy of v11 in
+[`desktop_downloader_v12`](./desktop_downloader_v12/README.md). Its GUI is split
+into focused modules for UI construction, themes, preferences, queue management,
+downloads, media tools, and events. Existing versions remain unchanged.
+
+- [Version 12.0 features and refactored app structure](./desktop_downloader_v12/README.md)
+- [Version 12.0 setup and aria2 installation](./desktop_downloader_v12/SETUP.md)
 
 ## Smart Downloader 10.0
 

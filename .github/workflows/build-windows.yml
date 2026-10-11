@@ -20,6 +20,8 @@ jobs:
             executable: SmartDownloader
           - app-directory: desktop_downloader_v11
             executable: SmartDownloader11
+          - app-directory: desktop_downloader_v12
+            executable: SmartDownloader12
     defaults:
       run:
         working-directory: ${{ matrix.app-directory }}
@@ -100,8 +102,8 @@ jobs:
         run: |
           $assets = Get-ChildItem -Path release-artifacts -Filter "*.zip" -Recurse |
             ForEach-Object { $_.FullName }
-          if ($assets.Count -ne 2) {
-            throw "Expected two portable ZIP files, found $($assets.Count)."
+          if ($assets.Count -ne 3) {
+            throw "Expected three portable ZIP files, found $($assets.Count)."
           }
           gh release create "$env:GITHUB_REF_NAME" $assets `
             --repo "${{ github.repository }}" --verify-tag --generate-notes
