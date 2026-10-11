@@ -207,7 +207,9 @@ class EventsMixin:
                         try:
                             notify(
                                 "Download complete",
-                                Path(detail).name if detail else self.jobs.set(job_id, "link"),
+                                Path(detail.replace("\\", "/")).name
+                                if detail
+                                else self.jobs.set(job_id, "link"),
                             )
                         except Exception as error:
                             warning = f"OS notification failed: {error}"

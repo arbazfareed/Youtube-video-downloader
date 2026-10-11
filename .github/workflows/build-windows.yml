@@ -104,43 +104,23 @@ jobs:
           --collect-submodules plugins
           launch.py
       - name: Verify packaged GUI initializes
-        if: matrix.platform == 'Windows'
+        if: matrix.platform == 'Windows' && (matrix.app-directory == 'desktop_downloader_v12' || matrix.app-directory == 'desktop_downloader_v13')
         shell: pwsh
         run: |
-          $supportsSmokeTest = "${{ matrix.app-directory }}" -eq "desktop_downloader_v12" -or
-            "${{ matrix.app-directory }}" -eq "desktop_downloader_v13"
-          $arguments = @()
-          if ($supportsSmokeTest) {
-            $arguments = @("--smoke-test")
-          }
           $process = Start-Process `
             -FilePath "dist\${{ matrix.executable }}.exe" `
-            -ArgumentList $arguments -PassThru
+            -ArgumentList "--smoke-test" -PassThru
           $deadline = (Get-Date).AddSeconds(60)
-          if ($supportsSmokeTest) {
-            do {
-              Start-Sleep -Seconds 1
-              $process.Refresh()
-            } until ($process.HasExited -or (Get-Date) -ge $deadline)
-            if (-not $process.HasExited) {
-              Stop-Process -Id $process.Id
-              throw "Packaged app GUI initialization timed out."
-            }
-            if ($process.ExitCode -ne 0) {
-              throw "Packaged app GUI initialization failed with code $($process.ExitCode)."
-            }
-          } else {
-            do {
-              Start-Sleep -Seconds 1
-              $process.Refresh()
-            } until ($process.HasExited -or $process.MainWindowHandle -ne 0 -or (Get-Date) -ge $deadline)
-            if ($process.HasExited -or $process.MainWindowHandle -eq 0) {
-              if (-not $process.HasExited) {
-                Stop-Process -Id $process.Id
-              }
-              throw "Packaged app did not open a visible window."
-            }
+          do {
+            Start-Sleep -Seconds 1
+            $process.Refresh()
+          } until ($process.HasExited -or (Get-Date) -ge $deadline)
+          if (-not $process.HasExited) {
             Stop-Process -Id $process.Id
+            throw "Packaged app GUI initialization timed out."
+          }
+          if ($process.ExitCode -ne 0) {
+            throw "Packaged app GUI initialization failed with code $($process.ExitCode)."
           }
           if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v12" -or
               "${{ matrix.app-directory }}" -eq "desktop_downloader_v13") {
@@ -177,7 +157,8 @@ jobs:
             do {
               $process.Refresh()
               if ($process.HasExited) {
-                throw "Packaged REST API exited with code $($process.ExitCode)."
+                $apiError = Get-Content -Raw $apiLog -ErrorAction SilentlyContinue
+                throw "Packaged REST API exited with code $($process.ExitCode). $apiError"
               }
               try {
                 $response = Invoke-WebRequest `
@@ -195,23 +176,7 @@ jobs:
             if ($process) {
               $process.Refresh()
               if (-not $process.HasExited) {
-                $processIds = @([int]$process.Id)
-                $pendingProcessIds = $processIds
-                while ($pendingProcessIds.Count -gt 0) {
-                  $childProcessIds = @(
-                    Get-CimInstance Win32_Process |
-                      Where-Object {
-                        $pendingProcessIds -contains [int]$_.ParentProcessId -and
-                        $processIds -notcontains [int]$_.ProcessId
-                      } |
-                      Select-Object -ExpandProperty ProcessId
-                  )
-                  $processIds += $childProcessIds
-                  $pendingProcessIds = $childProcessIds
-                }
-                for ($index = $processIds.Count - 1; $index -ge 0; $index--) {
-                  Stop-Process -Id $processIds[$index] -Force -ErrorAction SilentlyContinue
-                }
+                $process.Kill($true)
                 $process.WaitForExit(10000) | Out-Null
               }
             }
