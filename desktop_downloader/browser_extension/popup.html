@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Smart Downloader</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <h1>Smart Downloader</h1>
+      <label>API address<input id="apiUrl" type="url" value="http://127.0.0.1:8765"></label>
+      <label>API token<input id="apiToken" type="password" autocomplete="off"></label>
+      <label>Save folder on this computer<input id="output" type="text" value="downloads"></label>
+      <button id="save" type="button">Save settings</button>
+      <button id="downloadPage" type="button">Download this page</button>
+      <button id="showQr" type="button">Show phone QR</button>
+      <img id="qr" alt="Phone control QR code">
+      <p id="result" role="status"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

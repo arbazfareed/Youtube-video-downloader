@@ -1,0 +1,107 @@
+name: Build Windows downloads
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app-directory: desktop_downloader
+            executable: SmartDownloader
+          - app-directory: desktop_downloader_v11
+            executable: SmartDownloader11
+    defaults:
+      run:
+        working-directory: ${{ matrix.app-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ${{ matrix.app-directory }}/requirements.txt
+      - name: Install app and packaging dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements.txt
+          python -m pip install --disable-pip-version-check pyinstaller
+      - name: Run application tests
+        run: python -m unittest discover -s tests -v
+      - name: Build standalone executable
+        run: >-
+          pyinstaller --noconfirm --clean --onefile --windowed
+          --name "${{ matrix.executable }}"
+          --collect-all yt_dlp
+          --collect-submodules plugins
+          launch.py
+      - name: Verify packaged GUI opens
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath "dist\${{ matrix.executable }}.exe" -PassThru
+          try {
+            $deadline = (Get-Date).AddSeconds(30)
+            do {
+              Start-Sleep -Seconds 1
+              $process.Refresh()
+              if ($process.HasExited) {
+                throw "Packaged app exited with code $($process.ExitCode)."
+              }
+            } until ($process.MainWindowTitle -like "*Smart Downloader*" -or (Get-Date) -ge $deadline)
+            if ($process.MainWindowTitle -notlike "*Smart Downloader*") {
+              throw "Packaged app did not create its main window."
+            }
+          } finally {
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id
+            }
+          }
+      - name: Package executable
+        shell: pwsh
+        run: |
+          $packageName = "${{ matrix.executable }}-Windows"
+          $packageDirectory = Join-Path $env:RUNNER_TEMP $packageName
+          New-Item -ItemType Directory -Path $packageDirectory | Out-Null
+          Copy-Item "dist\${{ matrix.executable }}.exe" $packageDirectory
+          Copy-Item README.md $packageDirectory
+          $setupPath = Join-Path $packageDirectory "PORTABLE-SETUP.txt"
+          @(
+            "Extract this ZIP file, then double-click ${{ matrix.executable }}.exe."
+            "Python and the app's Python packages are bundled; no Python installation is required."
+            "Optional external tools are listed in README.md."
+          ) | Set-Content -Path $setupPath -Encoding utf8
+          Compress-Archive -Path "$packageDirectory\*" -DestinationPath "$env:RUNNER_TEMP\$packageName.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.executable }}-Windows
+          path: ${{ runner.temp }}/${{ matrix.executable }}-Windows.zip
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+      - name: Publish portable ZIP files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $assets = Get-ChildItem -Path release-artifacts -Filter "*.zip" -Recurse |
+            ForEach-Object { $_.FullName }
+          if ($assets.Count -ne 2) {
+            throw "Expected two portable ZIP files, found $($assets.Count)."
+          }
+          gh release create "$env:GITHUB_REF_NAME" $assets `
+            --repo "${{ github.repository }}" --verify-tag --generate-notes

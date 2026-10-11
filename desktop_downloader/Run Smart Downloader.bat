@@ -20,18 +20,6 @@ if not exist ".venv\Scripts\python.exe" (
     )
 )
 
-".venv\Scripts\python.exe" -c "import tkinter, requests, yt_dlp" >nul 2>nul
-if errorlevel 1 (
-    echo Installing downloader packages. The first launch can take several minutes...
-    ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -r requirements.txt
-    ".venv\Scripts\python.exe" -c "import tkinter, requests, yt_dlp"
-    if errorlevel 1 (
-        echo Required packages are not ready. Check your internet connection and try again.
-        pause
-        exit /b 1
-    )
-)
-
 ".venv\Scripts\python.exe" launch.py
 if errorlevel 1 (
     echo Smart Downloader closed with an error.

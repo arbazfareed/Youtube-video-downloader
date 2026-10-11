@@ -37,8 +37,14 @@ and extract a newer ZIP or use the Git method above.
   the system `python3-tk` package if it is missing.
 - Git only if you want to clone or update the project using Git.
 - Internet access for initial package installation and downloading.
+- Native desktop notifications use Plyer, which is installed from
+  `requirements.txt`; notification support depends on the operating system.
 - FFmpeg is optional. Install it only for MP3 conversion or merging separate
   audio/video streams.
+- PDF-to-DOCX conversion is included in the Python requirements. DOCX-to-PDF
+  also needs LibreOffice: install its Windows desktop installer or, on
+  Debian/Ubuntu Linux, run `sudo apt install libreoffice-writer`. The app finds
+  `soffice` on PATH or in common install locations.
 - No separate speed-accelerator package is required. Parallel HTTP range
   downloads and yt-dlp media fragment connections are provided by this app.
 
@@ -110,6 +116,17 @@ python3 -m venv .venv
 
 Restart Smart Downloader after installing FFmpeg.
 
+## Cloud destinations
+
+Open **More settings** > **Schedule & files**, then choose Amazon S3, Google
+Drive, or Dropbox and select **Account setup**. S3 credentials and provider tokens are saved
+in the operating system credential store. Google Drive needs an OAuth client
+JSON file and browser sign-in; Dropbox needs an app key/secret and browser
+authorization. The app stages files locally and deletes that staging copy only
+after a successful upload. Failed uploads retain the local copy and show its
+location. The remote-folder field is an S3 prefix, Dropbox path, or Google
+Drive folder ID.
+
 ## Get the latest app version
 
 If you cloned the repo with Git, open PowerShell in the repository folder and
@@ -167,9 +184,37 @@ change, but no version guarantees that every URL will work.
 - Direct-file range data is stored next to the destination as hidden-in-purpose
   `.part.segment-*` files and a `.segments.json` resume record until the
   download finishes. Keep these files together if moving an interrupted job.
-- A bandwidth cap is applied per download. For example, three jobs capped at
-  1 MB/s can together use up to roughly 3 MB/s.
+- Each download can have its own bandwidth cap, and **Global max speed** limits
+  combined app traffic. Direct downloads apply the shared limiter before
+  writing data; yt-dlp reports progress in updates, so instantaneous network
+  rates can vary around the global cap.
 - Scheduled downloads start only while the app remains open.
+
+## History and verification
+
+- **Clear finished** hides completed, failed, and cancelled rows instead of
+  deleting their history. Enable **Show hidden** and choose **Restore
+  selected** to bring a hidden row back.
+- The app remembers your dark theme and duplicate-warning choice. It warns
+  before repeating a completed download unless **Warn if already downloaded**
+  in **More settings** > **Schedule & files** is turned off. Dark mode is in
+  the main-window header.
+- The sidebar filters the queue by **All tasks**, **Downloading**, **Completed**,
+  or **Media library**. Use **More settings** for less common options and
+  **History** for hide, restore, and clear-finished actions.
+- Choose **Convert to MP3** in the sidebar to convert a local audio or video
+  file. FFmpeg is required, and the original source is not overwritten.
+- New users can choose **Use recommended**. Then paste a link, choose a save
+  folder, and click **Add download**.
+- Optional checksum verification accepts an MD5 or SHA-256 hash; you can include
+  its prefix, such as `sha256:<hash>`.
+- Turn on **Auto-fill copied links** to fill the link box when a web link is
+  copied. Choose **Batch...** to paste many links, load a `.txt` file, or use
+  clipboard contents; enter one link per line. A single checksum is not applied
+  to batch items.
+- A download can optionally be checked against an expected MD5 or SHA-256
+  digest. Digest verification is available for single-file downloads, not
+  playlists or multi-file results.
 
 ## Troubleshooting
 

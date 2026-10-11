@@ -1,13 +1,18 @@
 import queue
+import sqlite3
 import threading
 import time
+from types import SimpleNamespace
 import unittest
+from contextlib import closing
 from datetime import datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
-from app import MAX_SPEEDS, DownloaderApp
+from app import MAX_SPEEDS, DownloaderApp, normalize_url
+from bandwidth import GlobalBandwidthLimiter
+from checksum import verify_checksum
 from history_store import DownloadHistory
 from download_engine import (
     ACTIVE_TARGETS,
@@ -18,6 +23,8 @@ from download_engine import (
     _is_direct_file_url,
     _safe_filename,
     _video_format_selector,
+    _audio_language_format_ids,
+    _all_audio_tracks_selector,
     _download_with_ytdlp,
     _fragment_workers,
     download_url,
@@ -29,7 +36,10 @@ import requests
 
 class _FakeJobs:
     def __init__(self, statuses):
-        self.rows = {job_id: {"status": status} for job_id, status in statuses.items()}
+        self.rows = {
+            job_id: {"status": status, "location": "original", "link": ""}
+            for job_id, status in statuses.items()
+        }
 
     def get_children(self):
         return tuple(self.rows)
@@ -52,19 +62,36 @@ class _FakeRoot:
 
 
 class _FakeStringVar:
-    def __init__(self):
-        self.value = ""
+    def __init__(self, value=""):
+        self.value = value
 
     def set(self, value):
+        self.value = value
+
+    def get(self):
+        return self.value
+
+
+class _FakeEntry:
+    def __init__(self, value=""):
+        self.value = value
+
+    def get(self):
+        return self.value
+
+    def delete(self, *_args):
+        self.value = ""
+
+    def insert(self, _index, value):
         self.value = value
 
 
 class _FakeHistory:
     def __init__(self):
-        self.deleted = []
+        self.hidden = []
 
-    def delete(self, record_id):
-        self.deleted.append(record_id)
+    def set_hidden(self, record_id, hidden):
+        self.hidden.append((record_id, hidden))
 
 
 class _FakeResponse:
@@ -149,7 +176,97 @@ class _RecordingSession(_FakeSession):
 
 
 class DownloadEngineTests(unittest.TestCase):
-    def test_clear_finished_removes_only_terminal_rows(self):
+    def test_destination_changes_only_update_queued_rows(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.jobs = _FakeJobs({
+            "1": "Complete",
+            "2": "Failed",
+            "3": "Cancelled",
+            "4": "Interrupted",
+            "5": "Downloading",
+            "6": "Queued",
+            "7": "Scheduled",
+        })
+        app._queue_job_ids = list(app.jobs.get_children())
+        app._download_paths = {
+            job_id: Path(job_id) for job_id in app.jobs.get_children()
+        }
+        app.destination = _FakeStringVar("C:\\Downloads")
+
+        app._update_destination_labels()
+
+        for job_id in ("1", "2", "3", "4", "5"):
+            self.assertEqual(app.jobs.set(job_id, "location"), "original")
+        for job_id in ("6", "7"):
+            self.assertEqual(app.jobs.set(job_id, "location"), "C:\\Downloads")
+
+    def test_resume_options_restore_saved_settings_without_persisting_proxy(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.proxy_list = _FakeStringVar("http://user:secret@proxy.example:8080")
+        app.browser_cookies = _FakeStringVar("firefox")
+        record = SimpleNamespace(
+            url="https://example.org/video",
+            destination="C:\\Downloads",
+            options={
+                "source": "auto",
+                "mode": "audio",
+                "quality": "best",
+                "destination": "C:\\Downloads",
+                "output_path": "C:\\Downloads\\video.mp4",
+                "cloud_provider": "local",
+            },
+        )
+
+        restored = app._options_for_record(record)
+        persisted = DownloaderApp._persistent_job_options_values(
+            {
+                **restored,
+                "destination": Path("C:\\Downloads"),
+                "proxy": "http://user:secret@proxy.example:8080",
+            },
+            Path("C:\\Downloads\\video.mp4"),
+        )
+
+        self.assertEqual(restored["mode"], "audio")
+        self.assertEqual(restored["destination"], Path("C:\\Downloads"))
+        self.assertEqual(restored["proxy"], "http://user:secret@proxy.example:8080")
+        self.assertEqual(restored["browser_cookies"], "firefox")
+        self.assertNotIn("proxy", persisted)
+        self.assertEqual(persisted["output_path"], "C:\\Downloads\\video.mp4")
+
+    def test_multilingual_video_selection_keeps_one_best_track_per_language(self):
+        from yt_dlp import YoutubeDL
+
+        formats = [
+            {"format_id": "137", "ext": "mp4", "url": "https://media/video",
+             "vcodec": "avc1", "acodec": "none", "height": 1080, "quality": 10},
+            {"format_id": "140", "ext": "m4a", "url": "https://media/en-low",
+             "vcodec": "none", "acodec": "mp4a", "language": "en", "abr": 128},
+            {"format_id": "251", "ext": "webm", "url": "https://media/en",
+             "vcodec": "none", "acodec": "opus", "language": "en", "abr": 160},
+            {"format_id": "hi-audio", "ext": "webm", "url": "https://media/hi",
+             "vcodec": "none", "acodec": "opus", "language": "hi", "abr": 128},
+        ]
+        self.assertEqual(
+            _audio_language_format_ids(formats),
+            [("en", "251"), ("hi", "hi-audio")],
+        )
+
+        with YoutubeDL({"quiet": True, "allow_multiple_audio_streams": True}) as ydl:
+            selector = _all_audio_tracks_selector(ydl, "1080p")
+            selected = list(selector({
+                "formats": formats,
+                "has_merged_format": False,
+                "incomplete_formats": False,
+            }))
+
+        self.assertEqual(ydl.params["merge_output_format"], "mkv")
+        self.assertEqual(
+            [item["format_id"] for item in selected[0]["requested_formats"]],
+            ["137", "251", "hi-audio"],
+        )
+
+    def test_clear_finished_hides_only_terminal_rows(self):
         app = DownloaderApp.__new__(DownloaderApp)
         app.jobs = _FakeJobs({
             "1": "Complete",
@@ -158,11 +275,18 @@ class DownloadEngineTests(unittest.TestCase):
             "4": "Downloading direct file",
             "5": "Queued",
         })
+        app._queue_job_ids = list(app.jobs.get_children())
+        app._apply_queue_filter = Mock()
+        app._queue_filter = "all"
         app.history = _FakeHistory()
         app._download_paths = {job_id: Path(job_id) for job_id in app.jobs.get_children()}
+        app._job_destinations = {}
+        app.download_options = {}
+        app._resume_errors = {}
         app.cancel_events = {job_id: threading.Event() for job_id in app.jobs.get_children()}
-        app.pause_events = {job_id: threading.Event() for job_id in app.jobs.get_children()}
+        app.resume_events = {job_id: threading.Event() for job_id in app.jobs.get_children()}
         app.progress_summary = _FakeStringVar()
+        app.show_hidden = _FakeStringVar()
 
         removed = app.clear_finished()
 
@@ -170,14 +294,25 @@ class DownloadEngineTests(unittest.TestCase):
         self.assertEqual(set(app.jobs.get_children()), {"4", "5"})
         self.assertEqual(set(app._download_paths), {"4", "5"})
         self.assertEqual(set(app.cancel_events), {"4", "5"})
-        self.assertEqual(set(app.pause_events), {"4", "5"})
-        self.assertEqual(set(app.history.deleted), {1, 2, 3})
-        self.assertEqual(app.progress_summary.value, "Removed 3 finished download(s) from the list")
+        self.assertEqual(set(app.resume_events), {"4", "5"})
+        self.assertEqual(set(app.history.hidden), {(1, True), (2, True), (3, True)})
+        self.assertIn("Hidden 3", app.progress_summary.value)
 
     def test_download_history_persists_updates_and_marks_interrupted_jobs(self):
         with TemporaryDirectory() as folder:
             history = DownloadHistory(Path(folder) / "history.sqlite3")
-            record_id = history.add("https://example.org/video", "Downloading", folder)
+            saved_options = {
+                "mode": "audio",
+                "quality": "best",
+                "destination": folder,
+                "output_path": str(Path(folder) / "video.mp4"),
+            }
+            record_id = history.add(
+                "https://example.org/video",
+                "Downloading",
+                folder,
+                saved_options,
+            )
             history.update(record_id, "Downloading media", "42.0%", "video.mp4", folder)
 
             reloaded = DownloadHistory(Path(folder) / "history.sqlite3")
@@ -189,9 +324,284 @@ class DownloadEngineTests(unittest.TestCase):
             self.assertEqual(record.status, "Interrupted")
             self.assertEqual(record.progress, "42.0%")
             self.assertEqual(record.details, "video.mp4")
+            self.assertEqual(record.options, saved_options)
 
-            reloaded.delete(record_id)
+            reloaded.set_hidden(record_id, True)
             self.assertEqual(reloaded.list_records(), [])
+            hidden_record = reloaded.list_records(include_hidden=True)[0]
+            self.assertTrue(hidden_record.hidden)
+            reloaded.set_hidden(record_id, False)
+            self.assertFalse(reloaded.list_records()[0].hidden)
+
+    def test_history_finds_latest_completed_url_and_persists_settings(self):
+        with TemporaryDirectory() as folder:
+            database_path = Path(folder) / "history.sqlite3"
+            history = DownloadHistory(database_path)
+            history.add("HTTPS://Example.org:443/video#first", "Complete", folder)
+            latest_id = history.add("https://example.org/video#latest", "Complete", folder)
+            history.add("https://example.org/failed", "Failed", folder)
+            history.set_setting("dark_mode", "1")
+
+            reloaded = DownloadHistory(database_path)
+            result = reloaded.find_by_url("https://EXAMPLE.org/video#another")
+
+            self.assertIsNotNone(result)
+            self.assertEqual(result.id, latest_id)
+            self.assertEqual(result.status, "Complete")
+            self.assertEqual(reloaded.get_setting("dark_mode"), "1")
+            self.assertIsNone(reloaded.find_by_url("https://example.org/failed"))
+
+    def test_settings_callbacks_persist_and_recommended_setup_is_simple(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.history = Mock()
+        app.dark_mode = _FakeStringVar(True)
+        app.warn_on_duplicates = _FakeStringVar(False)
+        app.clipboard_autofill = _FakeStringVar(True)
+        app._apply_theme = Mock()
+        app.source = _FakeStringVar("Supported site")
+        app.mode = _FakeStringVar("MP3 audio")
+        app.quality = _FakeStringVar("720p (HD)")
+        app.playlist_scope = _FakeStringVar("Single video")
+        app.speed_mode = _FakeStringVar("Maximum")
+        app.max_speed = _FakeStringVar("1 MB/s")
+        app.progress_summary = _FakeStringVar()
+
+        app._save_theme_preference()
+        app._save_duplicate_preference()
+        app._save_clipboard_preference()
+        app._use_recommended_settings()
+
+        self.assertEqual(
+            app.history.set_setting.call_args_list,
+            [
+                call("dark_mode", "1"),
+                call("warn_on_duplicates", "0"),
+                call("clipboard_autofill", "1"),
+            ],
+        )
+        app._apply_theme.assert_called_once()
+        self.assertEqual(app.source.get(), "Auto")
+        self.assertEqual(app.mode.get(), "Video")
+        self.assertEqual(app.quality.get(), "1080p (Full HD)")
+        self.assertEqual(app.playlist_scope.get(), "Auto (from link)")
+        self.assertEqual(app.speed_mode.get(), "Balanced")
+        self.assertEqual(app.max_speed.get(), "Unlimited")
+
+    def test_completed_duplicate_prompts_before_adding_again(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.url_entry = _FakeStringVar("https://example.org/video")
+        app.destination = _FakeStringVar("C:\\Downloads")
+        app.warn_on_duplicates = _FakeStringVar(True)
+        app.history = Mock()
+        app.history.find_by_url.return_value = object()
+        app._has_pending_duplicate = Mock(return_value=False)
+
+        with patch("app.messagebox.askyesno", return_value=False) as confirm:
+            app.add_download()
+
+        app.history.find_by_url.assert_called_once_with("https://example.org/video")
+        confirm.assert_called_once()
+        app.history.add.assert_not_called()
+
+    def test_clipboard_watcher_fills_new_urls_without_overwriting_user_text(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.clipboard_autofill = _FakeStringVar(True)
+        app._last_clipboard = ""
+        app._last_autofilled_clipboard = ""
+        app.url_entry = _FakeEntry()
+        app.root = Mock()
+        app.root.clipboard_get.return_value = " https://example.org/file "
+
+        app._watch_clipboard()
+
+        self.assertEqual(app.url_entry.get(), "https://example.org/file")
+        app.root.after.assert_called_once_with(800, app._watch_clipboard)
+
+        app.url_entry.delete(0, "end")
+        app.url_entry.insert(0, "https://manually-entered.example/")
+        app.root.clipboard_get.return_value = "https://example.org/another"
+        app._watch_clipboard()
+
+        self.assertEqual(app.url_entry.get(), "https://manually-entered.example/")
+
+    def test_batch_add_queues_valid_links_and_restores_url_entry(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.url_entry = _FakeEntry("https://keep-this.example/")
+        app.expected_checksum = _FakeStringVar("sha256:" + "a" * 64)
+        app.jobs = _FakeJobs({})
+        queued = []
+
+        def add_download():
+            self.assertEqual(app.expected_checksum.get(), "")
+            url = app.url_entry.get()
+            queued.append(url)
+            app.jobs.rows[str(len(queued))] = {
+                "status": "Queued",
+                "location": "",
+                "link": url,
+            }
+
+        app.add_download = add_download
+        added, valid = app._add_batch_urls(
+            [
+                "https://example.org/one",
+                "",
+                "not a link",
+                "https://[broken/",
+                "http://example.org/two",
+            ]
+        )
+
+        self.assertEqual((added, valid), (2, 2))
+        self.assertEqual(queued, ["https://example.org/one", "http://example.org/two"])
+        self.assertEqual(app.url_entry.get(), "https://keep-this.example/")
+        self.assertEqual(app.expected_checksum.get(), "sha256:" + "a" * 64)
+
+    def test_history_migrates_existing_database_for_hidden_records(self):
+        with TemporaryDirectory() as folder:
+            database_path = Path(folder) / "history.sqlite3"
+            with closing(sqlite3.connect(database_path)) as connection:
+                connection.execute(
+                    """
+                    CREATE TABLE downloads (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        url TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        progress TEXT NOT NULL DEFAULT '—',
+                        details TEXT NOT NULL DEFAULT '',
+                        destination TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    INSERT INTO downloads
+                        (url, status, destination, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    ("https://example.org/video", "Complete", folder, "now", "now"),
+                )
+                connection.commit()
+
+            history = DownloadHistory(database_path)
+
+            self.assertFalse(history.list_records()[0].hidden)
+            history.set_hidden(history.list_records()[0].id, True)
+            self.assertEqual(history.list_records(), [])
+
+    def test_url_normalization_ignores_host_case_default_port_and_fragment(self):
+        self.assertEqual(
+            normalize_url("HTTPS://Example.org:443/video?id=1#part"),
+            "https://example.org/video?id=1",
+        )
+
+    def test_duplicate_detection_ignores_completed_history(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.jobs = _FakeJobs({"1": "Queued", "2": "Complete"})
+        app._queue_job_ids = list(app.jobs.get_children())
+        app.jobs.set("1", "link", "https://example.org/video#first")
+        app.jobs.set("2", "link", "https://example.org/video")
+
+        self.assertTrue(app._has_pending_duplicate("HTTPS://EXAMPLE.ORG/video#second"))
+        app.jobs.set("1", "status", "Complete")
+        self.assertFalse(app._has_pending_duplicate("https://example.org/video"))
+
+    def test_checksum_verification_checks_sha256(self):
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "payload.bin"
+            path.write_bytes(b"payload")
+            actual, matches = verify_checksum(
+                path,
+                "sha256",
+                "239f59ed55e737c77147cf55ad0c1b030b6d7ee748a7426952f9b852d5a935e5",
+            )
+            self.assertEqual(len(actual), 64)
+            self.assertTrue(matches)
+            self.assertFalse(verify_checksum(path, "md5", "0" * 32)[1])
+
+    def test_checksum_entry_accepts_algorithm_prefix(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.checksum_algorithm = _FakeStringVar("SHA256")
+        app.expected_checksum = _FakeStringVar("md5:" + "a" * 32)
+
+        self.assertEqual(app._checksum_options(), ("md5", "a" * 32))
+
+    def test_job_finish_verifies_checksum_and_marks_mismatch_failed(self):
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "payload.bin"
+            path.write_bytes(b"payload")
+            app = DownloaderApp.__new__(DownloaderApp)
+            app.events = queue.Queue()
+            app.verified_checksums = {}
+            app.download_options = {
+                "good": {
+                    "expected_checksum": (
+                        "239f59ed55e737c77147cf55ad0c1b030b6d7ee748a7426952f9b852d5a935e5"
+                    ),
+                    "checksum_algorithm": "sha256",
+                },
+                "bad": {
+                    "expected_checksum": "0" * 64,
+                    "checksum_algorithm": "sha256",
+                },
+            }
+            successful_future = Mock()
+            successful_future.result.return_value = str(path)
+            failed_future = Mock()
+            failed_future.result.return_value = str(path)
+
+            app._job_finished("good", successful_future)
+            app._job_finished("bad", failed_future)
+
+            self.assertEqual(app.events.get_nowait(), ("finished", "good", "Complete", str(path)))
+            failed_event = app.events.get_nowait()
+            self.assertEqual(failed_event[:3], ("finished", "bad", "Failed"))
+            self.assertIn("checksum mismatch", failed_event[3])
+            self.assertEqual(app.verified_checksums["good"], (
+                "sha256",
+                "239f59ed55e737c77147cf55ad0c1b030b6d7ee748a7426952f9b852d5a935e5",
+            ))
+
+    def test_completion_notification_names_the_downloaded_file(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.events = queue.Queue()
+        app.events.put(
+            ("finished", "1", "Complete", "C:\\Downloads\\video.mp4")
+        )
+        app.jobs = _FakeJobs({"1": "Downloading"})
+        app._refresh_job_style = Mock()
+        app._apply_queue_filter = Mock()
+        app._download_paths = {"1": Path("C:\\Downloads\\video.mp4")}
+        app.verified_checksums = {}
+        app.overall_progress = Mock()
+        app.progress_summary = _FakeStringVar()
+        app.root = Mock()
+        app._persist_job = Mock()
+        app.cancel_events = {"1": threading.Event()}
+        app.resume_events = {"1": threading.Event()}
+        app.schedule_timers = {}
+        app.download_options = {"1": {}}
+
+        with patch("app.notify") as notify_download:
+            app._process_events()
+
+        notify_download.assert_called_once_with("Download complete", "video.mp4")
+
+    def test_global_bandwidth_limiter_is_cancellable(self):
+        cancel_event = threading.Event()
+        limiter = GlobalBandwidthLimiter(1024)
+        cancel_event.set()
+        self.assertFalse(limiter.acquire(1024, cancel_event))
+
+    def test_global_bandwidth_limiter_is_shared_between_jobs(self):
+        cancel_event = threading.Event()
+        limiter = GlobalBandwidthLimiter(8192)
+        self.assertTrue(limiter.acquire(8192, cancel_event))
+        started = time.monotonic()
+        self.assertTrue(limiter.acquire(8192, cancel_event))
+        self.assertGreaterEqual(time.monotonic() - started, 0.75)
 
     def test_schedule_validation_requires_future_local_time(self):
         self.assertIsNone(DownloaderApp._parse_scheduled_start(""))
@@ -519,23 +929,23 @@ class DownloadEngineTests(unittest.TestCase):
 
     def test_pause_waits_for_resume_and_observes_cancellation(self):
         cancel_event = threading.Event()
-        pause_event = threading.Event()
+        resume_event = threading.Event()
         completed = threading.Event()
 
         thread = threading.Thread(
-            target=lambda: (_wait_until_resumed(cancel_event, pause_event), completed.set())
+            target=lambda: (_wait_until_resumed(cancel_event, resume_event), completed.set())
         )
         thread.start()
         time.sleep(0.05)
         self.assertFalse(completed.is_set())
-        pause_event.set()
+        resume_event.set()
         thread.join(timeout=1)
         self.assertTrue(completed.is_set())
 
-        pause_event.clear()
+        resume_event.clear()
         cancel_event.set()
         with self.assertRaises(DownloadCancelled) as raised:
-            _wait_until_resumed(cancel_event, pause_event)
+            _wait_until_resumed(cancel_event, resume_event)
         self.assertEqual(str(raised.exception), "Download cancelled.")
 
 

@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Smart Downloader",
+  "version": "1.0.0",
+  "description": "Send a page, link, or media URL to Smart Downloader.",
+  "permissions": ["contextMenus", "storage", "activeTab"],
+  "host_permissions": [
+    "http://127.0.0.1:8765/*",
+    "http://localhost:8765/*",
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Smart Downloader",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

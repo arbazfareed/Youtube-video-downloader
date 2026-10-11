@@ -15,6 +15,7 @@ Youtube-video-downloader/
 |-- smart_downloader_v9.ipynb
 |-- Untitled*.ipynb
 |-- .ipynb_checkpoints/             # Local Jupyter checkpoints; not app source
+|-- tests/                          # Root package smoke tests
 `-- desktop_downloader/
     |-- app.py                      # Desktop GUI
     |-- download_engine.py          # Direct and yt-dlp download logic
@@ -48,10 +49,41 @@ data, not source files to publish.
 For a new computer, macOS/Linux steps, manual installation, and troubleshooting,
 see [`desktop_downloader/SETUP.md`](./desktop_downloader/SETUP.md).
 
+## Portable Windows download
+
+The GitHub Actions workflow builds a portable Windows ZIP for the original
+desktop app and Smart Downloader 11.0. To publish the ZIPs, create and push a
+version tag from the repository root:
+
+```powershell
+git tag v11.0.1
+git push origin v11.0.1
+```
+
+After the **Build Windows downloads** workflow succeeds, both ZIP files appear
+as assets on that GitHub Release. On another Windows PC, download and extract
+the ZIP, then double-click the `.exe`; Python and the app's Python packages do
+not need to be installed. Some optional integrations still use external
+programs; see the version-specific README for those limitations.
+
 ## App documentation
 
 - [Features, download options, and limitations](./desktop_downloader/README.md)
 - [New-computer setup, GitHub download/update, and troubleshooting](./desktop_downloader/SETUP.md)
+
+## Smart Downloader 11.0
+
+Version 11.0 is a separate copy of version 10.0 in
+[`desktop_downloader_v11`](./desktop_downloader_v11/README.md). It preserves the
+separate v10 folder and has its own local data folder. The original
+[`desktop_downloader`](./desktop_downloader/README.md) and v11 both include
+the requested bug fixes, soft-hidden history, a shared global bandwidth cap,
+duplicate-active-URL protection, OS completion notifications, a dark-mode
+toggle, and optional MD5/SHA256 verification. Existing v10 source remains
+unchanged.
+
+- [Version 11.0 features and fixes](./desktop_downloader_v11/README.md)
+- [Version 11.0 setup and aria2 installation](./desktop_downloader_v11/SETUP.md)
 
 ## Smart Downloader 10.0
 
