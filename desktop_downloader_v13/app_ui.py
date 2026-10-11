@@ -97,8 +97,10 @@ class UiMixin:
         outer.columnconfigure(1, weight=1, minsize=660)
         outer.columnconfigure(2, weight=0, minsize=275)
         outer.rowconfigure(0, weight=1)
+        self._main_outer = outer
         sidebar_host = ttk.Frame(outer, style="Sidebar.TFrame")
         sidebar_host.grid(row=0, column=0, sticky="nsew")
+        self._sidebar_host = sidebar_host
         sidebar_host.rowconfigure(0, weight=1)
         sidebar_host.columnconfigure(0, weight=1)
         self.sidebar_canvas = tk.Canvas(
@@ -223,10 +225,12 @@ class UiMixin:
 
         frame = ttk.Frame(outer, padding=16)
         frame.grid(row=0, column=1, sticky="nsew")
+        self._main_content_frame = frame
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(5, weight=1)
         inspector = ttk.Frame(outer, style="Card.TFrame", padding=14)
         inspector.grid(row=0, column=2, sticky="nsew", padx=(0, 16), pady=16)
+        self._media_inspector = inspector
         inspector.columnconfigure(0, weight=1)
         inspector.rowconfigure(2, weight=1)
 
@@ -617,19 +621,19 @@ class UiMixin:
         self.preview_details.grid(row=4, column=0, columnspan=2, sticky="new")
         inspector_actions = ttk.Frame(inspector, style="Card.TFrame")
         inspector_actions.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(12, 0))
-        for column in range(3):
+        for column in range(2):
             inspector_actions.columnconfigure(column, weight=1)
         ttk.Button(
             inspector_actions,
             text=self._t("Play in app"),
             command=self.play_selected_media,
             style="Accent.TButton",
-        ).grid(row=0, column=0, columnspan=2, sticky="ew", padx=(0, 3), pady=(0, 6))
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 3), pady=(0, 6))
         ttk.Button(
             inspector_actions,
             text=self._t("Open in system player"),
             command=self.open_selected_media_in_system_player,
-        ).grid(row=0, column=2, sticky="ew", padx=(3, 0), pady=(0, 6))
+        ).grid(row=0, column=1, sticky="ew", padx=(3, 0), pady=(0, 6))
         ttk.Button(
             inspector_actions,
             text=self._t("Show file"),
@@ -644,7 +648,7 @@ class UiMixin:
             inspector_actions,
             text=self._t("Copy link"),
             command=self.copy_selected_link,
-        ).grid(row=1, column=2, sticky="ew", padx=(3, 0))
+        ).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(6, 0))
         self.current_thumbnail = None
         ttk.Label(
             inspector,
@@ -694,6 +698,65 @@ class UiMixin:
         more_menu.add_command(label=self._t("Help"), command=self.show_help)
         more_button.configure(menu=more_menu)
         more_button.grid(row=1, column=3, sticky="ew", padx=(4, 0))
+
+    def _adapt_responsive_layout(self, event=None) -> None:
+        if event is not None and event.widget is not self.root:
+            return
+        width = self.root.winfo_width()
+        outer = self._main_outer
+        sidebar = self._sidebar_host
+        content = self._main_content_frame
+        inspector = self._media_inspector
+
+        if width < 760:
+            sidebar.grid_remove()
+            content.grid_configure(row=0, column=0)
+            inspector.grid_configure(
+                row=1,
+                column=0,
+                columnspan=1,
+                padx=16,
+                pady=(0, 16),
+            )
+            outer.columnconfigure(0, weight=1, minsize=0)
+            outer.columnconfigure(1, weight=0, minsize=0)
+            outer.columnconfigure(2, weight=0, minsize=0)
+            outer.rowconfigure(1, weight=1)
+        elif width < 1180:
+            sidebar.grid()
+            content.grid_configure(row=0, column=1)
+            inspector.grid_configure(
+                row=1,
+                column=1,
+                columnspan=1,
+                padx=(16, 16),
+                pady=(0, 16),
+            )
+            outer.columnconfigure(0, weight=0, minsize=150)
+            outer.columnconfigure(1, weight=1, minsize=360)
+            outer.columnconfigure(2, weight=0, minsize=0)
+            outer.rowconfigure(1, weight=1)
+        else:
+            sidebar.grid()
+            content.grid_configure(row=0, column=1)
+            inspector.grid_configure(
+                row=0,
+                column=2,
+                columnspan=1,
+                padx=(0, 16),
+                pady=16,
+            )
+            outer.columnconfigure(0, weight=0, minsize=190)
+            outer.columnconfigure(1, weight=1, minsize=660)
+            outer.columnconfigure(2, weight=0, minsize=275)
+            outer.rowconfigure(1, weight=0)
+        preview_width = (
+            240
+            if width >= 1180
+            else max(180, width - (32 if width < 760 else 182))
+        )
+        self.preview_image_label.configure(wraplength=preview_width)
+        self.preview_details.configure(wraplength=preview_width)
 
     def _resize_sidebar_content(self, event) -> None:
         self.sidebar_canvas.itemconfigure(self.sidebar_window, width=event.width)

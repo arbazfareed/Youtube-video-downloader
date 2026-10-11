@@ -107,6 +107,52 @@ class QueueFilterTests(unittest.TestCase):
 
 
 class UiStartupWiringTests(unittest.TestCase):
+    def test_responsive_layout_reflows_preview_without_clipping_narrow_screens(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.root = Mock()
+        app.root.winfo_width.side_effect = (600, 900, 1300)
+        app._main_outer = Mock()
+        app._sidebar_host = Mock()
+        app._main_content_frame = Mock()
+        app._media_inspector = Mock()
+        app.preview_image_label = Mock()
+        app.preview_details = Mock()
+
+        app._adapt_responsive_layout()
+
+        app._sidebar_host.grid_remove.assert_called_once_with()
+        app._main_content_frame.grid_configure.assert_called_with(row=0, column=0)
+        app._media_inspector.grid_configure.assert_called_with(
+            row=1,
+            column=0,
+            columnspan=1,
+            padx=16,
+            pady=(0, 16),
+        )
+        app._main_outer.columnconfigure.assert_any_call(0, weight=1, minsize=0)
+
+        app._adapt_responsive_layout()
+        app._sidebar_host.grid.assert_called_once_with()
+        app._main_content_frame.grid_configure.assert_called_with(row=0, column=1)
+        app._media_inspector.grid_configure.assert_called_with(
+            row=1,
+            column=1,
+            columnspan=1,
+            padx=(16, 16),
+            pady=(0, 16),
+        )
+        app.preview_image_label.configure.assert_called_with(wraplength=718)
+
+        app._adapt_responsive_layout()
+        app._media_inspector.grid_configure.assert_called_with(
+            row=0,
+            column=2,
+            columnspan=1,
+            padx=(0, 16),
+            pady=16,
+        )
+        app.preview_details.configure.assert_called_with(wraplength=240)
+
     def test_sidebar_and_queue_callbacks_exist(self):
         required_callbacks = (
             "open_statistics_dashboard",
@@ -270,7 +316,7 @@ class UiStartupWiringTests(unittest.TestCase):
 
 
 class MediaPlaybackTests(unittest.TestCase):
-    def test_play_action_uses_embedded_player_for_existing_local_media(self):
+    def test_play_action_uses_separate_player_for_existing_local_media(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "existing-video.mp4"
             path.write_bytes(b"test media")
@@ -356,7 +402,7 @@ class MediaPlaybackTests(unittest.TestCase):
             self.assertIsNone(selected)
             show_error.assert_called_once()
 
-    def test_in_app_playback_embeds_supported_video_and_audio_without_new_window(self):
+    def test_in_app_playback_opens_separate_player_for_video_and_audio(self):
         with tempfile.TemporaryDirectory() as directory:
             for suffix in (".mp4", ".mp3"):
                 with self.subTest(suffix=suffix):
@@ -377,6 +423,9 @@ class MediaPlaybackTests(unittest.TestCase):
                     vlc_instance = Mock()
                     vlc_player = vlc_instance.media_player_new.return_value
                     vlc_player.get_state.return_value = 0
+                    vlc_player.get_length.return_value = 0
+                    vlc_player.get_time.return_value = 0
+                    vlc_player.is_seekable.return_value = False
                     vlc_player.audio_get_track_description.return_value = []
                     vlc_module = SimpleNamespace(
                         Instance=Mock(return_value=vlc_instance),
@@ -384,29 +433,29 @@ class MediaPlaybackTests(unittest.TestCase):
                     )
                     video_surface = Mock()
                     video_surface.winfo_id.return_value = 42
-                    player_container = Mock()
+                    player_window = Mock()
                     volume = Mock()
                     volume.get.return_value = 80
-                    volume_label = Mock()
-                    track_variable = Mock()
+                    variables = [Mock() for _ in range(5)]
                     with (
                         patch("app_media.sys.platform", "win32"),
                         patch.dict("sys.modules", {"vlc": vlc_module}),
-                        patch("app_media.tk.Toplevel") as toplevel,
+                        patch(
+                            "app_media.tk.Toplevel", return_value=player_window
+                        ) as toplevel,
                         patch("app_media.tk.Frame", return_value=video_surface),
                         patch("app_media.tk.IntVar", return_value=volume),
+                        patch("app_media.tk.DoubleVar", return_value=Mock()),
                         patch(
                             "app_media.tk.StringVar",
-                            side_effect=[
-                                volume_label,
-                                track_variable,
-                                Mock(),
-                            ],
+                            side_effect=variables,
                         ),
                         patch(
                             "app_media.ttk.Frame",
                             side_effect=[
-                                player_container,
+                                Mock(),
+                                Mock(),
+                                Mock(),
                                 Mock(),
                                 Mock(),
                                 Mock(),
@@ -422,33 +471,24 @@ class MediaPlaybackTests(unittest.TestCase):
                     vlc_instance.media_new.assert_called_once_with(str(path))
                     vlc_player.set_hwnd.assert_called_once_with(42)
                     vlc_player.play.assert_called_once_with()
-                    toplevel.assert_not_called()
-                    app.preview_image_label.grid_remove.assert_called_once_with()
-                    self.assertEqual(app._in_app_player_window, app.root)
-                    player_container.grid.assert_called_once_with(
-                        row=0, column=0, sticky="nsew"
+                    toplevel.assert_called_once_with(app.root)
+                    player_window.title.assert_called_once_with(
+                        f"Smart VLC — {path.name}"
                     )
-                    self.assertIs(app._in_app_player_container, player_container)
-                    self.assertIn(
-                        unittest.mock.call(
-                            str(app.root),
-                            "<F11>",
-                            app._toggle_in_app_fullscreen,
-                            add="+",
-                        ),
-                        app.root.bind_class.call_args_list,
+                    player_window.protocol.assert_called_once_with(
+                        "WM_DELETE_WINDOW", app._close_in_app_player
                     )
-                    self.assertIn(
-                        unittest.mock.call(
-                            str(app.root),
-                            "<Escape>",
-                            app._exit_in_app_fullscreen,
-                            add="+",
-                        ),
-                        app.root.bind_class.call_args_list,
+                    player_window.bind.assert_any_call(
+                        "<F11>", app._toggle_in_app_fullscreen, add="+"
                     )
+                    player_window.bind.assert_any_call(
+                        "<Escape>", app._exit_in_app_fullscreen, add="+"
+                    )
+                    player_window.destroy.assert_not_called()
+                    app.preview_image_label.grid_remove.assert_not_called()
+                    self.assertIs(app._in_app_player_window, player_window)
 
-    def test_stop_keeps_embedded_player_interface_open(self):
+    def test_stop_keeps_separate_player_interface_open(self):
         app = MediaMixin()
         app._in_app_player = Mock()
         app._in_app_playback_button = Mock()
@@ -463,10 +503,36 @@ class MediaPlaybackTests(unittest.TestCase):
         app._in_app_player_status.set.assert_called_once_with("Playback stopped")
         app._close_in_app_player.assert_not_called()
 
-    def test_finished_playback_keeps_embedded_player_interface_open(self):
+    def test_playback_toggle_updates_compact_status(self):
+        app = MediaMixin()
+        app._in_app_player = Mock()
+        app._in_app_player.is_playing.return_value = True
+        app._in_app_playback_button = Mock()
+        app._in_app_player_status = Mock()
+        app._t = lambda text: text
+
+        MediaMixin._toggle_in_app_playback(app)
+
+        app._in_app_player.pause.assert_called_once_with()
+        app._in_app_playback_button.configure.assert_called_once_with(text="Play")
+        app._in_app_player_status.set.assert_called_once_with("Playback paused")
+
+    def test_playback_title_is_shortened_without_losing_full_filename(self):
+        title = "a" * 100 + ".mp4"
+
+        compact_title = MediaMixin._compact_in_app_title(title)
+
+        self.assertEqual(len(compact_title), 72)
+        self.assertTrue(compact_title.endswith("..."))
+        self.assertEqual(title, "a" * 100 + ".mp4")
+
+    def test_finished_playback_keeps_separate_player_interface_open(self):
         app = MediaMixin()
         app._in_app_player = Mock()
         app._in_app_player.get_state.return_value = 1
+        app._in_app_player.get_length.return_value = 0
+        app._in_app_player.get_time.return_value = 0
+        app._in_app_player.is_seekable.return_value = False
         app._in_app_vlc = SimpleNamespace(
             State=SimpleNamespace(Ended=1, Error=2)
         )
@@ -474,6 +540,10 @@ class MediaPlaybackTests(unittest.TestCase):
         app._in_app_audio_refresh_ticks = 0
         app._in_app_playback_button = Mock()
         app._in_app_player_status = Mock()
+        app._in_app_current_time = Mock()
+        app._in_app_duration = Mock()
+        app._in_app_seek_scale = Mock()
+        app._in_app_position_var = Mock()
         app._close_in_app_player = Mock()
         app._t = lambda text: text
 
@@ -483,35 +553,29 @@ class MediaPlaybackTests(unittest.TestCase):
         app._in_app_player_status.set.assert_called_once_with("Playback finished")
         app._close_in_app_player.assert_not_called()
 
-    def test_close_embedded_player_restores_preview_without_destroying_main_app(self):
+    def test_close_separate_player_without_destroying_main_app(self):
         app = MediaMixin()
         app.root = Mock()
         app.preview_image_label = Mock()
-        app.preview_image_label.winfo_exists.return_value = True
-        app._in_app_player_window = app.root
-        container = Mock()
-        app._in_app_player_container = container
+        player_window = Mock()
+        app._in_app_player_window = player_window
         player = Mock()
         app._in_app_player = player
         app._in_app_vlc_instance = Mock()
         app._in_app_playback_after = None
-        app._in_app_key_bindings = ()
         app._in_app_fullscreen = True
-        fullscreen = Mock()
-        app._in_app_fullscreen_window = fullscreen
-        app._in_app_video_surface = Mock()
-        app._in_app_video_surface.winfo_id.return_value = 303
+        app._in_app_fullscreen_button = Mock()
+        app._t = lambda text: text
 
         with patch("app_media.sys.platform", "win32"):
             MediaMixin._close_in_app_player(app)
 
-        container.destroy.assert_called_once_with()
-        fullscreen.destroy.assert_called_once_with()
-        player.set_hwnd.assert_called_once_with(303)
-        app.preview_image_label.grid.assert_called_once_with()
+        player_window.attributes.assert_called_once_with("-fullscreen", False)
+        player_window.destroy.assert_called_once_with()
         app.root.attributes.assert_not_called()
         app.root.geometry.assert_not_called()
         app.root.destroy.assert_not_called()
+        player.release.assert_called_once_with()
         self.assertIsNone(app._in_app_player_window)
 
     def test_volume_control_updates_vlc_and_displays_rounded_percentage(self):
@@ -566,55 +630,34 @@ class MediaPlaybackTests(unittest.TestCase):
         )
         app._in_app_audio_track.set.assert_called_once_with("No audio tracks available")
 
-    def test_fullscreen_uses_separate_window_and_does_not_fullscreen_main_app(self):
+    def test_fullscreen_expands_separate_player_window_without_reparenting_video(self):
         app = MediaMixin()
         app.root = Mock()
-        app._in_app_player_window = app.root
+        player_window = Mock()
+        app._in_app_player_window = player_window
         app._in_app_player = Mock()
         app._in_app_player.is_playing.return_value = True
         app._in_app_video_surface = Mock()
         app._in_app_video_surface.winfo_id.return_value = 101
         app._in_app_fullscreen = False
         app._in_app_fullscreen_button = Mock()
-        app._in_app_volume_label = Mock()
-        app._in_app_volume_var = Mock()
-        app._in_app_audio_track = Mock()
-        app._in_app_audio_tracks = {"English": 1}
-        app._in_app_media_title = "movie.mp4"
         app._t = lambda text: text
 
-        fullscreen = Mock()
-        fullscreen_surface = Mock()
-        fullscreen_surface.winfo_id.return_value = 202
-        toolbar = Mock()
-        with (
-            patch("app_media.tk.Toplevel", return_value=fullscreen) as toplevel,
-            patch("app_media.tk.Frame", return_value=fullscreen_surface),
-            patch("app_media.ttk.Frame", return_value=toolbar),
-            patch("app_media.ttk.Label"),
-            patch("app_media.ttk.Button"),
-            patch("app_media.ttk.Scale"),
-            patch("app_media.ttk.Combobox"),
-        ):
-            self.assertEqual(MediaMixin._toggle_in_app_fullscreen(app), "break")
-
-        toplevel.assert_called_once_with(app.root)
-        fullscreen.transient.assert_called_once_with(app.root)
-        fullscreen.attributes.assert_called_once_with("-fullscreen", True)
-        fullscreen.bind.assert_any_call("<Escape>", app._exit_in_app_fullscreen)
-        fullscreen.bind.assert_any_call("<F11>", app._exit_in_app_fullscreen)
-        app._in_app_player.set_hwnd.assert_called_once_with(202)
+        self.assertEqual(MediaMixin._toggle_in_app_fullscreen(app), "break")
+        player_window.attributes.assert_called_once_with("-fullscreen", True)
+        app._in_app_player.set_hwnd.assert_not_called()
         app.root.attributes.assert_not_called()
         app.root.geometry.assert_not_called()
         self.assertTrue(app._in_app_fullscreen)
-        self.assertIs(app._in_app_fullscreen_window, fullscreen)
         app._in_app_fullscreen_button.configure.assert_called_once_with(
             text="Exit full screen"
         )
 
         self.assertEqual(MediaMixin._exit_in_app_fullscreen(app), "break")
-        app._in_app_player.set_hwnd.assert_called_with(101)
-        fullscreen.destroy.assert_called_once_with()
+        player_window.attributes.assert_has_calls(
+            [unittest.mock.call("-fullscreen", True), unittest.mock.call("-fullscreen", False)]
+        )
+        app._in_app_player.set_hwnd.assert_not_called()
         app.root.attributes.assert_not_called()
         app.root.geometry.assert_not_called()
         self.assertFalse(app._in_app_fullscreen)
@@ -622,44 +665,52 @@ class MediaPlaybackTests(unittest.TestCase):
             text="Full screen"
         )
 
-    def test_fullscreen_has_its_own_playback_volume_and_track_controls(self):
+    def test_player_time_format_supports_long_media(self):
+        self.assertEqual(MediaMixin._format_in_app_time(65_000), "01:05")
+        self.assertEqual(MediaMixin._format_in_app_time(3_661_000), "1:01:01")
+
+    def test_playback_poll_updates_elapsed_time_and_seek_position(self):
         app = MediaMixin()
         app.root = Mock()
-        app._in_app_player_window = app.root
         app._in_app_player = Mock()
-        app._in_app_player.is_playing.return_value = False
-        app._in_app_video_surface = Mock()
-        app._in_app_video_surface.winfo_id.return_value = 101
-        app._in_app_fullscreen_button = Mock()
-        app._in_app_volume_label = Mock()
-        app._in_app_volume_var = Mock()
+        app._in_app_player.get_state.return_value = 0
+        app._in_app_player.get_length.return_value = 120_000
+        app._in_app_player.get_time.return_value = 30_000
+        app._in_app_player.is_seekable.return_value = True
+        app._in_app_vlc = SimpleNamespace(State=SimpleNamespace(Ended=1, Error=2))
+        app._in_app_player_window = Mock()
+        app._in_app_audio_refresh_ticks = 0
+        app._in_app_audio_track_combo = Mock()
         app._in_app_audio_track = Mock()
-        app._in_app_audio_tracks = {"English": 1}
-        app._in_app_media_title = "movie.mp4"
-        app._t = lambda text: text
+        app._in_app_audio_tracks = {}
+        app._in_app_audio_tracks_loaded = True
+        app._in_app_current_time = Mock()
+        app._in_app_duration = Mock()
+        app._in_app_seek_scale = Mock()
+        app._in_app_position_var = Mock()
+        app._in_app_seeking = False
 
-        with (
-            patch("app_media.tk.Toplevel", return_value=Mock()),
-            patch("app_media.tk.Frame", return_value=Mock(winfo_id=Mock(return_value=202))),
-            patch("app_media.ttk.Frame", return_value=Mock()),
-            patch("app_media.ttk.Label"),
-            patch("app_media.ttk.Button") as buttons,
-            patch("app_media.ttk.Scale") as scale,
-            patch("app_media.ttk.Combobox") as track_combo,
-        ):
-            MediaMixin._toggle_in_app_fullscreen(app)
+        MediaMixin._poll_in_app_playback(app)
 
-        self.assertEqual(buttons.call_count, 3)
-        scale.assert_called_once()
-        track_combo.assert_called_once()
-        self.assertEqual(
-            track_combo.call_args.kwargs["values"],
-            ("English",),
-        )
-        self.assertEqual(
-            buttons.call_args_list[0].kwargs["text"],
-            "Play",
-        )
+        app._in_app_current_time.set.assert_called_once_with("00:30")
+        app._in_app_duration.set.assert_called_once_with("02:00")
+        app._in_app_seek_scale.configure.assert_called_once_with(state="normal")
+        app._in_app_position_var.set.assert_called_once_with(25)
+        app.root.after.assert_called_once_with(250, app._poll_in_app_playback)
+
+    def test_seek_moves_vlc_to_selected_position(self):
+        app = MediaMixin()
+        app._in_app_player = Mock()
+        app._in_app_player.get_length.return_value = 200_000
+        app._in_app_player.is_seekable.return_value = True
+        app._in_app_position_var = Mock()
+        app._in_app_position_var.get.return_value = 25
+        app._in_app_seeking = True
+
+        MediaMixin._seek_in_app_player(app)
+
+        app._in_app_player.set_time.assert_called_once_with(50_000)
+        self.assertFalse(app._in_app_seeking)
 
     def test_player_help_explains_separate_fullscreen_and_controls(self):
         app = MediaMixin()
@@ -671,13 +722,13 @@ class MediaPlaybackTests(unittest.TestCase):
 
         title, help_text = show_info.call_args.args
         self.assertEqual(title, "Media player help")
-        self.assertIn("stays inside the Media preview", help_text)
-        self.assertIn("own fullscreen surface", help_text)
-        self.assertIn("main app window stays windowed", help_text)
+        self.assertIn("separate Smart VLC window", help_text)
+        self.assertIn("timeline to seek", help_text)
+        self.assertIn("without changing the main app window", help_text)
         self.assertIn("F11", help_text)
         self.assertIn("Escape", help_text)
-        self.assertIn("play/pause, stop, volume", help_text)
-        self.assertIn("audio-track controls", help_text)
+        self.assertIn("pause, stop, change volume", help_text)
+        self.assertIn("select an audio track", help_text)
         self.assertIn("Close player", help_text)
         self.assertEqual(show_info.call_args.kwargs["parent"], app.root)
 

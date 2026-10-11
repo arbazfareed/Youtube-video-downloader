@@ -145,13 +145,14 @@ TRANSLATIONS = {
         "ar": "مساعدة مشغل الوسائط", "hi": "मीडिया प्लेयर सहायता",
         "bn": "মিডিয়া প্লেয়ার সহায়তা",
     },
-    "Playback stays inside the Media preview area of Smart Downloader. Use Full screen or F11 to show the video on its own fullscreen surface; the main app window stays windowed. Press Escape or F11 to return to the app. Fullscreen playback includes its own play/pause, stop, volume, and audio-track controls. Use Stop to stop playback without closing the player, or Close player to return to preview.": {
+    "Playback opens in a separate Smart VLC window, so the downloader preview remains available. Use Full screen or F11 to expand the player without changing the main app window. Press Escape or F11 to return to windowed playback. Use the timeline to seek, and the controls to pause, stop, change volume, or select an audio track. Close player to stop playback and close the player window.": {
         "ur": (
-            "پلے بیک اسمارٹ ڈاؤن لوڈر کے میڈیا پیش نظارہ میں رہتا ہے۔ Full screen "
-            "یا F11 سے ویڈیو اپنی مکمل اسکرین پر چلے گی جبکہ مرکزی ایپ ونڈو معمول "
-            "کے مطابق رہے گی۔ ایپ پر واپس آنے کے لیے Escape یا F11 دبائیں۔ مکمل "
-            "اسکرین پر چلانے کے لیے الگ پلے/پاز، اسٹاپ، والیوم اور آڈیو ٹریک کنٹرول "
-            "موجود ہیں۔ Stop پلے بیک روکتا ہے؛ Close player پیش نظارہ پر واپس آتا ہے۔"
+            "پلے بیک الگ Smart VLC ونڈو میں کھلتا ہے، اس لیے ڈاؤن لوڈر کا پیش "
+            "نظارہ دستیاب رہتا ہے۔ Full screen یا F11 سے پلیئر بڑی اسکرین پر "
+            "کھلتا ہے جبکہ مرکزی ایپ ونڈو تبدیل نہیں ہوتی۔ ونڈو والے پلے بیک پر "
+            "واپس آنے کے لیے Escape یا F11 دبائیں۔ ٹائم لائن سے آگے پیچھے جائیں، "
+            "اور کنٹرولز سے پاز، اسٹاپ، والیوم یا آڈیو ٹریک منتخب کریں۔ Close "
+            "player پلے بیک روک کر پلیئر ونڈو بند کرتا ہے۔"
         ),
     },
     "Full screen playback": {
@@ -170,6 +171,11 @@ TRANSLATIONS = {
     "Playback started": {
         "es": "Reproducción iniciada", "ur": "پلے بیک شروع ہو گیا",
         "ar": "بدأ التشغيل", "hi": "प्लेबैक शुरू हुआ", "bn": "প্লেব্যাক শুরু হয়েছে",
+    },
+    "Playback paused": {
+        "es": "Reproducción en pausa", "ur": "پلے بیک روک دیا گیا",
+        "ar": "تم إيقاف التشغيل مؤقتًا", "hi": "प्लेबैक रोका गया",
+        "bn": "প্লেব্যাক বিরতি দেওয়া হয়েছে",
     },
     "Playback stopped": {
         "es": "Reproducción detenida", "ur": "پلے بیک روک دیا گیا",

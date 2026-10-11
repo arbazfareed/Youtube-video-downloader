@@ -95,17 +95,20 @@ Larger text and a high-contrast palette are also available. Screen-reader
 announcements and Urdu text shaping depend on the operating system, screen
 reader, fonts, and Tk version; verify those combinations manually.
 
-The VLC player is embedded in the **Media preview** panel, so playback does not
-open a separate VLC window or taskbar icon. Minimizing Smart Downloader hides
-the player with the app; restoring the app returns to the same player interface.
-**Stop** stops playback but leaves its controls open; **Close player** restores
-the normal preview. The video surface expands with the app window. **Full screen** or **F11** opens
-a dedicated fullscreen video surface with its own playback, stop, volume, and
-audio-track controls; the Smart Downloader window stays windowed. Press
-**Escape** or **F11** to return video to the preview. Volume shows its
-percentage, and available audio tracks can be selected from the **Audio track**
-list. Actual resolution/codec playback depends on the media, VLC build,
-hardware, and display and must be checked with representative files.
+The **Play in app** action opens a separate, resizable **Smart VLC** window and
+leaves the downloader's **Media preview** available. The player has a compact
+control strip with a seekable timeline, elapsed/total time, play/pause, stop,
+volume, and audio-track selection; playback status sits beside the shortened
+title instead of taking a full footer row. **Full screen** or **F11** expands
+that same player window; the video stays attached to its original surface and
+the main Smart Downloader window remains unchanged. Press **Escape** or
+**F11** to return to windowed playback. **Close player** stops playback and
+closes only the player window. Actual resolution/codec playback depends on the
+media, VLC build, hardware, and display and must be checked with representative
+files.
+
+On narrow displays, the main navigation collapses and the Media preview moves
+below the downloader workspace so its controls are not cut off horizontally.
 
 For completed local downloads, v13 saves a SHA-256 baseline in download history.
 Before opening, playing, editing, or extracting a selected download, the app

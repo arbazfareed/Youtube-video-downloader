@@ -21,9 +21,9 @@ change network adapters, sleep the computer, or access normal user history.
 Earlier passes completed Sections 1–14 and passed 181 tests. The Section 15–20
 extension added 10 regression tests, bringing the suite to 191. This
 localization/accessibility pass added four tests, bringing the total to 195.
-The previous embedded-player pass brought the suite to 203 tests. The
-independent fullscreen-player regression coverage adds one test; the complete
-suite now passes 204 tests.
+The suite now passes 209 automated tests, including separate-player, compact
+control-layout, same-surface fullscreen, seek/time, and responsive-layout
+regression coverage.
 
 | Behavior | Before this extension | After this extension |
 | --- | --- | --- |
@@ -37,7 +37,8 @@ suite now passes 204 tests.
 | Filename and assembly locks | Long names could lose useful extensions, and a transient Windows file lock could fail assembly immediately. | Long names preserve ordinary extensions; atomic replacement retries transient permission locks and reports a persistent lock clearly. |
 | Parallel state recovery | Corrupt range metadata or an externally enlarged segment could interfere with a later retry. | Malformed metadata starts with fresh range state, and segments with a size mismatch are discarded and fetched again. |
 | Urdu and keyboard accessibility | Urdu coverage did not include several primary controls, and link/queue/status focus shortcuts were not available. | Primary navigation and download controls have Urdu labels; shortcuts focus the URL field, queue, and progress status; Space toggles pause/resume while the queue has focus. |
-| VLC fullscreen behavior | Full-screen action applied the fullscreen attribute to the Smart Downloader root, expanding the entire app instead of only the video. | VLC is reattached to a dedicated fullscreen video surface with its own playback/volume/audio-track controls; main app geometry stays unchanged and Escape/F11 restores embedded playback. |
+| VLC player/fullscreen behavior | Playback was constrained to the Media preview and fullscreen created a second native video surface, which could leave VLC rendering to a black or hidden surface. | Playback opens in its own resizable window with a seek timeline; fullscreen expands that same window and retains the original video surface, leaving the downloader window unchanged. |
+| Narrow display clipping | Fixed minimum app width and wide three-column inspector actions could push right-side controls offscreen. | Root sizing follows available screen width; narrow layouts stack the inspector and collapse navigation when needed; the inspector actions use two columns to reduce their minimum width. |
 
 The suite also covers bandwidth-limit edge cases, schedule validation,
 concurrent history writes, SQL-like URL text, chunked checksum reads,
@@ -118,13 +119,18 @@ substitute for device, OS, network, or packaged-app tests.
   events, visual Urdu shaping, and screen-reader output are platform-dependent
   and must be checked manually.
 - **VLC player controls:** automated tests verify video/audio file acceptance,
-  embedding without a second top-level window, stop/close lifecycle, volume
-  percentage, audio-track listing/selection and empty-track handling,
-  separate fullscreen surface targeting, unchanged main-app geometry, Escape/F11
-  return-to-preview behavior, fullscreen controls, and player help. The test environment does not have
-  python-vlc installed, so VLC is mocked; these tests do not verify real codecs,
-  playback at actual resolutions, aspect ratio, sound output, track switching
-  against a media file, or fullscreen rendering on a physical display.
+  a separate resizable top-level player, stop/close lifecycle, volume percentage,
+  audio-track listing/selection and empty-track handling, seek position and time
+  updates, same-surface fullscreen with unchanged main-app geometry, Escape/F11
+  return to windowed playback, title truncation and compact status placement,
+  responsive grid transitions, and player help.
+  The suite's test interpreter does not have python-vlc installed, so VLC is
+  mocked in unit tests. A separate Windows smoke test used the app environment
+  and temporary generated AVI media: VLC reached Playing, playback time advanced
+  across a fullscreen toggle, the native video handle stayed the same, and the
+  main window geometry stayed unchanged. It did not pixel-inspect the display;
+  real-content visibility, codecs/resolutions, aspect ratio, sound output,
+  multi-track switching, and fullscreen rendering still need manual validation.
 - **Shutdown and cleanup (Section 20):** mocked tests verify aria2 termination
   on cancellation and RPC failure. They do not prove that forcibly killing the
   packaged app leaves no real yt-dlp/aria2 process, socket, or worker behind.
@@ -193,17 +199,19 @@ SECTION 21 — LOCALIZATION / ACCESSIBILITY
 21.7 [M] Urdu shaping, font coverage, contrast, and screen-reader output per OS
 21.8 [M] Verify Urdu right-to-left reading and layout suitability with users
 
-SECTION 22 — VLC PLAYER / DISPLAY / AUDIO
-22.1 [A] Player video/controls embed in main Media preview; no separate window
-22.2 [A] Stop retains the UI; Close player restores preview without closing app
-22.3 [M] Minimize/restore app and verify the embedded interface stays available
+SECTION 22 — SMART VLC PLAYER / DISPLAY / AUDIO
+22.1 [A] Playback opens a separate Smart VLC window; the downloader preview remains available
+22.2 [A] Stop retains player controls; Close player closes only the player window
+22.3 [M] Minimize/restore the separate player and verify playback state remains
 22.4 [A] Volume slider applies 0–100 values and shows rounded percentage
 22.5 [A] Track list maps displayed tracks to VLC IDs; no-track state is disabled
-22.6 [A] Dedicated video fullscreen does not change main-app geometry
-22.7 [A] Escape/F11 returns video to preview; fullscreen has playback/audio controls
-22.8 [A] Player Help explains separate fullscreen and controls
+22.6 [A] Player fullscreen keeps the same video surface and does not change main-app geometry
+22.7 [A] Escape/F11 returns to windowed playback without moving video to a new surface
+22.8 [A] Timeline seek/time display and player Help
 22.9 [M] Test available 240p/360p/480p/720p/1080p/1440p/2160p media
 22.10 [M] Test portrait/ultrawide clips, aspect ratio, resizing, volume, and tracks
+22.11 [A] Narrow-width app hides sidebar/reflows preview and wraps labels
+22.12 [M] Verify right-side media controls at narrow resolution and high DPI
 PV-1–PV-9 [A/M] Detailed VLC checks and manual resolution matrix are in TEST_CASES.md
 
 FAILURES ENCOUNTERED AND ADDRESSED

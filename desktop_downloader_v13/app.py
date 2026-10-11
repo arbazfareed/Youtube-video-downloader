@@ -71,9 +71,12 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         self.root.title("Smart Downloader")
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-        window_width = min(1440, max(1180, screen_width - 80))
-        window_height = min(860, max(680, screen_height - 80))
-        self.root.minsize(1180, 680)
+        window_width = min(1440, max(560, screen_width - 40))
+        window_height = min(860, max(500, screen_height - 80))
+        self.root.minsize(
+            min(1180, max(560, screen_width - 40)),
+            min(680, max(500, screen_height - 40)),
+        )
         self.root.geometry(f"{window_width}x{window_height}")
 
         self.events: queue.Queue[tuple] = queue.Queue()
@@ -164,6 +167,7 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         self._resume_errors: dict[str, str] = {}
 
         self._build_ui()
+        self.root.bind("<Configure>", self._adapt_responsive_layout, add="+")
         self._apply_theme()
         self._restore_history()
         if self.history.recovery_backup_path is not None:
