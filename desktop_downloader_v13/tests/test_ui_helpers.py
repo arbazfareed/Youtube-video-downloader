@@ -115,6 +115,8 @@ class UiStartupWiringTests(unittest.TestCase):
         app.root.winfo_width.side_effect = (600, 900, 1300)
         app._main_outer = Mock()
         app._sidebar_host = Mock()
+        app._main_splitter = Mock()
+        app._main_splitter_stacked = False
         app._main_content_frame = Mock()
         app._media_inspector = Mock()
         app.preview_image_label = Mock()
@@ -123,35 +125,37 @@ class UiStartupWiringTests(unittest.TestCase):
         app._adapt_responsive_layout()
 
         app._sidebar_host.grid_remove.assert_called_once_with()
-        app._main_content_frame.grid_configure.assert_called_with(row=0, column=0)
-        app._media_inspector.grid_configure.assert_called_with(
-            row=1,
-            column=0,
-            columnspan=1,
-            padx=16,
-            pady=(0, 16),
+        app._main_splitter.forget.assert_any_call(app._main_content_frame)
+        app._main_splitter.forget.assert_any_call(app._media_inspector)
+        app._main_content_frame.grid.assert_called_with(
+            row=0, column=0, sticky="nsew",
+        )
+        app._media_inspector.grid.assert_called_with(
+            row=1, column=0, sticky="nsew",
+        )
+        app._main_splitter.grid_configure.assert_called_with(
+            row=0, column=0, columnspan=1, padx=16, pady=(16, 0),
         )
         app._main_outer.columnconfigure.assert_any_call(0, weight=1, minsize=0)
 
         app._adapt_responsive_layout()
         app._sidebar_host.grid.assert_called_once_with()
-        app._main_content_frame.grid_configure.assert_called_with(row=0, column=1)
-        app._media_inspector.grid_configure.assert_called_with(
-            row=1,
-            column=1,
-            columnspan=1,
-            padx=(16, 16),
-            pady=(0, 16),
+        app._main_splitter.grid_configure.assert_called_with(
+            row=0, column=1, columnspan=1, padx=(0, 16), pady=16,
         )
         app.preview_image_label.configure.assert_called_with(wraplength=718)
 
         app._adapt_responsive_layout()
-        app._media_inspector.grid_configure.assert_called_with(
-            row=0,
-            column=2,
-            columnspan=1,
-            padx=(0, 16),
-            pady=16,
+        app._main_content_frame.grid_forget.assert_called_once_with()
+        app._media_inspector.grid_forget.assert_called_once_with()
+        app._main_splitter.add.assert_has_calls(
+            [
+                unittest.mock.call(app._main_content_frame, weight=4),
+                unittest.mock.call(app._media_inspector, weight=1),
+            ]
+        )
+        app._main_splitter.grid_configure.assert_called_with(
+            row=0, column=1, columnspan=2, padx=(0, 16), pady=16,
         )
         app.preview_details.configure.assert_called_with(wraplength=240)
 
@@ -474,81 +478,455 @@ class MediaPlaybackTests(unittest.TestCase):
                     vlc_player.get_time.return_value = 0
                     vlc_player.is_seekable.return_value = False
                     vlc_player.audio_get_track_description.return_value = []
+                    vlc_player.video_get_spu_description.return_value = []
                     vlc_module = SimpleNamespace(
                         Instance=Mock(return_value=vlc_instance),
                         State=SimpleNamespace(Ended=1, Error=2),
                     )
                     video_surface = Mock()
                     video_surface.winfo_id.return_value = 42
+                    video_surface.winfo_width.return_value = 1120
+                    video_surface.winfo_height.return_value = 700
+                    video_surface.winfo_rootx.return_value = 0
+                    video_surface.winfo_rooty.return_value = 0
+                    controls_overlay = Mock()
+                    controls_overlay.winfo_reqheight.return_value = 40
+                    controls_window = Mock()
+                    top_controls_window = Mock()
+                    top_controls = Mock()
+                    timeline = Mock()
+                    timeline.winfo_width.return_value = 500
+                    timeline.winfo_height.return_value = 20
                     player_window = Mock()
+                    top_controls.winfo_reqheight.return_value = 40
                     volume = Mock()
                     volume.get.return_value = 80
-                    variables = [Mock() for _ in range(5)]
-                    player_buttons = [Mock() for _ in range(5)]
+                    variables = [Mock() for _ in range(7)]
+                    player_buttons = [Mock() for _ in range(6)]
+                    position = Mock()
+                    position.get.return_value = 0
                     with (
                         patch("app_media.sys.platform", "win32"),
                         patch.dict("sys.modules", {"vlc": vlc_module}),
                         patch(
-                            "app_media.tk.Toplevel", return_value=player_window
+                            "app_media.tk.Toplevel",
+                            side_effect=[
+                                player_window,
+                                controls_window,
+                                top_controls_window,
+                            ],
                         ) as toplevel,
-                        patch("app_media.tk.Frame", return_value=video_surface),
+                        patch(
+                            "app_media.tk.Frame",
+                            side_effect=[
+                                video_surface,
+                                top_controls,
+                                controls_overlay,
+                            ],
+                        ),
+                        patch("app_media.tk.Canvas", return_value=timeline),
+                        patch("app_media.tk.Label") as label_factory,
+                        patch(
+                            "app_media.tk.Button",
+                            side_effect=player_buttons,
+                        ) as button_factory,
+                        patch("app_media.tk.Scale"),
                         patch("app_media.tk.IntVar", return_value=volume),
-                        patch("app_media.tk.DoubleVar", return_value=Mock()),
+                        patch("app_media.tk.DoubleVar", return_value=position),
                         patch(
                             "app_media.tk.StringVar",
                             side_effect=variables,
-                        ),
-                        patch(
-                            "app_media.ttk.Frame",
-                            side_effect=[
-                                Mock(),
-                                Mock(),
-                                Mock(),
-                                Mock(),
-                                Mock(),
-                                Mock(),
-                                Mock(),
-                            ],
-                        ),
-                        patch(
-                            "app_media.ttk.Button",
-                            side_effect=player_buttons,
-                        ) as button_factory,
-                        patch("app_media.ttk.Label"),
-                        patch("app_media.ttk.Scale"),
-                        patch("app_media.ttk.Combobox"),
+                        ) as string_var_factory,
                     ):
                         MediaMixin.play_selected_media(app)
                     vlc_instance.media_new.assert_called_once_with(str(path))
                     vlc_player.set_hwnd.assert_called_once_with(42)
                     vlc_player.play.assert_called_once_with()
-                    toplevel.assert_called_once_with(app.root)
+                    self.assertEqual(
+                        toplevel.call_args_list,
+                        [
+                            unittest.mock.call(app.root),
+                            unittest.mock.call(player_window),
+                            unittest.mock.call(player_window),
+                        ],
+                    )
                     player_window.title.assert_called_once_with(
                         f"Smart VLC — {path.name}"
                     )
                     player_window.protocol.assert_called_once_with(
                         "WM_DELETE_WINDOW", app._close_in_app_player
                     )
+                    player_window.geometry.assert_called_once_with("1120x700")
+                    player_window.minsize.assert_called_once_with(800, 500)
                     player_window.bind.assert_any_call(
                         "<F11>", app._toggle_in_app_fullscreen, add="+"
                     )
                     player_window.bind.assert_any_call(
                         "<Escape>", app._exit_in_app_fullscreen, add="+"
                     )
+                    player_window.bind.assert_any_call(
+                        "<KeyPress>", app._show_in_app_controls, add="+"
+                    )
                     player_window.destroy.assert_not_called()
                     app.preview_image_label.grid_remove.assert_not_called()
                     self.assertIs(app._in_app_player_window, player_window)
+                    vlc_player.audio_set_mute.assert_called_once_with(False)
+                    vlc_player.audio_set_volume.assert_called_once_with(80)
                     self.assertEqual(
                         [
                             call.kwargs["text"]
                             for call in button_factory.call_args_list
                         ],
-                        ["Ⅱ", "■", "⛶", "×", "?"],
+                        ["←", "⚙", "Ⅱ", "CC", "⚙", "⛶"],
                     )
-                    player_buttons[-1].grid.assert_called_once()
+                    string_var_factory.assert_any_call(value="1.0x")
+                    self.assertIn(
+                        unittest.mock.call(
+                            top_controls,
+                            text=path.name,
+                            background="#000000",
+                            foreground="#FFFFFF",
+                            font=("Segoe UI", 11, "bold"),
+                            anchor="center",
+                        ),
+                        label_factory.call_args_list,
+                    )
+                    self.assertEqual(app._in_app_timeline, timeline)
+                    self.assertIs(
+                        app._in_app_controls_overlay_window,
+                        controls_window,
+                    )
+                    self.assertIs(
+                        app._in_app_top_controls_overlay_window,
+                        top_controls_window,
+                    )
+                    controls_window.overrideredirect.assert_called_once_with(True)
+                    controls_window.transient.assert_called_once_with(player_window)
+                    controls_window.attributes.assert_any_call("-alpha", 0.0)
+                    controls_window.geometry.assert_called_once_with(
+                        "1120x40+0+660"
+                    )
                     self.assertEqual(
-                        player_buttons[-1].grid.call_args.kwargs["row"], 2
+                        timeline.bind.call_args_list[0].args[0],
+                        "<ButtonPress-1>",
                     )
+                    controls_overlay.pack.assert_called_once_with(
+                        fill="both",
+                        expand=True,
+                    )
+                    self.assertEqual(
+                        top_controls_window.bind.call_args_list[0].args[0],
+                        "<F11>",
+                    )
+                    top_controls_window.bind.assert_any_call(
+                        "<KeyPress>", app._show_in_app_controls, add="+"
+                    )
+                    controls_window.bind.assert_any_call(
+                        "<KeyPress>", app._show_in_app_controls, add="+"
+                    )
+                    self.assertIs(
+                        app._in_app_top_title_label,
+                        label_factory.return_value,
+                    )
+                    player_window.bind.assert_any_call(
+                        "<Motion>", app._show_in_app_controls, add="+"
+                    )
+
+    def test_video_preview_autoplays_on_its_embedded_canvas(self):
+        app = MediaMixin()
+        app._t = lambda text: text
+        app.preview_image_label = Mock()
+        app.preview_video_surface = Mock()
+        app.preview_player_controls = Mock()
+        app.preview_video_placeholder = Mock()
+        app.preview_player_play_button = Mock()
+        app.preview_player_current_time = Mock()
+        app.preview_player_duration = Mock()
+        app.preview_player_position = Mock()
+        app._toggle_video_preview = Mock()
+        path = Path("preview.mp4")
+
+        MediaMixin._show_video_preview(app, path)
+
+        self.assertEqual(app._preview_media_path, path)
+        app.preview_image_label.grid_remove.assert_called_once_with()
+        app.preview_video_surface.grid.assert_called_once_with()
+        app.preview_player_controls.grid.assert_called_once_with()
+        app.preview_video_placeholder.configure.assert_called_once_with(
+            text="preview.mp4\nLoading preview",
+        )
+        app._toggle_video_preview.assert_called_once_with()
+        app.preview_video_placeholder.place.assert_called_with(
+            relx=0.5, rely=0.5, anchor="center",
+        )
+
+    def test_embedded_preview_uses_vlc_canvas_and_starts_with_audio_enabled(self):
+        app = MediaMixin()
+        app._t = lambda text: text
+        app._prepare_bundled_vlc_runtime = Mock()
+        app._preview_media_path = Path("preview.mp4")
+        app.preview_video_surface = Mock()
+        app.preview_video_surface.winfo_id.return_value = 42
+        app.preview_video_placeholder = Mock()
+        app.preview_player_volume = Mock()
+        app.preview_player_volume.get.return_value = 80
+        app.preview_player_play_button = Mock()
+        app._preview_playback_rate = Mock()
+        app._preview_playback_rate.get.return_value = "1.0x"
+        app._preview_playback_after = None
+        vlc_instance = Mock()
+        vlc_player = vlc_instance.media_player_new.return_value
+        vlc_module = SimpleNamespace(Instance=Mock(return_value=vlc_instance))
+        with (
+            patch("app_media.sys.platform", "win32"),
+            patch.dict("sys.modules", {"vlc": vlc_module}),
+        ):
+            MediaMixin._toggle_video_preview(app)
+
+        vlc_instance.media_new.assert_called_once_with("preview.mp4")
+        vlc_player.set_hwnd.assert_called_once_with(42)
+        vlc_player.audio_set_mute.assert_called_once_with(False)
+        vlc_player.audio_set_volume.assert_called_once_with(80)
+        vlc_player.play.assert_called_once_with()
+        app.preview_player_play_button.configure.assert_called_once_with(
+            text="Pause preview",
+        )
+
+    def test_dashboard_preview_settings_include_speed_audio_and_subtitles(self):
+        app = MediaMixin()
+        app.root = Mock()
+        app._t = lambda text: text
+        app._preview_vlc_player = Mock()
+        app._preview_vlc_player.audio_get_track_description.return_value = [
+            (1, "English"),
+            (2, "Urdu"),
+        ]
+        app._preview_vlc_player.audio_get_track.return_value = 1
+        app._preview_vlc_player.video_get_spu_description.return_value = [
+            (-1, "Disable"),
+            (3, "English"),
+        ]
+        app._preview_vlc_player.video_get_spu.return_value = -1
+        app._preview_audio_track = Mock()
+        app._preview_playback_rate = Mock()
+        app._preview_subtitle_track = Mock()
+        app._preview_audio_tracks = {}
+        app._preview_subtitle_tracks = {}
+        app.preview_player_cc_button = Mock()
+        app.preview_player_settings_button = Mock()
+        app.preview_player_settings_button.winfo_rootx.return_value = 300
+        app.preview_player_settings_button.winfo_rooty.return_value = 120
+        menus = [Mock() for _ in range(4)]
+        menus[0].winfo_reqheight.return_value = 80
+
+        with patch("app_media.tk.Menu", side_effect=menus) as menu_factory:
+            MediaMixin._show_video_preview_settings(
+                app,
+                app.preview_player_settings_button,
+            )
+
+        self.assertEqual(menu_factory.call_count, 4)
+        self.assertEqual(
+            [call.kwargs["label"] for call in menus[1].add_radiobutton.call_args_list],
+            ["0.5x", "1.0x", "1.5x", "2.0x"],
+        )
+        self.assertEqual(
+            [call.kwargs["label"] for call in menus[2].add_radiobutton.call_args_list],
+            ["English", "Urdu"],
+        )
+        self.assertEqual(
+            [call.kwargs["label"] for call in menus[3].add_radiobutton.call_args_list],
+            ["Off", "English"],
+        )
+        self.assertEqual(
+            [call.kwargs["label"] for call in menus[0].add_cascade.call_args_list],
+            ["Playback speed", "Audio track", "Subtitles"],
+        )
+        app.preview_player_cc_button.grid.assert_called_once_with()
+        menus[0].tk_popup.assert_called_once_with(300, 40)
+        menus[0].destroy.assert_called_once_with()
+
+    def test_dashboard_preview_keeps_cc_visible_but_disables_it_without_subtitles(self):
+        app = MediaMixin()
+        app._t = lambda text: text
+        app._preview_vlc_player = Mock()
+        app._preview_vlc_player.video_get_spu_description.return_value = [
+            (-1, "Disable"),
+        ]
+        app._preview_subtitle_track = Mock()
+        app.preview_player_cc_button = Mock()
+
+        MediaMixin._refresh_video_preview_subtitle_tracks(app)
+
+        app.preview_player_cc_button.grid_remove.assert_not_called()
+        app.preview_player_cc_button.configure.assert_called_once_with(
+            state="disabled",
+        )
+        app._preview_subtitle_track.set.assert_called_once_with("Off")
+
+    def test_dashboard_preview_cc_enables_first_available_subtitle_track(self):
+        app = MediaMixin()
+        app._t = lambda text: text
+        app._preview_vlc_player = Mock()
+        app._preview_vlc_player.video_get_spu.return_value = -1
+        app._preview_vlc_player.video_set_spu.return_value = 0
+        app._preview_subtitle_track = Mock()
+        app._preview_subtitle_track.get.side_effect = ["Off", "English"]
+        app._preview_subtitle_tracks = {"English": 3}
+        app._refresh_video_preview_subtitle_tracks = Mock()
+
+        MediaMixin._toggle_video_preview_subtitles(app)
+
+        app._preview_subtitle_track.set.assert_called_once_with("English")
+        app._preview_vlc_player.video_set_spu.assert_called_once_with(3)
+
+    def test_dashboard_preview_settings_explain_when_subtitles_are_unavailable(self):
+        app = MediaMixin()
+        app.root = Mock()
+        app._t = lambda text: text
+        app._preview_vlc_player = Mock()
+        app._preview_vlc_player.audio_get_track_description.return_value = []
+        app._preview_vlc_player.video_get_spu_description.return_value = [
+            (-1, "Disable"),
+        ]
+        app._preview_subtitle_track = Mock()
+        app._preview_audio_track = Mock()
+        app._preview_playback_rate = Mock()
+        app._preview_audio_tracks = {}
+        app._preview_subtitle_tracks = {}
+        app.preview_player_cc_button = Mock()
+        app.preview_player_settings_button = Mock()
+        app.preview_player_settings_button.winfo_rootx.return_value = 300
+        app.preview_player_settings_button.winfo_rooty.return_value = 120
+        menus = [Mock() for _ in range(4)]
+        menus[0].winfo_reqheight.return_value = 80
+
+        with patch("app_media.tk.Menu", side_effect=menus):
+            MediaMixin._show_video_preview_settings(
+                app,
+                app.preview_player_settings_button,
+            )
+
+        menus[3].add_radiobutton.assert_not_called()
+        menus[3].add_command.assert_called_once_with(
+            label="No subtitles available",
+            state="disabled",
+        )
+
+    def test_dashboard_video_preview_shows_a_local_file_while_its_job_is_active(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "active-download.mp4"
+            path.write_bytes(b"video")
+            app = MediaMixin()
+            app.jobs = Mock()
+            app.jobs.selection.return_value = ("active-job",)
+            app.jobs.item.return_value = ("Downloading", "42%")
+            app._local_media_path = None
+            app._selected_output_path = Mock(return_value=path)
+            app._download_paths = {}
+            app._clear_video_preview = Mock()
+            app._show_video_preview = Mock()
+            app.inspector_status = Mock()
+            app.preview_details = Mock()
+
+            MediaMixin._show_selected_thumbnail(app)
+
+        app._show_video_preview.assert_called_once_with(path)
+        app.inspector_status.set.assert_called_once_with("Downloading")
+
+    def test_stopping_dashboard_preview_clears_tracks_from_previous_media(self):
+        app = MediaMixin()
+        app._t = lambda text: text
+        app._preview_playback_after = None
+        app._preview_vlc_player = None
+        app._preview_vlc_instance = None
+        app._preview_audio_tracks = {"English": 1}
+        app._preview_subtitle_tracks = {"English": 2}
+        app._preview_audio_track = Mock()
+        app._preview_subtitle_track = Mock()
+
+        MediaMixin._stop_video_preview(app)
+
+        self.assertEqual(app._preview_audio_tracks, {})
+        self.assertEqual(app._preview_subtitle_tracks, {})
+        app._preview_audio_track.set.assert_called_once_with("")
+        app._preview_subtitle_track.set.assert_called_once_with("Off")
+
+    def test_dashboard_preview_poll_updates_timestamps_and_seek_position(self):
+        app = MediaMixin()
+        app.root = Mock()
+        app._preview_playback_after = "old-poll"
+        app._preview_vlc_player = Mock()
+        app._preview_vlc_player.get_length.return_value = 120_000
+        app._preview_vlc_player.get_time.return_value = 30_000
+        app._preview_vlc_player.is_seekable.return_value = True
+        app.preview_player_current_time = Mock()
+        app.preview_player_duration = Mock()
+        app.preview_player_position = Mock()
+        app.preview_player_position.get.return_value = 25
+        app.preview_player_timeline = Mock()
+        app.preview_player_timeline.winfo_width.return_value = 110
+        app.preview_player_timeline.winfo_height.return_value = 16
+        app._preview_seeking = False
+        app._preview_audio_refresh_ticks = 0
+
+        MediaMixin._poll_video_preview(app)
+
+        app.preview_player_current_time.set.assert_called_once_with("00:30")
+        app.preview_player_duration.set.assert_called_once_with("02:00")
+        app.preview_player_position.set.assert_called_once_with(25)
+        app.preview_player_timeline.delete.assert_called_once_with("all")
+        app.root.after.assert_called_once_with(250, app._poll_video_preview)
+
+    def test_dashboard_preview_timeline_draws_red_gray_and_hover_handle(self):
+        app = MediaMixin()
+        app.preview_player_timeline = Mock()
+        app.preview_player_timeline.winfo_width.return_value = 110
+        app.preview_player_timeline.winfo_height.return_value = 16
+        app.preview_player_position = Mock()
+        app.preview_player_position.get.return_value = 50
+        app._preview_timeline_hover = True
+        app._preview_seeking = False
+
+        MediaMixin._draw_video_preview_timeline(app)
+
+        self.assertEqual(
+            [call.kwargs["fill"] for call in app.preview_player_timeline.create_line.call_args_list],
+            ["#777777", "#FF3333"],
+        )
+        self.assertEqual(
+            [call.kwargs["width"] for call in app.preview_player_timeline.create_line.call_args_list],
+            [8, 8],
+        )
+        self.assertEqual(
+            app.preview_player_timeline.create_oval.call_args.kwargs["fill"],
+            "#FFFFFF",
+        )
+
+    def test_preview_fullscreen_opens_its_media_in_the_separate_smart_vlc_window(self):
+        app = MediaMixin()
+        app._t = lambda text: text
+        app._preview_media_path = Path("preview.mp4")
+        app._preview_vlc_player = Mock()
+        app._preview_vlc_player.is_playing.return_value = True
+        app.preview_player_play_button = Mock()
+        app._stop_video_preview = Mock()
+        app._play_media_in_app = Mock()
+        app.jobs = Mock()
+        app.jobs.selection.return_value = ()
+        app._in_app_player = Mock()
+        app._toggle_in_app_fullscreen = Mock()
+
+        MediaMixin._open_preview_fullscreen(app)
+
+        app._preview_vlc_player.pause.assert_called_once_with()
+        app.preview_player_play_button.configure.assert_called_once_with(
+            text="Play preview",
+        )
+        app._stop_video_preview.assert_not_called()
+        app._play_media_in_app.assert_called_once_with(Path("preview.mp4"))
+        app._toggle_in_app_fullscreen.assert_called_once_with()
+        self.assertFalse(app._preserve_video_preview)
 
     def test_stop_keeps_separate_player_interface_open(self):
         app = MediaMixin()
@@ -579,6 +957,54 @@ class MediaPlaybackTests(unittest.TestCase):
         app._in_app_playback_button.configure.assert_called_once_with(text="▶")
         app._in_app_player_status.set.assert_called_once_with("Playback paused")
 
+    def test_playback_rate_selection_applies_the_requested_vlc_rate(self):
+        app = MediaMixin()
+        app._in_app_player = Mock()
+        app._in_app_player.set_rate.return_value = 0
+        app._in_app_playback_rate = Mock()
+        app._in_app_playback_rate.get.return_value = "1.5x"
+
+        MediaMixin._set_in_app_playback_rate(app)
+
+        app._in_app_player.set_rate.assert_called_once_with(1.5)
+
+    def test_unavailable_playback_rate_is_reported_and_selection_is_restored(self):
+        app = MediaMixin()
+        app._in_app_player = Mock()
+        app._in_app_player.set_rate.return_value = -1
+        app._in_app_player.get_rate.return_value = 1.0
+        app._in_app_playback_rate = Mock()
+        app._in_app_playback_rate.get.return_value = "2.0x"
+        app._in_app_player_window = Mock()
+        app._t = lambda text: text
+        with patch("app_media.messagebox.showerror") as show_error:
+            MediaMixin._set_in_app_playback_rate(app)
+
+        app._in_app_player.set_rate.assert_called_once_with(2.0)
+        app._in_app_playback_rate.set.assert_called_once_with("1.0x")
+        show_error.assert_called_once_with(
+            "Playback speed unavailable",
+            "VLC could not change the playback speed.",
+            parent=app._in_app_player_window,
+        )
+
+    def test_invalid_playback_rate_is_reported_without_calling_vlc(self):
+        app = MediaMixin()
+        app._in_app_player = Mock()
+        app._in_app_playback_rate = Mock()
+        app._in_app_playback_rate.get.return_value = "2.5x"
+        app._in_app_player_window = Mock()
+        app._t = lambda text: text
+        with patch("app_media.messagebox.showerror") as show_error:
+            MediaMixin._set_in_app_playback_rate(app)
+
+        app._in_app_player.set_rate.assert_not_called()
+        show_error.assert_called_once_with(
+            "Invalid playback speed",
+            "Choose one of the available playback speeds.",
+            parent=app._in_app_player_window,
+        )
+
     def test_playback_title_is_shortened_without_losing_full_filename(self):
         title = "a" * 100 + ".mp4"
 
@@ -604,7 +1030,6 @@ class MediaPlaybackTests(unittest.TestCase):
         app._in_app_player_status = Mock()
         app._in_app_current_time = Mock()
         app._in_app_duration = Mock()
-        app._in_app_seek_scale = Mock()
         app._in_app_position_var = Mock()
         app._close_in_app_player = Mock()
         app._t = lambda text: text
@@ -620,7 +1045,11 @@ class MediaPlaybackTests(unittest.TestCase):
         app.root = Mock()
         app.preview_image_label = Mock()
         player_window = Mock()
+        controls_window = Mock()
+        top_controls_window = Mock()
         app._in_app_player_window = player_window
+        app._in_app_controls_overlay_window = controls_window
+        app._in_app_top_controls_overlay_window = top_controls_window
         player = Mock()
         app._in_app_player = player
         app._in_app_vlc_instance = Mock()
@@ -638,6 +1067,9 @@ class MediaPlaybackTests(unittest.TestCase):
         app.root.geometry.assert_not_called()
         app.root.destroy.assert_not_called()
         player.release.assert_called_once_with()
+        controls_window.destroy.assert_called_once_with()
+        top_controls_window.destroy.assert_called_once_with()
+        self.assertIsNone(app._in_app_top_controls_overlay_window)
         self.assertIsNone(app._in_app_player_window)
 
     def test_volume_control_updates_vlc_and_displays_rounded_percentage(self):
@@ -650,7 +1082,7 @@ class MediaPlaybackTests(unittest.TestCase):
         app._in_app_player.audio_set_volume.assert_called_once_with(64)
         app._in_app_volume_label.set.assert_called_once_with("64%")
 
-    def test_audio_track_selector_lists_tracks_and_selects_chosen_track(self):
+    def test_audio_track_menu_lists_tracks_and_selects_chosen_track(self):
         app = MediaMixin()
         app._in_app_player = Mock()
         app._in_app_player.audio_get_track_description.return_value = [
@@ -658,41 +1090,160 @@ class MediaPlaybackTests(unittest.TestCase):
             (2, b"Urdu"),
         ]
         app._in_app_player.audio_get_track.return_value = 2
-        app._in_app_audio_track_combo = Mock()
         app._in_app_audio_track = Mock()
         app._in_app_audio_tracks = {}
         app._t = lambda text: text
 
         MediaMixin._refresh_in_app_audio_tracks(app)
 
-        app._in_app_audio_track_combo.configure.assert_called_once_with(
-            values=("English", "Urdu"),
-            state="readonly",
-        )
+        self.assertEqual(app._in_app_audio_tracks, {"English": 1, "Urdu": 2})
         app._in_app_audio_track.set.assert_called_once_with("Urdu")
         app._in_app_audio_track.get.return_value = "English"
         app._in_app_player.audio_set_track.return_value = 0
         MediaMixin._select_in_app_audio_track(app)
         app._in_app_player.audio_set_track.assert_called_once_with(1)
 
-    def test_audio_track_selector_disables_when_vlc_has_no_tracks(self):
+    def test_audio_track_menu_handles_missing_vlc_tracks(self):
         app = MediaMixin()
         app._in_app_player = Mock()
         app._in_app_player.audio_get_track_description.return_value = None
-        app._in_app_audio_track_combo = Mock()
         app._in_app_audio_track = Mock()
         app._in_app_audio_tracks = {}
         app._t = lambda text: text
 
         MediaMixin._refresh_in_app_audio_tracks(app)
 
-        app._in_app_audio_track_combo.configure.assert_called_once_with(
-            values=(),
-            state="disabled",
-        )
-        app._in_app_audio_track.set.assert_called_once_with("No audio tracks available")
+        app._in_app_audio_track.set.assert_called_once_with("")
 
-    def test_fullscreen_expands_separate_player_window_without_reparenting_video(self):
+    def test_settings_menu_contains_speed_audio_and_subtitle_tracks(self):
+        app = MediaMixin()
+        app._t = lambda text: text
+        app._in_app_player_window = Mock()
+        app._in_app_player = Mock()
+        app._in_app_player.audio_get_track_description.return_value = [
+            (1, "English"),
+            (2, "Urdu"),
+        ]
+        app._in_app_player.audio_get_track.return_value = 1
+        app._in_app_player.video_get_spu_description.return_value = [
+            (-1, "Disable"),
+            (3, "English"),
+        ]
+        app._in_app_player.video_get_spu.return_value = -1
+        app._in_app_audio_track = Mock()
+        app._in_app_playback_rate = Mock()
+        app._in_app_subtitle_track = Mock()
+        app._in_app_cc_button = Mock()
+        app._begin_in_app_control_interaction = Mock()
+        app._end_in_app_control_interaction = Mock()
+        button = Mock()
+        button.winfo_rootx.return_value = 300
+        button.winfo_rooty.return_value = 120
+        menus = [Mock() for _ in range(4)]
+        menus[0].winfo_reqheight.return_value = 90
+
+        with patch("app_media.tk.Menu", side_effect=menus) as menu_factory:
+            MediaMixin._show_in_app_settings_menu(app, button)
+
+        self.assertEqual(menu_factory.call_count, 4)
+        self.assertEqual(
+            [call.kwargs["label"] for call in menus[1].add_radiobutton.call_args_list],
+            list(app_media._IN_APP_PLAYBACK_RATES),
+        )
+        self.assertEqual(
+            app_media._IN_APP_PLAYBACK_RATES,
+            ("0.5x", "1.0x", "1.5x", "2.0x"),
+        )
+        self.assertEqual(
+            [
+                call.kwargs["label"]
+                for call in menus[2].add_radiobutton.call_args_list
+            ],
+            ["English", "Urdu"],
+        )
+        self.assertEqual(
+            [
+                call.kwargs["label"]
+                for call in menus[3].add_radiobutton.call_args_list
+            ],
+            ["Off", "English"],
+        )
+        self.assertEqual(
+            [call.kwargs["label"] for call in menus[0].add_cascade.call_args_list],
+            ["Playback speed", "Audio track", "Subtitles"],
+        )
+        menus[0].tk_popup.assert_called_once_with(300, 30)
+        menus[0].grab_release.assert_called_once_with()
+        menus[0].destroy.assert_called_once_with()
+        app._end_in_app_control_interaction.assert_called_once_with()
+
+    def test_subtitle_button_is_only_shown_when_tracks_are_available(self):
+        app = MediaMixin()
+        app._t = lambda text: text
+        app._in_app_player = Mock()
+        app._in_app_player.video_get_spu_description.return_value = [
+            (-1, "Disable"),
+            (4, "English"),
+        ]
+        app._in_app_player.video_get_spu.return_value = 4
+        app._in_app_subtitle_track = Mock()
+        app._in_app_cc_button = Mock()
+
+        MediaMixin._refresh_in_app_subtitle_tracks(app)
+
+        self.assertEqual(app._in_app_subtitle_tracks, {"English": 4})
+        app._in_app_subtitle_track.set.assert_called_once_with("English")
+        app._in_app_cc_button.grid.assert_called_once_with()
+        app._in_app_cc_button.grid_remove.assert_not_called()
+        app._in_app_cc_button.configure.assert_called_once_with(
+            foreground="#FF3333"
+        )
+
+        app._in_app_player.video_get_spu_description.return_value = [
+            (-1, "Disable"),
+        ]
+        MediaMixin._refresh_in_app_subtitle_tracks(app)
+        app._in_app_subtitle_track.set.assert_called_with("Off")
+        app._in_app_cc_button.grid_remove.assert_called_once_with()
+
+    def test_cc_button_toggles_selected_subtitle_track(self):
+        app = MediaMixin()
+        app._t = lambda text: text
+        app._in_app_player_window = Mock()
+        app._in_app_player = Mock()
+        app._in_app_player.video_get_spu.side_effect = [-1, 1, 1, 1]
+        app._in_app_player.video_get_spu_description.return_value = [
+            (1, "English"),
+        ]
+        app._in_app_player.video_set_spu.return_value = 0
+        app._in_app_subtitle_track = Mock()
+        app._in_app_subtitle_track.get.side_effect = [
+            "Off",
+            "English",
+            "English",
+        ]
+        app._in_app_subtitle_tracks = {"English": 1}
+        app._in_app_cc_button = Mock()
+        app._show_in_app_controls = Mock()
+
+        MediaMixin._toggle_in_app_subtitles(app)
+
+        app._in_app_player.video_set_spu.assert_called_once_with(1)
+        app._in_app_subtitle_track.set.assert_has_calls(
+            [unittest.mock.call("English"), unittest.mock.call("English")]
+        )
+        app._in_app_cc_button.configure.assert_called_with(
+            foreground="#FF3333"
+        )
+
+        MediaMixin._toggle_in_app_subtitles(app)
+
+        app._in_app_player.video_set_spu.assert_has_calls(
+            [unittest.mock.call(1), unittest.mock.call(-1)]
+        )
+        app._in_app_subtitle_track.set.assert_called_with("Off")
+
+    def test_fullscreen_expands_player_and_refreshes_video_target_after_resize(self):
         app = MediaMixin()
         app.root = Mock()
         player_window = Mock()
@@ -707,6 +1258,9 @@ class MediaPlaybackTests(unittest.TestCase):
 
         self.assertEqual(MediaMixin._toggle_in_app_fullscreen(app), "break")
         player_window.attributes.assert_called_once_with("-fullscreen", True)
+        player_window.after.assert_called_once_with(
+            150, app._refresh_in_app_video_target
+        )
         app._in_app_player.set_hwnd.assert_not_called()
         app.root.attributes.assert_not_called()
         app.root.geometry.assert_not_called()
@@ -719,11 +1273,56 @@ class MediaPlaybackTests(unittest.TestCase):
         player_window.attributes.assert_has_calls(
             [unittest.mock.call("-fullscreen", True), unittest.mock.call("-fullscreen", False)]
         )
+        self.assertEqual(player_window.after.call_count, 2)
         app._in_app_player.set_hwnd.assert_not_called()
         app.root.attributes.assert_not_called()
         app.root.geometry.assert_not_called()
         self.assertFalse(app._in_app_fullscreen)
         app._in_app_fullscreen_button.configure.assert_called_with(text="⛶")
+
+    def test_fullscreen_header_is_positioned_at_top_and_hidden_in_windowed_mode(self):
+        app = MediaMixin()
+        app._in_app_controls_visible = True
+        app._in_app_controls_overlay = Mock()
+        app._in_app_controls_overlay.winfo_reqheight.return_value = 40
+        app._in_app_controls_overlay_window = Mock()
+        app._in_app_top_controls_overlay = Mock()
+        app._in_app_top_controls_overlay.winfo_reqheight.return_value = 48
+        app._in_app_top_controls_overlay_window = Mock()
+        app._in_app_video_surface = Mock()
+        app._in_app_video_surface.winfo_width.return_value = 1120
+        app._in_app_video_surface.winfo_height.return_value = 700
+        app._in_app_video_surface.winfo_rootx.return_value = 15
+        app._in_app_video_surface.winfo_rooty.return_value = 25
+        app._in_app_fullscreen = True
+
+        MediaMixin._raise_in_app_controls_overlay(app)
+
+        app._in_app_top_controls_overlay_window.geometry.assert_called_once_with(
+            "1120x48+15+25"
+        )
+        app._in_app_top_controls_overlay_window.lift.assert_called_once_with()
+        app._in_app_top_controls_overlay_window.withdraw.assert_not_called()
+
+        app._in_app_fullscreen = False
+        MediaMixin._raise_in_app_controls_overlay(app)
+        app._in_app_top_controls_overlay_window.withdraw.assert_called_once_with()
+
+    def test_video_target_refresh_uses_the_resized_player_surface(self):
+        app = MediaMixin()
+        app._in_app_player_window = Mock()
+        app._in_app_player_window.winfo_exists.return_value = True
+        app._in_app_video_surface = Mock()
+        app._in_app_video_surface.winfo_exists.return_value = True
+        app._in_app_player = Mock()
+        app._set_in_app_video_target = Mock()
+
+        MediaMixin._refresh_in_app_video_target(app)
+
+        app._in_app_player_window.update_idletasks.assert_called_once_with()
+        app._set_in_app_video_target.assert_called_once_with(
+            app._in_app_video_surface
+        )
 
     def test_icon_control_hint_is_restored_to_current_player_status(self):
         app = MediaMixin()
@@ -758,13 +1357,11 @@ class MediaPlaybackTests(unittest.TestCase):
         app._in_app_vlc = SimpleNamespace(State=SimpleNamespace(Ended=1, Error=2))
         app._in_app_player_window = Mock()
         app._in_app_audio_refresh_ticks = 0
-        app._in_app_audio_track_combo = Mock()
         app._in_app_audio_track = Mock()
         app._in_app_audio_tracks = {}
         app._in_app_audio_tracks_loaded = True
         app._in_app_current_time = Mock()
         app._in_app_duration = Mock()
-        app._in_app_seek_scale = Mock()
         app._in_app_position_var = Mock()
         app._in_app_seeking = False
 
@@ -772,23 +1369,190 @@ class MediaPlaybackTests(unittest.TestCase):
 
         app._in_app_current_time.set.assert_called_once_with("00:30")
         app._in_app_duration.set.assert_called_once_with("02:00")
-        app._in_app_seek_scale.configure.assert_called_once_with(state="normal")
         app._in_app_position_var.set.assert_called_once_with(25)
+        self.assertEqual(app._in_app_duration_ms, 120_000)
         app.root.after.assert_called_once_with(250, app._poll_in_app_playback)
 
     def test_seek_moves_vlc_to_selected_position(self):
         app = MediaMixin()
         app._in_app_player = Mock()
+        app._in_app_player.is_playing.return_value = False
         app._in_app_player.get_length.return_value = 200_000
         app._in_app_player.is_seekable.return_value = True
         app._in_app_position_var = Mock()
         app._in_app_position_var.get.return_value = 25
         app._in_app_seeking = True
+        app._in_app_controls_overlay = Mock()
+        app.root = Mock()
 
         MediaMixin._seek_in_app_player(app)
 
         app._in_app_player.set_time.assert_called_once_with(50_000)
         self.assertFalse(app._in_app_seeking)
+
+    def test_canvas_timeline_draws_red_played_progress(self):
+        app = MediaMixin()
+        app._in_app_timeline = Mock()
+        app._in_app_timeline.winfo_width.return_value = 110
+        app._in_app_timeline.winfo_height.return_value = 20
+        app._in_app_position_var = Mock()
+        app._in_app_position_var.get.return_value = 50
+
+        MediaMixin._draw_in_app_timeline(app)
+
+        app._in_app_timeline.delete.assert_called_once_with("all")
+        self.assertEqual(app._in_app_timeline.create_line.call_count, 2)
+        self.assertEqual(
+            [call.kwargs["width"] for call in app._in_app_timeline.create_line.call_args_list],
+            [4, 4],
+        )
+        self.assertEqual(
+            app._in_app_timeline.create_line.call_args_list[1].kwargs["fill"],
+            "#FF3333",
+        )
+        app._in_app_timeline.create_oval.assert_not_called()
+
+    def test_canvas_timeline_hover_shows_white_handle_and_thickens_track(self):
+        app = MediaMixin()
+        app._in_app_timeline = Mock()
+        app._in_app_timeline.winfo_width.return_value = 110
+        app._in_app_timeline.winfo_height.return_value = 20
+        app._in_app_position_var = Mock()
+        app._in_app_position_var.get.return_value = 50
+        app._in_app_timeline_hover = True
+        app._in_app_seeking = False
+
+        MediaMixin._draw_in_app_timeline(app)
+
+        self.assertEqual(
+            [call.kwargs["width"] for call in app._in_app_timeline.create_line.call_args_list],
+            [8, 8],
+        )
+        self.assertEqual(
+            app._in_app_timeline.create_oval.call_args.kwargs["fill"],
+            "#FFFFFF",
+        )
+        self.assertEqual(
+            app._in_app_timeline.create_oval.call_args.kwargs["outline"],
+            "#FFFFFF",
+        )
+
+    def test_canvas_timeline_drag_seeks_and_updates_progress(self):
+        app = MediaMixin()
+        app._in_app_player = Mock()
+        app._in_app_player.is_seekable.return_value = True
+        app._in_app_player.get_length.return_value = 200_000
+        app._in_app_timeline = Mock()
+        app._in_app_timeline.winfo_width.return_value = 110
+        app._in_app_timeline.winfo_height.return_value = 20
+        app._in_app_position_var = Mock()
+        position = {"value": 0}
+        app._in_app_position_var.get.side_effect = lambda: position["value"]
+        app._in_app_position_var.set.side_effect = (
+            lambda value: position.__setitem__("value", value)
+        )
+        app._in_app_duration_ms = 200_000
+        app._in_app_seeking = False
+        app._in_app_controls_overlay = Mock()
+        app._in_app_controls_visible = True
+        app._in_app_current_time = Mock()
+        app.root = Mock()
+
+        MediaMixin._begin_in_app_seek(app, SimpleNamespace(x=55))
+        MediaMixin._update_in_app_seek(app, SimpleNamespace(x=80))
+        MediaMixin._seek_in_app_player(app, SimpleNamespace(x=55))
+
+        app._in_app_position_var.set.assert_any_call(50)
+        app._in_app_current_time.set.assert_any_call("01:40")
+        app._in_app_player.set_time.assert_called_once_with(100_000)
+        self.assertFalse(app._in_app_seeking)
+
+    def test_controls_hide_after_five_seconds_only_during_playback(self):
+        app = MediaMixin()
+        app.root = Mock()
+        app._in_app_player = Mock()
+        app._in_app_player.is_playing.return_value = True
+        app._in_app_seeking = False
+        app._in_app_control_interaction = False
+        app._in_app_controls_after = None
+
+        MediaMixin._schedule_in_app_controls_hide(app)
+
+        app.root.after.assert_called_once_with(5000, app._hide_in_app_controls)
+
+        app._in_app_timeline_hover = True
+        app.root.after.reset_mock()
+        MediaMixin._schedule_in_app_controls_hide(app)
+        app.root.after.assert_not_called()
+
+        app._in_app_timeline_hover = False
+        app._in_app_player.is_playing.return_value = False
+        app.root.after.reset_mock()
+        MediaMixin._schedule_in_app_controls_hide(app)
+        app.root.after.assert_not_called()
+
+    def test_hidden_controls_remain_visible_when_playback_is_paused(self):
+        app = MediaMixin()
+        app.root = Mock()
+        app._in_app_player = Mock()
+        app._in_app_player.is_playing.return_value = False
+        app._in_app_controls_overlay = Mock()
+        app._in_app_controls_overlay.winfo_reqheight.return_value = 40
+        app._in_app_controls_overlay_window = Mock()
+        app._in_app_video_surface = Mock()
+        app._in_app_video_surface.winfo_width.return_value = 1120
+        app._in_app_video_surface.winfo_height.return_value = 700
+        app._in_app_video_surface.winfo_rootx.return_value = 0
+        app._in_app_video_surface.winfo_rooty.return_value = 0
+        app._in_app_controls_after = None
+        app._in_app_controls_fade_after = None
+        app._in_app_controls_opacity = 0.0
+        app._in_app_controls_visible = False
+
+        MediaMixin._hide_in_app_controls(app)
+
+        app._in_app_controls_overlay_window.deiconify.assert_called_once_with()
+        app._in_app_controls_overlay_window.lift.assert_called_once_with()
+        app._in_app_controls_overlay_window.attributes.assert_any_call(
+            "-alpha", 0.0
+        )
+        app.root.after.assert_called_once_with(
+            40,
+            app._advance_in_app_controls_fade,
+        )
+        self.assertTrue(app._in_app_controls_visible)
+
+    def test_playback_controls_fade_out_after_inactivity(self):
+        app = MediaMixin()
+        app.root = Mock()
+        app._in_app_player = Mock()
+        app._in_app_player.is_playing.return_value = True
+        app._in_app_controls_overlay_window = Mock()
+        app._in_app_top_controls_overlay_window = Mock()
+        app._in_app_controls_visible = True
+        app._in_app_controls_opacity = 0.92
+        app._in_app_controls_fade_after = None
+        app._in_app_seeking = False
+        app._in_app_control_interaction = False
+        app._in_app_timeline_hover = False
+
+        MediaMixin._hide_in_app_controls(app)
+
+        self.assertTrue(app._in_app_controls_visible)
+        alpha_call = app._in_app_controls_overlay_window.attributes.call_args
+        self.assertEqual(alpha_call.args[0], "-alpha")
+        self.assertAlmostEqual(alpha_call.args[1], 0.69)
+        app.root.after.assert_called_once_with(
+            40,
+            app._advance_in_app_controls_fade,
+        )
+
+        for _ in range(3):
+            MediaMixin._advance_in_app_controls_fade(app)
+
+        app._in_app_controls_overlay_window.withdraw.assert_called_once_with()
+        app._in_app_top_controls_overlay_window.withdraw.assert_called_once_with()
+        self.assertFalse(app._in_app_controls_visible)
 
     def test_player_help_explains_separate_fullscreen_and_controls(self):
         app = MediaMixin()
@@ -805,8 +1569,11 @@ class MediaPlaybackTests(unittest.TestCase):
         self.assertIn("without changing the main app window", help_text)
         self.assertIn("F11", help_text)
         self.assertIn("Escape", help_text)
-        self.assertIn("pause, stop, change volume", help_text)
-        self.assertIn("select an audio track", help_text)
+        self.assertIn("change volume", help_text)
+        self.assertIn("playback speed", help_text)
+        self.assertIn("audio tracks", help_text)
+        self.assertIn("subtitles", help_text)
+        self.assertIn("Settings", help_text)
         self.assertIn("Close player", help_text)
         self.assertEqual(show_info.call_args.kwargs["parent"], app.root)
 

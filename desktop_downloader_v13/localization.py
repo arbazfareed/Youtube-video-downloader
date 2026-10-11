@@ -98,6 +98,11 @@ TRANSLATIONS = {
         "ar": "تشغيل داخل التطبيق", "hi": "ऐप में चलाएँ",
         "bn": "অ্যাপে চালান",
     },
+    "Open Smart VLC": {
+        "es": "Abrir Smart VLC", "ur": "Smart VLC کھولیں",
+        "ar": "فتح Smart VLC", "hi": "Smart VLC खोलें",
+        "bn": "Smart VLC খুলুন",
+    },
     "Open in system player": {
         "es": "Abrir en el reproductor del sistema",
         "ur": "سسٹم پلیئر میں کھولیں",
@@ -121,6 +126,60 @@ TRANSLATIONS = {
         "es": "Pista de audio", "ur": "آڈیو ٹریک",
         "ar": "المسار الصوتي", "hi": "ऑडियो ट्रैक", "bn": "অডিও ট্র্যাক",
     },
+    "Subtitles": {
+        "es": "Subtítulos", "ur": "سب ٹائٹلز", "ar": "الترجمة",
+        "hi": "उपशीर्षक", "bn": "সাবটাইটেল",
+    },
+    "Off": {
+        "es": "Desactivados", "ur": "بند", "ar": "إيقاف",
+        "hi": "बंद", "bn": "বন্ধ",
+    },
+    "No subtitles available": {
+        "es": "No hay subtítulos disponibles",
+        "ur": "کوئی سب ٹائٹلز دستیاب نہیں",
+        "ar": "لا توجد ترجمات متاحة",
+        "hi": "कोई उपशीर्षक उपलब्ध नहीं",
+        "bn": "কোনো সাবটাইটেল উপলভ্য নেই",
+    },
+    "Loading preview": {
+        "es": "Cargando vista previa",
+        "ur": "پیش نظارہ لوڈ ہو رہا ہے",
+        "ar": "جارٍ تحميل المعاينة",
+        "hi": "पूर्वावलोकन लोड हो रहा है",
+        "bn": "প্রিভিউ লোড হচ্ছে",
+    },
+    "Playback speed": {
+        "es": "Velocidad", "ur": "پلے بیک کی رفتار",
+        "ar": "سرعة التشغيل", "hi": "प्लेबैक गति", "bn": "প্লেব্যাক গতি",
+    },
+    "Invalid playback speed": {
+        "es": "Velocidad de reproducción no válida",
+        "ur": "پلے بیک کی رفتار درست نہیں",
+        "ar": "سرعة تشغيل غير صالحة",
+        "hi": "अमान्य प्लेबैक गति",
+        "bn": "অবৈধ প্লেব্যাক গতি",
+    },
+    "Choose one of the available playback speeds.": {
+        "es": "Elige una de las velocidades de reproducción disponibles.",
+        "ur": "دستیاب پلے بیک رفتار میں سے ایک منتخب کریں۔",
+        "ar": "اختر إحدى سرعات التشغيل المتاحة.",
+        "hi": "उपलब्ध प्लेबैक गतियों में से एक चुनें।",
+        "bn": "উপলভ্য প্লেব্যাক গতিগুলোর একটি বেছে নিন।",
+    },
+    "Playback speed unavailable": {
+        "es": "Velocidad de reproducción no disponible",
+        "ur": "پلے بیک کی رفتار دستیاب نہیں",
+        "ar": "سرعة التشغيل غير متاحة",
+        "hi": "प्लेबैक गति उपलब्ध नहीं",
+        "bn": "প্লেব্যাক গতি উপলভ্য নয়",
+    },
+    "VLC could not change the playback speed.": {
+        "es": "VLC no pudo cambiar la velocidad de reproducción.",
+        "ur": "VLC پلے بیک کی رفتار تبدیل نہیں کر سکا۔",
+        "ar": "تعذر على VLC تغيير سرعة التشغيل.",
+        "hi": "VLC प्लेबैक गति नहीं बदल सका।",
+        "bn": "VLC প্লেব্যাক গতি পরিবর্তন করতে পারেনি।",
+    },
     "No audio tracks available": {
         "es": "No hay pistas de audio disponibles",
         "ur": "کوئی آڈیو ٹریک دستیاب نہیں",
@@ -140,19 +199,41 @@ TRANSLATIONS = {
         "hi": "VLC इस ऑडियो ट्रैक को चुन नहीं सका।",
         "bn": "VLC এই অডিও ট্র্যাক নির্বাচন করতে পারেনি।",
     },
+    "Subtitle track unavailable": {
+        "es": "Pista de subtítulos no disponible",
+        "ur": "سب ٹائٹل ٹریک دستیاب نہیں",
+        "ar": "مسار الترجمة غير متاح",
+        "hi": "उपशीर्षक ट्रैक उपलब्ध नहीं",
+        "bn": "সাবটাইটেল ট্র্যাক উপলভ্য নয়",
+    },
+    "VLC could not select this subtitle track.": {
+        "es": "VLC no pudo seleccionar esta pista de subtítulos.",
+        "ur": "VLC یہ سب ٹائٹل ٹریک منتخب نہیں کر سکا۔",
+        "ar": "تعذر على VLC تحديد مسار الترجمة هذا.",
+        "hi": "VLC इस उपशीर्षक ट्रैक को नहीं चुन सका।",
+        "bn": "VLC এই সাবটাইটেল ট্র্যাক নির্বাচন করতে পারেনি।",
+    },
+    "VLC could not change subtitle visibility.": {
+        "es": "VLC no pudo cambiar la visibilidad de los subtítulos.",
+        "ur": "VLC سب ٹائٹلز کی نمائش تبدیل نہیں کر سکا۔",
+        "ar": "تعذر على VLC تغيير ظهور الترجمة.",
+        "hi": "VLC उपशीर्षकों की दृश्यता नहीं बदल सका।",
+        "bn": "VLC সাবটাইটেলের দৃশ্যমানতা পরিবর্তন করতে পারেনি।",
+    },
     "Media player help": {
         "es": "Ayuda del reproductor multimedia", "ur": "میڈیا پلیئر کی مدد",
         "ar": "مساعدة مشغل الوسائط", "hi": "मीडिया प्लेयर सहायता",
         "bn": "মিডিয়া প্লেয়ার সহায়তা",
     },
-    "Playback opens in a separate Smart VLC window, so the downloader preview remains available. Use Full screen or F11 to expand the player without changing the main app window. Press Escape or F11 to return to windowed playback. Use the timeline to seek, and the controls to pause, stop, change volume, or select an audio track. Close player to stop playback and close the player window.": {
+    "Playback opens in a separate Smart VLC window, so the downloader preview remains available. Use Full screen or F11 to expand the player without changing the main app window. Press Escape or F11 to return to windowed playback. Use the timeline to seek, and the controls to pause, stop, or change volume. Select playback speed, audio tracks, and subtitles from Settings. Close player to stop playback and close the player window.": {
         "ur": (
             "پلے بیک الگ Smart VLC ونڈو میں کھلتا ہے، اس لیے ڈاؤن لوڈر کا پیش "
             "نظارہ دستیاب رہتا ہے۔ Full screen یا F11 سے پلیئر بڑی اسکرین پر "
             "کھلتا ہے جبکہ مرکزی ایپ ونڈو تبدیل نہیں ہوتی۔ ونڈو والے پلے بیک پر "
             "واپس آنے کے لیے Escape یا F11 دبائیں۔ ٹائم لائن سے آگے پیچھے جائیں، "
-            "اور کنٹرولز سے پاز، اسٹاپ، والیوم یا آڈیو ٹریک منتخب کریں۔ Close "
-            "player پلے بیک روک کر پلیئر ونڈو بند کرتا ہے۔"
+            "کنٹرولز سے پاز، اسٹاپ یا والیوم تبدیل کریں، اور Settings سے رفتار، "
+            "آڈیو ٹریک یا سب ٹائٹلز منتخب کریں۔ Close player پلے بیک روک کر "
+            "پلیئر ونڈو بند کرتا ہے۔"
         ),
     },
     "Full screen playback": {

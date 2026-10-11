@@ -99,17 +99,36 @@ announcements and Urdu text shaping depend on the operating system, screen
 reader, fonts, and Tk version; verify those combinations manually.
 
 The **Play in app** action opens a separate, resizable **Smart VLC** window and
-leaves the downloader's **Media preview** available. The player has a compact icon-led control strip with a seekable timeline,
-elapsed/total time, play/pause, stop, volume, audio-track selection, and Help;
-hovering or keyboard-focusing a control shows its label in the status area.
-Playback status sits beside the shortened title instead of taking a full footer
-row. **Full screen** or **F11** expands
-that same player window; the video stays attached to its original surface and
-the main Smart Downloader window remains unchanged. Press **Escape** or
-**F11** to return to windowed playback. **Close player** stops playback and
-closes only the player window. Actual resolution/codec playback depends on the
-media, VLC build, hardware, and display and must be checked with representative
-files.
+leaves the downloader's **Media preview** available. The dashboard video preview
+starts playback when a video is selected and has its own play/pause, volume,
+elapsed and total time, red/gray seek timeline, CC toggle, Settings for
+speed/audio/subtitles, and a **Full screen** action. When subtitle tracks are
+available, CC enables the first track and Settings lets you choose a track or
+turn subtitles off. If no tracks are found, CC stays visible but disabled and
+Settings explains that subtitles are unavailable. The **Full screen** action
+opens the previewed media in the separate Smart VLC window directly in
+fullscreen, rather than fullscreening the small dashboard preview.
+Smart VLC's compact bottom controls show play/pause, volume, elapsed and total time, the red/gray seek timeline,
+fullscreen, and a **Settings** menu for playback speed (0.5x, 1.0x, 1.5x,
+and 2.0x),
+audio tracks, and subtitles. A **CC** button appears only when VLC reports
+subtitle tracks. In fullscreen, a compact header adds Back, the media title,
+and Settings. The timeline shows a thin red played portion and a gray
+remainder; hovering reveals a white scrubber and thickens the track. Click or
+drag to seek without pausing. While playing, Smart VLC's overlays fade out
+after five seconds without pointer, keyboard, or control activity; mouse/key
+activity reveals them again, and hovering over or dragging the timeline keeps
+them visible. Smart VLC's controls stay visible while paused or while a control
+is being used. The dashboard preview keeps its compact controls below the video.
+VLC does not expose a reliable buffered-ahead range for this local-file player,
+so the timeline does not display a fabricated buffer indicator.
+Use **Full screen** or **F11** to expand that same player window; double-clicking
+the dashboard preview also opens it full screen. The video stays attached to its
+original surface and the main Smart Downloader window remains unchanged. Press
+**Escape** or **F11** to return to windowed playback. Closing the player stops
+playback and closes only the player window. Actual resolution/codec playback
+depends on the media, VLC build, hardware, and display and must be checked with
+representative files.
 
 On narrow displays, the main navigation collapses and the Media preview moves
 below the downloader workspace so its controls are not cut off horizontally.

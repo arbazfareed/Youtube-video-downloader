@@ -229,6 +229,7 @@ class EventsMixin:
         self.root.after(100, self._process_events)
 
     def _close(self) -> None:
+        self._clear_video_preview()
         self._close_in_app_player()
         for timer in self.schedule_timers.values():
             timer.cancel()

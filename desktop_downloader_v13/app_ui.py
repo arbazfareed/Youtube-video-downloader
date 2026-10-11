@@ -95,9 +95,16 @@ class UiMixin:
         outer.pack(fill="both", expand=True)
         outer.columnconfigure(0, weight=0, minsize=190)
         outer.columnconfigure(1, weight=1, minsize=660)
-        outer.columnconfigure(2, weight=0, minsize=275)
+        outer.columnconfigure(2, weight=0, minsize=0)
         outer.rowconfigure(0, weight=1)
         self._main_outer = outer
+        splitter = ttk.Panedwindow(outer, orient="horizontal")
+        splitter.grid(
+            row=0, column=1, columnspan=2, sticky="nsew",
+            padx=(0, 16), pady=16,
+        )
+        self._main_splitter = splitter
+        self._main_splitter_stacked = False
         sidebar_host = ttk.Frame(outer, style="Sidebar.TFrame")
         sidebar_host.grid(row=0, column=0, sticky="nsew")
         self._sidebar_host = sidebar_host
@@ -223,16 +230,16 @@ class UiMixin:
             justify="left",
         ).grid(row=12, column=0, sticky="sw", padx=8, pady=(24, 0))
 
-        frame = ttk.Frame(outer, padding=16)
-        frame.grid(row=0, column=1, sticky="nsew")
+        frame = ttk.Frame(splitter, padding=16)
         self._main_content_frame = frame
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(5, weight=1)
-        inspector = ttk.Frame(outer, style="Card.TFrame", padding=14)
-        inspector.grid(row=0, column=2, sticky="nsew", padx=(0, 16), pady=16)
+        inspector = ttk.Frame(splitter, style="Card.TFrame", padding=14)
         self._media_inspector = inspector
         inspector.columnconfigure(0, weight=1)
         inspector.rowconfigure(2, weight=1)
+        splitter.add(frame, weight=4)
+        splitter.add(inspector, weight=1)
 
         header = ttk.Frame(frame, style="Card.TFrame", padding=(14, 9))
         header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
@@ -592,6 +599,136 @@ class UiMixin:
         preview.grid(row=2, column=0, columnspan=2, sticky="nsew")
         preview.columnconfigure(0, weight=1)
         preview.rowconfigure(0, weight=1)
+        self.preview_video_surface = tk.Frame(
+            preview, background="#000000", height=180,
+        )
+        self.preview_video_surface.grid(
+            row=0, column=0, sticky="nsew",
+        )
+        self.preview_video_surface.grid_remove()
+        self.preview_video_placeholder = tk.Label(
+            self.preview_video_surface,
+            text=self._t("Choose a video to preview"),
+            background="#000000",
+            foreground="#ffffff",
+            anchor="center",
+            justify="center",
+            wraplength=240,
+        )
+        self.preview_video_placeholder.place(
+            relx=0.5, rely=0.5, anchor="center",
+        )
+        preview_player_controls = ttk.Frame(preview, style="Card.TFrame")
+        preview_player_controls.grid(
+            row=1, column=0, sticky="ew", pady=(5, 0),
+        )
+        preview_player_controls.grid_remove()
+        self.preview_player_controls = preview_player_controls
+        for column in range(7):
+            preview_player_controls.columnconfigure(column, weight=0)
+        preview_player_controls.columnconfigure(3, weight=1)
+        self.preview_player_play_button = ttk.Button(
+            preview_player_controls,
+            text=self._t("Play preview"),
+            command=self._toggle_video_preview,
+        )
+        self.preview_player_play_button.grid(row=0, column=0, sticky="ew")
+        ttk.Button(
+            preview_player_controls,
+            text=self._t("Stop"),
+            command=self._stop_video_preview,
+        ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
+        self.preview_player_cc_button = ttk.Button(
+            preview_player_controls,
+            text="CC",
+            command=self._toggle_video_preview_subtitles,
+            width=3,
+        )
+        self.preview_player_cc_button.grid(row=0, column=2, padx=(4, 0))
+        self.preview_player_settings_button = ttk.Button(
+            preview_player_controls,
+            text="⚙",
+            command=lambda: self._show_video_preview_settings(
+                self.preview_player_settings_button
+            ),
+            width=3,
+        )
+        self.preview_player_settings_button.grid(row=0, column=4, padx=(4, 0))
+        ttk.Button(
+            preview_player_controls,
+            text=self._t("Full screen"),
+            command=self._open_preview_fullscreen,
+            width=10,
+        ).grid(row=0, column=5, sticky="ew", padx=(4, 0))
+        self.preview_player_volume = tk.IntVar(value=80)
+        ttk.Label(
+            preview_player_controls,
+            text=self._t("Volume"),
+        ).grid(row=1, column=0, sticky="e", padx=(0, 3))
+        ttk.Scale(
+            preview_player_controls,
+            from_=0,
+            to=100,
+            variable=self.preview_player_volume,
+            command=self._set_video_preview_volume,
+            takefocus=True,
+        ).grid(row=1, column=1, sticky="ew", padx=(0, 4))
+        self.preview_player_current_time = tk.StringVar(value="00:00")
+        ttk.Label(
+            preview_player_controls,
+            textvariable=self.preview_player_current_time,
+            width=8,
+            anchor="e",
+        ).grid(row=1, column=2, padx=(2, 4))
+        self.preview_player_position = tk.DoubleVar(value=0)
+        self.preview_player_timeline = tk.Canvas(
+            preview_player_controls,
+            height=16,
+            background="#202020",
+            highlightthickness=0,
+            cursor="hand2",
+        )
+        self.preview_player_timeline.grid(
+            row=1, column=3, sticky="ew", padx=3,
+        )
+        self.preview_player_timeline.bind(
+            "<Configure>", lambda _event: self._draw_video_preview_timeline(),
+            add="+",
+        )
+        self.preview_player_timeline.bind(
+            "<ButtonPress-1>", self._begin_video_preview_seek, add="+",
+        )
+        self.preview_player_timeline.bind(
+            "<B1-Motion>", self._update_video_preview_seek, add="+",
+        )
+        self.preview_player_timeline.bind(
+            "<ButtonRelease-1>", self._seek_video_preview, add="+",
+        )
+        self.preview_player_timeline.bind(
+            "<Enter>", lambda _event: self._set_video_preview_timeline_hover(True),
+            add="+",
+        )
+        self.preview_player_timeline.bind(
+            "<Leave>", lambda _event: self._set_video_preview_timeline_hover(False),
+            add="+",
+        )
+        self.preview_player_duration = tk.StringVar(value="00:00")
+        ttk.Label(
+            preview_player_controls,
+            textvariable=self.preview_player_duration,
+            width=8,
+            anchor="w",
+        ).grid(row=1, column=4, padx=(4, 0))
+        self._preview_playback_rate = tk.StringVar(value="1.0x")
+        self._preview_audio_track = tk.StringVar(value="")
+        self._preview_audio_tracks = {}
+        self._preview_subtitle_track = tk.StringVar(value="Off")
+        self._preview_subtitle_tracks = {}
+        self._preview_playback_after = None
+        self._preview_audio_refresh_ticks = 0
+        self._preview_duration_ms = 0
+        self._preview_timeline_hover = False
+        self._preview_seeking = False
         self.preview_image_label = ttk.Label(
             preview,
             text=self._t("Select a file to preview"),
@@ -602,6 +739,9 @@ class UiMixin:
             padding=8,
         )
         self.preview_image_label.grid(row=0, column=0, sticky="nsew")
+        self.preview_video_surface.bind(
+            "<Double-Button-1>", lambda _event: self._open_preview_fullscreen(),
+        )
         ttk.Label(
             inspector,
             text=self._t("File attributes"),
@@ -625,7 +765,7 @@ class UiMixin:
             inspector_actions.columnconfigure(column, weight=1)
         ttk.Button(
             inspector_actions,
-            text=self._t("Play in app"),
+            text=self._t("Open Smart VLC"),
             command=self.play_selected_media,
             style="Accent.TButton",
         ).grid(row=0, column=0, sticky="ew", padx=(0, 3), pady=(0, 6))
@@ -705,18 +845,32 @@ class UiMixin:
         width = self.root.winfo_width()
         outer = self._main_outer
         sidebar = self._sidebar_host
-        content = self._main_content_frame
-        inspector = self._media_inspector
+        splitter = self._main_splitter
+        stacked = width < 1180
+        if stacked != self._main_splitter_stacked:
+            if stacked:
+                splitter.forget(self._main_content_frame)
+                splitter.forget(self._media_inspector)
+                self._main_content_frame.grid(
+                    row=0, column=0, sticky="nsew",
+                )
+                self._media_inspector.grid(
+                    row=1, column=0, sticky="nsew",
+                )
+                splitter.columnconfigure(0, weight=1)
+                splitter.rowconfigure(0, weight=3)
+                splitter.rowconfigure(1, weight=1)
+            else:
+                self._main_content_frame.grid_forget()
+                self._media_inspector.grid_forget()
+                splitter.add(self._main_content_frame, weight=4)
+                splitter.add(self._media_inspector, weight=1)
+            self._main_splitter_stacked = stacked
 
         if width < 760:
             sidebar.grid_remove()
-            content.grid_configure(row=0, column=0)
-            inspector.grid_configure(
-                row=1,
-                column=0,
-                columnspan=1,
-                padx=16,
-                pady=(0, 16),
+            splitter.grid_configure(
+                row=0, column=0, columnspan=1, padx=16, pady=(16, 0),
             )
             outer.columnconfigure(0, weight=1, minsize=0)
             outer.columnconfigure(1, weight=0, minsize=0)
@@ -724,13 +878,8 @@ class UiMixin:
             outer.rowconfigure(1, weight=1)
         elif width < 1180:
             sidebar.grid()
-            content.grid_configure(row=0, column=1)
-            inspector.grid_configure(
-                row=1,
-                column=1,
-                columnspan=1,
-                padx=(16, 16),
-                pady=(0, 16),
+            splitter.grid_configure(
+                row=0, column=1, columnspan=1, padx=(0, 16), pady=16,
             )
             outer.columnconfigure(0, weight=0, minsize=150)
             outer.columnconfigure(1, weight=1, minsize=360)
@@ -738,17 +887,12 @@ class UiMixin:
             outer.rowconfigure(1, weight=1)
         else:
             sidebar.grid()
-            content.grid_configure(row=0, column=1)
-            inspector.grid_configure(
-                row=0,
-                column=2,
-                columnspan=1,
-                padx=(0, 16),
-                pady=16,
+            splitter.grid_configure(
+                row=0, column=1, columnspan=2, padx=(0, 16), pady=16,
             )
             outer.columnconfigure(0, weight=0, minsize=190)
             outer.columnconfigure(1, weight=1, minsize=660)
-            outer.columnconfigure(2, weight=0, minsize=275)
+            outer.columnconfigure(2, weight=0, minsize=0)
             outer.rowconfigure(1, weight=0)
         preview_width = (
             240
@@ -757,6 +901,9 @@ class UiMixin:
         )
         self.preview_image_label.configure(wraplength=preview_width)
         self.preview_details.configure(wraplength=preview_width)
+        placeholder = getattr(self, "preview_video_placeholder", None)
+        if placeholder is not None:
+            placeholder.configure(wraplength=max(140, preview_width - 20))
 
     def _resize_sidebar_content(self, event) -> None:
         self.sidebar_canvas.itemconfigure(self.sidebar_window, width=event.width)

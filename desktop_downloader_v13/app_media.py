@@ -32,6 +32,7 @@ from app_support import (
 )
 
 _VLC_DLL_DIRECTORY = None
+_IN_APP_PLAYBACK_RATES = ("0.5x", "1.0x", "1.5x", "2.0x")
 
 
 class MediaMixin:
@@ -502,6 +503,538 @@ class MediaMixin:
             ):
                 self.open_media_in_system_player(path)
 
+    def _show_video_preview(self, path: Path) -> None:
+        self._clear_video_preview()
+        self._preview_media_path = path
+        self.preview_image_label.grid_remove()
+        self.preview_video_surface.grid()
+        self.preview_player_controls.grid()
+        self.preview_player_current_time.set("00:00")
+        self.preview_player_duration.set("00:00")
+        self.preview_player_position.set(0)
+        self._draw_video_preview_timeline()
+        self.preview_video_placeholder.configure(
+            text=f"{path.name}\n{self._t('Loading preview')}",
+        )
+        self._toggle_video_preview()
+
+    def _clear_video_preview(self) -> None:
+        self._stop_video_preview()
+        self._preview_media_path = None
+        surface = getattr(self, "preview_video_surface", None)
+        if surface is not None:
+            surface.grid_remove()
+        controls = getattr(self, "preview_player_controls", None)
+        if controls is not None:
+            controls.grid_remove()
+        preview = getattr(self, "preview_image_label", None)
+        if preview is not None:
+            preview.grid()
+
+    def _toggle_video_preview(self) -> None:
+        player = getattr(self, "_preview_vlc_player", None)
+        if player is not None:
+            if player.is_playing():
+                player.pause()
+                self.preview_player_play_button.configure(
+                    text=self._t("Play preview"),
+                )
+            else:
+                player.play()
+                self.preview_player_play_button.configure(
+                    text=self._t("Pause preview"),
+                )
+                self._schedule_video_preview_poll()
+            return
+
+        path = getattr(self, "_preview_media_path", None)
+        if path is None:
+            return
+        try:
+            import importlib
+
+            self._prepare_bundled_vlc_runtime()
+            vlc = importlib.import_module("vlc")
+            instance = vlc.Instance()
+            if instance is None:
+                raise RuntimeError(self._t("VLC could not initialize."))
+            self._preview_vlc_instance = instance
+            player = instance.media_player_new()
+            self._preview_vlc_player = player
+            player.set_media(instance.media_new(str(path)))
+            surface = self.preview_video_surface
+            surface.update_idletasks()
+            handle = surface.winfo_id()
+            if sys.platform == "win32":
+                player.set_hwnd(handle)
+            elif sys.platform == "darwin":
+                player.set_nsobject(handle)
+            else:
+                player.set_xwindow(handle)
+            self.preview_video_placeholder.place_forget()
+            player.audio_set_mute(False)
+            player.audio_set_volume(self.preview_player_volume.get())
+            if player.play() == -1:
+                raise RuntimeError(self._t("VLC could not start playback."))
+            rate = float(self._preview_playback_rate.get().removesuffix("x"))
+            if rate != 1.0 and player.set_rate(rate) == -1:
+                self._preview_playback_rate.set("1.0x")
+                messagebox.showerror(
+                    self._t("Playback speed unavailable"),
+                    self._t("VLC could not change the playback speed."),
+                    parent=self.root,
+                )
+            self.preview_player_play_button.configure(
+                text=self._t("Pause preview"),
+            )
+            self._preview_duration_ms = 0
+            self._preview_seeking = False
+            self._schedule_video_preview_poll()
+        except (AttributeError, ImportError, OSError, RuntimeError) as error:
+            self._stop_video_preview()
+            messagebox.showerror(
+                self._t("Could not preview video"),
+                str(error),
+                parent=self.root,
+            )
+
+    def _schedule_video_preview_poll(self) -> None:
+        root = getattr(self, "root", None)
+        if root is None or getattr(self, "_preview_playback_after", None) is not None:
+            return
+        self._preview_playback_after = root.after(
+            250,
+            self._poll_video_preview,
+        )
+
+    def _poll_video_preview(self) -> None:
+        self._preview_playback_after = None
+        player = getattr(self, "_preview_vlc_player", None)
+        if player is None:
+            return
+        duration = max(0, player.get_length())
+        current_time = max(0, player.get_time())
+        self._preview_duration_ms = duration
+        self.preview_player_duration.set(self._format_in_app_time(duration))
+        self.preview_player_current_time.set(
+            self._format_in_app_time(current_time)
+        )
+        if duration > 0 and player.is_seekable() and not self._preview_seeking:
+            self.preview_player_position.set(
+                min(100, current_time * 100 / duration)
+            )
+        self._draw_video_preview_timeline()
+        self._preview_audio_refresh_ticks = (
+            getattr(self, "_preview_audio_refresh_ticks", 0) + 1
+        )
+        if self._preview_audio_refresh_ticks % 4 == 0:
+            self._refresh_video_preview_audio_tracks()
+            self._refresh_video_preview_subtitle_tracks()
+        self._schedule_video_preview_poll()
+
+    def _draw_video_preview_timeline(self) -> None:
+        timeline = getattr(self, "preview_player_timeline", None)
+        if timeline is None:
+            return
+        width = timeline.winfo_width()
+        height = timeline.winfo_height()
+        if width <= 1 or height <= 1:
+            return
+        timeline.delete("all")
+        start = 5
+        end = max(start + 1, width - 5)
+        midpoint = height / 2
+        active = (
+            getattr(self, "_preview_timeline_hover", False)
+            or getattr(self, "_preview_seeking", False)
+        )
+        line_width = 8 if active else 4
+        position = max(0.0, min(100.0, self.preview_player_position.get()))
+        played_end = start + (end - start) * position / 100
+        timeline.create_line(
+            start,
+            midpoint,
+            end,
+            midpoint,
+            fill="#777777",
+            width=line_width,
+            capstyle="round",
+        )
+        timeline.create_line(
+            start,
+            midpoint,
+            played_end,
+            midpoint,
+            fill="#FF3333",
+            width=line_width,
+            capstyle="round",
+        )
+        if active:
+            radius = 5
+            timeline.create_oval(
+                played_end - radius,
+                midpoint - radius,
+                played_end + radius,
+                midpoint + radius,
+                fill="#FFFFFF",
+                outline="#FFFFFF",
+            )
+
+    def _set_video_preview_seek_from_event(self, event) -> None:
+        timeline = self.preview_player_timeline
+        width = max(1, timeline.winfo_width())
+        usable_width = max(1, width - 10)
+        position = max(0.0, min(100.0, (float(event.x) - 5) * 100 / usable_width))
+        self.preview_player_position.set(position)
+        if self._preview_duration_ms > 0:
+            self.preview_player_current_time.set(
+                self._format_in_app_time(
+                    round(self._preview_duration_ms * position / 100)
+                )
+            )
+        self._draw_video_preview_timeline()
+
+    def _begin_video_preview_seek(self, event=None) -> None:
+        player = getattr(self, "_preview_vlc_player", None)
+        if (
+            player is None
+            or self._preview_duration_ms <= 0
+            or not player.is_seekable()
+        ):
+            return
+        self._preview_seeking = True
+        if event is not None:
+            self._set_video_preview_seek_from_event(event)
+
+    def _update_video_preview_seek(self, event=None) -> None:
+        if self._preview_seeking and event is not None:
+            self._set_video_preview_seek_from_event(event)
+
+    def _seek_video_preview(self, event=None) -> None:
+        player = getattr(self, "_preview_vlc_player", None)
+        if player is not None and self._preview_seeking:
+            if event is not None:
+                self._set_video_preview_seek_from_event(event)
+            duration = max(0, player.get_length())
+            if duration > 0 and player.is_seekable():
+                position = max(
+                    0.0,
+                    min(100.0, float(self.preview_player_position.get())),
+                )
+                player.set_time(round(duration * position / 100))
+        self._preview_seeking = False
+        self._draw_video_preview_timeline()
+
+    def _set_video_preview_timeline_hover(self, active: bool) -> None:
+        self._preview_timeline_hover = active
+        self._draw_video_preview_timeline()
+
+    def _set_video_preview_volume(self, value: str) -> None:
+        player = getattr(self, "_preview_vlc_player", None)
+        if player is not None:
+            player.audio_set_volume(max(0, min(100, round(float(value)))))
+
+    def _refresh_video_preview_audio_tracks(self) -> None:
+        player = getattr(self, "_preview_vlc_player", None)
+        variable = getattr(self, "_preview_audio_track", None)
+        if player is None or variable is None:
+            return
+        tracks = {}
+        for track_id, description in player.audio_get_track_description() or []:
+            label = (
+                description.decode("utf-8", errors="replace")
+                if isinstance(description, bytes)
+                else str(description)
+            ) or self._t("Audio track")
+            if label in tracks:
+                label = f"{label} ({track_id})"
+            tracks[label] = int(track_id)
+        self._preview_audio_tracks = tracks
+        if not tracks:
+            variable.set("")
+            return
+        active = player.audio_get_track()
+        variable.set(
+            next(
+                (label for label, track_id in tracks.items() if track_id == active),
+                next(iter(tracks)),
+            )
+        )
+
+    def _refresh_video_preview_subtitle_tracks(self) -> None:
+        player = getattr(self, "_preview_vlc_player", None)
+        variable = getattr(self, "_preview_subtitle_track", None)
+        button = getattr(self, "preview_player_cc_button", None)
+        if player is None or variable is None or button is None:
+            return
+        tracks = {}
+        for track_id, description in player.video_get_spu_description() or []:
+            track_id = int(track_id)
+            if track_id < 0:
+                continue
+            label = (
+                description.decode("utf-8", errors="replace")
+                if isinstance(description, bytes)
+                else str(description)
+            ) or self._t("Subtitles")
+            if label.strip().lower() in {"disable", "off", "none"}:
+                continue
+            if label in tracks:
+                label = f"{label} ({track_id})"
+            tracks[label] = track_id
+        self._preview_subtitle_tracks = tracks
+        if not tracks:
+            variable.set(self._t("Off"))
+            button.configure(state="disabled")
+            return
+        button.grid()
+        button.configure(state="normal")
+        active = player.video_get_spu()
+        variable.set(
+            next(
+                (label for label, track_id in tracks.items() if track_id == active),
+                self._t("Off"),
+            )
+        )
+
+    def _set_video_preview_playback_rate(self, _event=None) -> None:
+        variable = getattr(self, "_preview_playback_rate", None)
+        if variable is None:
+            return
+        selected = variable.get()
+        if selected not in _IN_APP_PLAYBACK_RATES:
+            messagebox.showerror(
+                self._t("Invalid playback speed"),
+                self._t("Choose one of the available playback speeds."),
+                parent=self.root,
+            )
+            return
+        player = getattr(self, "_preview_vlc_player", None)
+        if player is None or player.set_rate(float(selected.removesuffix("x"))) != -1:
+            return
+        current_rate = player.get_rate()
+        variable.set(
+            next(
+                (
+                    option
+                    for option in _IN_APP_PLAYBACK_RATES
+                    if float(option.removesuffix("x")) == current_rate
+                ),
+                f"{current_rate:g}x",
+            )
+        )
+        messagebox.showerror(
+            self._t("Playback speed unavailable"),
+            self._t("VLC could not change the playback speed."),
+            parent=self.root,
+        )
+
+    def _select_video_preview_audio_track(self) -> None:
+        player = getattr(self, "_preview_vlc_player", None)
+        variable = getattr(self, "_preview_audio_track", None)
+        if player is None or variable is None:
+            return
+        track_id = self._preview_audio_tracks.get(variable.get())
+        if track_id is not None and player.audio_set_track(track_id) == -1:
+            messagebox.showerror(
+                self._t("Audio track unavailable"),
+                self._t("VLC could not select this audio track."),
+                parent=self.root,
+            )
+
+    def _set_video_preview_subtitle_track(self) -> None:
+        player = getattr(self, "_preview_vlc_player", None)
+        variable = getattr(self, "_preview_subtitle_track", None)
+        if player is None or variable is None:
+            return
+        label = variable.get()
+        if label == self._t("Off"):
+            self._disable_video_preview_subtitles()
+            return
+        track_id = self._preview_subtitle_tracks.get(label)
+        if track_id is not None and player.video_set_spu(track_id) == -1:
+            messagebox.showerror(
+                self._t("Subtitle track unavailable"),
+                self._t("VLC could not select this subtitle track."),
+                parent=self.root,
+            )
+        self._refresh_video_preview_subtitle_tracks()
+
+    def _disable_video_preview_subtitles(self) -> None:
+        player = getattr(self, "_preview_vlc_player", None)
+        if player is None:
+            return
+        if player.video_set_spu(-1) == -1:
+            messagebox.showerror(
+                self._t("Subtitle track unavailable"),
+                self._t("VLC could not change subtitle visibility."),
+                parent=self.root,
+            )
+            return
+        self._preview_subtitle_track.set(self._t("Off"))
+
+    def _toggle_video_preview_subtitles(self) -> None:
+        player = getattr(self, "_preview_vlc_player", None)
+        if player is None:
+            return
+        self._refresh_video_preview_subtitle_tracks()
+        if not self._preview_subtitle_tracks:
+            return
+        if player.video_get_spu() >= 0:
+            self._disable_video_preview_subtitles()
+            return
+        selected = self._preview_subtitle_track.get()
+        if selected not in self._preview_subtitle_tracks:
+            selected = next(iter(self._preview_subtitle_tracks))
+        self._preview_subtitle_track.set(selected)
+        self._set_video_preview_subtitle_track()
+
+    def _show_video_preview_settings(self, button=None) -> None:
+        if button is None:
+            return
+        self._refresh_video_preview_audio_tracks()
+        self._refresh_video_preview_subtitle_tracks()
+        menu_options = {
+            "tearoff": False,
+            "background": "#202020",
+            "foreground": "#FFFFFF",
+            "activebackground": "#333333",
+            "activeforeground": "#FFFFFF",
+        }
+        menu = tk.Menu(
+            self.root,
+            **menu_options,
+        )
+        speed_menu = tk.Menu(menu, **menu_options)
+        for rate in _IN_APP_PLAYBACK_RATES:
+            speed_menu.add_radiobutton(
+                label=rate,
+                variable=self._preview_playback_rate,
+                value=rate,
+                command=self._set_video_preview_playback_rate,
+            )
+        menu.add_cascade(label=self._t("Playback speed"), menu=speed_menu)
+        audio_menu = tk.Menu(menu, **menu_options)
+        if self._preview_audio_tracks:
+            for label in self._preview_audio_tracks:
+                audio_menu.add_radiobutton(
+                    label=label,
+                    variable=self._preview_audio_track,
+                    value=label,
+                    command=self._select_video_preview_audio_track,
+                )
+        else:
+            audio_menu.add_command(
+                label=self._t("No audio tracks available"),
+                state="disabled",
+            )
+        menu.add_cascade(label=self._t("Audio track"), menu=audio_menu)
+        subtitle_menu = tk.Menu(menu, **menu_options)
+        if self._preview_subtitle_tracks:
+            subtitle_menu.add_radiobutton(
+                label=self._t("Off"),
+                variable=self._preview_subtitle_track,
+                value=self._t("Off"),
+                command=self._disable_video_preview_subtitles,
+            )
+            for label in self._preview_subtitle_tracks:
+                subtitle_menu.add_radiobutton(
+                    label=label,
+                    variable=self._preview_subtitle_track,
+                    value=label,
+                    command=self._set_video_preview_subtitle_track,
+                )
+        else:
+            subtitle_menu.add_command(
+                label=self._t("No subtitles available"),
+                state="disabled",
+            )
+        menu.add_cascade(label=self._t("Subtitles"), menu=subtitle_menu)
+        try:
+            menu.tk_popup(
+                button.winfo_rootx(),
+                max(0, button.winfo_rooty() - menu.winfo_reqheight()),
+            )
+        finally:
+            menu.grab_release()
+            menu.destroy()
+
+    def _stop_video_preview(self) -> None:
+        after_id = getattr(self, "_preview_playback_after", None)
+        root = getattr(self, "root", None)
+        if root is not None and after_id is not None:
+            try:
+                root.after_cancel(after_id)
+            except tk.TclError:
+                pass
+        self._preview_playback_after = None
+        self._preview_audio_tracks = {}
+        self._preview_subtitle_tracks = {}
+        player = getattr(self, "_preview_vlc_player", None)
+        if player is not None:
+            player.stop()
+            player.release()
+        instance = getattr(self, "_preview_vlc_instance", None)
+        if instance is not None:
+            instance.release()
+        self._preview_vlc_player = None
+        self._preview_vlc_instance = None
+        button = getattr(self, "preview_player_play_button", None)
+        if button is not None:
+            button.configure(text=self._t("Play preview"))
+        placeholder = getattr(self, "preview_video_placeholder", None)
+        if placeholder is not None:
+            placeholder.place(relx=0.5, rely=0.5, anchor="center")
+        self._preview_duration_ms = 0
+        cc_button = getattr(self, "preview_player_cc_button", None)
+        if cc_button is not None:
+            cc_button.configure(state="disabled")
+        audio_variable = getattr(self, "_preview_audio_track", None)
+        if audio_variable is not None:
+            audio_variable.set("")
+        subtitle_variable = getattr(self, "_preview_subtitle_track", None)
+        if subtitle_variable is not None:
+            subtitle_variable.set(self._t("Off"))
+        if hasattr(self, "preview_player_position"):
+            self.preview_player_position.set(0)
+        if hasattr(self, "preview_player_current_time"):
+            self.preview_player_current_time.set("00:00")
+        if hasattr(self, "preview_player_duration"):
+            self.preview_player_duration.set("00:00")
+
+    def _open_preview_fullscreen(self) -> None:
+        path = getattr(self, "_preview_media_path", None)
+        if path is None:
+            return
+        preview_player = getattr(self, "_preview_vlc_player", None)
+        if preview_player is not None and preview_player.is_playing():
+            preview_player.pause()
+            self.preview_player_play_button.configure(
+                text=self._t("Play preview"),
+            )
+        selected = getattr(self, "jobs", None)
+        selection = selected.selection() if selected is not None else ()
+        if selection and self._selected_output_path() == path:
+            if not self._integrity_guard(selection[0]):
+                return
+        self._preserve_video_preview = True
+        try:
+            self._play_media_in_app(path)
+        except (AttributeError, ImportError, OSError, RuntimeError) as error:
+            if messagebox.askyesno(
+                self._t("In-app playback unavailable"),
+                self._t(
+                    "VLC is required for in-app playback. Open this file in your system player instead?"
+                )
+                + f"\n\n{error}",
+                parent=self.root,
+            ):
+                self.open_media_in_system_player(path)
+        finally:
+            self._preserve_video_preview = False
+        if getattr(self, "_in_app_player", None) is not None:
+            self._toggle_in_app_fullscreen()
+
     def _selected_media_path(self) -> Path | None:
         path = getattr(self, "_local_media_path", None)
         selected = self.jobs.selection()
@@ -525,6 +1058,8 @@ class MediaMixin:
     def _play_media_in_app(self, path: Path) -> None:
         import importlib
 
+        if not getattr(self, "_preserve_video_preview", False):
+            self._stop_video_preview()
         self._prepare_bundled_vlc_runtime()
         vlc = importlib.import_module("vlc")
         if getattr(self, "_in_app_player_window", None) is not None:
@@ -532,190 +1067,327 @@ class MediaMixin:
 
         window = tk.Toplevel(self.root)
         window.title(f"Smart VLC — {path.name}")
-        window.geometry("960x640")
-        window.minsize(640, 420)
+        window.geometry("1120x700")
+        window.minsize(800, 500)
         window.configure(background="#101318")
         window.columnconfigure(0, weight=1)
-        window.rowconfigure(1, weight=1)
+        window.rowconfigure(0, weight=1)
         window.protocol("WM_DELETE_WINDOW", self._close_in_app_player)
         window.bind("<F11>", self._toggle_in_app_fullscreen, add="+")
         window.bind("<Escape>", self._exit_in_app_fullscreen, add="+")
+        window.bind("<KeyPress>", self._show_in_app_controls, add="+")
+        window.bind("<Motion>", self._show_in_app_controls, add="+")
+        window.bind("<ButtonPress-1>", self._begin_in_app_control_interaction, add="+")
+        window.bind("<ButtonRelease-1>", self._end_in_app_control_interaction, add="+")
         self._in_app_player_window = window
         self._in_app_media_title = path.name
 
-        header = ttk.Frame(window, style="Card.TFrame", padding=(10, 6))
-        header.grid(row=0, column=0, sticky="ew")
         self._in_app_player_status = tk.StringVar(value=self._t("Playback started"))
-        ttk.Label(
-            header,
-            text=(
-                f"{self._t('Now playing')}: "
-                f"{self._compact_in_app_title(path.name)}"
-            ),
-            style="Card.TLabel",
-            anchor="w",
-        ).pack(side="left", fill="x", expand=True)
-        ttk.Label(
-            header,
-            textvariable=self._in_app_player_status,
-            style="SidebarHint.TLabel",
-            anchor="e",
-        ).pack(side="right", padx=(10, 0))
-        video_surface = tk.Frame(window, background="#000000")
-        video_surface.grid(row=1, column=0, sticky="nsew", padx=6, pady=6)
+        self._in_app_controls_visible = False
+        self._in_app_controls_after = None
+        self._in_app_controls_fade_after = None
+        self._in_app_controls_opacity = 0.0
+        self._in_app_pointer_after = None
+        self._in_app_control_interaction = False
+        self._in_app_pointer_down = False
+        self._in_app_last_pointer = None
+        self._in_app_timeline_hover = False
+        self._in_app_duration_ms = 0
+        self._in_app_seeking = False
 
-        controls = ttk.Frame(window, style="Card.TFrame", padding=(6, 4))
-        controls.grid(row=2, column=0, sticky="ew", padx=6, pady=(0, 6))
-        for column in range(3):
-            controls.columnconfigure(column, weight=1)
-        timeline = ttk.Frame(controls, style="Card.TFrame")
-        timeline.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 3))
-        timeline.columnconfigure(1, weight=1)
-        self._in_app_position_var = tk.DoubleVar(value=0)
+        video_surface = tk.Frame(window, background="#000000")
+        video_surface.grid(row=0, column=0, sticky="nsew")
+        self._in_app_video_surface = video_surface
+        video_surface.bind("<Configure>", self._raise_in_app_controls_overlay, add="+")
+        video_surface.bind("<Motion>", self._show_in_app_controls, add="+")
+        video_surface.bind("<ButtonPress-1>", self._show_in_app_controls, add="+")
+        video_surface.bind("<Double-Button-1>", self._toggle_in_app_fullscreen, add="+")
+
+        controls_window = tk.Toplevel(window)
+        controls_window.withdraw()
+        controls_window.overrideredirect(True)
+        controls_window.transient(window)
+        controls_window.attributes("-alpha", 0.0)
+        controls_window.bind("<F11>", self._toggle_in_app_fullscreen, add="+")
+        controls_window.bind("<Escape>", self._exit_in_app_fullscreen, add="+")
+        controls_window.bind("<KeyPress>", self._show_in_app_controls, add="+")
+        self._in_app_controls_overlay_window = controls_window
+        top_controls_window = tk.Toplevel(window)
+        top_controls_window.withdraw()
+        top_controls_window.overrideredirect(True)
+        top_controls_window.transient(window)
+        top_controls_window.attributes("-alpha", 0.0)
+        top_controls_window.bind("<F11>", self._toggle_in_app_fullscreen, add="+")
+        top_controls_window.bind("<Escape>", self._exit_in_app_fullscreen, add="+")
+        top_controls_window.bind("<KeyPress>", self._show_in_app_controls, add="+")
+        self._in_app_top_controls_overlay_window = top_controls_window
+        top_controls = tk.Frame(
+            top_controls_window,
+            background="#000000",
+            padx=12,
+            pady=5,
+            highlightthickness=0,
+        )
+        top_controls.pack(fill="both", expand=True)
+        top_controls.columnconfigure(1, weight=1)
+        self._in_app_top_controls_overlay = top_controls
+        self._in_app_top_back_button = tk.Button(
+            top_controls,
+            text="←",
+            command=self._exit_in_app_fullscreen,
+            width=3,
+            cursor="hand2",
+            font=("Segoe UI Symbol", 15),
+            background="#000000",
+            foreground="#FFFFFF",
+            activebackground="#202020",
+            activeforeground="#FFFFFF",
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=0,
+        )
+        self._in_app_top_back_button.grid(row=0, column=0, sticky="w")
+        self._in_app_top_title_label = tk.Label(
+            top_controls,
+            text=self._in_app_media_title,
+            background="#000000",
+            foreground="#FFFFFF",
+            font=("Segoe UI", 11, "bold"),
+            anchor="center",
+        )
+        self._in_app_top_title_label.grid(row=0, column=1, sticky="ew")
+        self._in_app_top_settings_button = tk.Button(
+            top_controls,
+            text="⚙",
+            command=lambda: self._show_in_app_settings_menu(
+                self._in_app_top_settings_button
+            ),
+            width=3,
+            cursor="hand2",
+            font=("Segoe UI Symbol", 14),
+            background="#000000",
+            foreground="#FFFFFF",
+            activebackground="#202020",
+            activeforeground="#FFFFFF",
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=0,
+        )
+        self._in_app_top_settings_button.grid(row=0, column=2, sticky="e")
+        controls_overlay = tk.Frame(
+            controls_window,
+            background="#000000",
+            padx=8,
+            pady=4,
+            highlightthickness=0,
+        )
+        controls_overlay.pack(fill="both", expand=True)
+        self._in_app_controls_overlay = controls_overlay
+        controls_overlay.columnconfigure(5, weight=1, minsize=100)
+
+        def make_button(parent, text: str, command, font_size: int = 13):
+            button = tk.Button(
+                parent,
+                text=text,
+                command=command,
+                width=3,
+                takefocus=True,
+                cursor="hand2",
+                font=("Segoe UI Symbol", font_size),
+                background="#000000",
+                foreground="#FFFFFF",
+                activebackground="#202020",
+                activeforeground="#FFFFFF",
+                relief="flat",
+                borderwidth=0,
+                highlightthickness=0,
+                padx=5,
+                pady=3,
+            )
+            return button
+
+        playback_button = make_button(
+            controls_overlay, "Ⅱ", self._toggle_in_app_playback, 12
+        )
+        playback_button.grid(row=0, column=0, padx=(0, 2))
+        self._in_app_playback_button = playback_button
+
         self._in_app_current_time = tk.StringVar(value="00:00")
         self._in_app_duration = tk.StringVar(value="00:00")
-        ttk.Label(timeline, textvariable=self._in_app_current_time, width=6).grid(
-            row=0, column=0, padx=(0, 8)
-        )
-        self._in_app_seek_scale = ttk.Scale(
-            timeline,
-            from_=0,
-            to=100,
-            variable=self._in_app_position_var,
-            takefocus=True,
-            state="disabled",
-        )
-        self._in_app_seek_scale.grid(row=0, column=1, sticky="ew")
-        self._in_app_seek_scale.bind(
-            "<ButtonPress-1>", self._begin_in_app_seek, add="+"
-        )
-        self._in_app_seek_scale.bind(
-            "<ButtonRelease-1>", self._seek_in_app_player, add="+"
-        )
-        ttk.Label(timeline, textvariable=self._in_app_duration, width=6).grid(
-            row=0, column=2, padx=(8, 0)
-        )
-
-        transport_controls = ttk.Frame(controls, style="Card.TFrame")
-        transport_controls.grid(row=1, column=0, columnspan=3, sticky="ew")
-        playback_button = ttk.Button(
-            transport_controls, text="Ⅱ", width=3, padding=(2, 2), takefocus=True
-        )
-        playback_button.pack(side="left")
-        stop_button = ttk.Button(
-            transport_controls,
-            text="■",
-            command=self._stop_in_app_player,
-            width=3,
-            padding=(2, 2),
-            takefocus=True,
-        )
-        stop_button.pack(side="left", padx=(4, 0))
-        fullscreen_button = ttk.Button(
-            transport_controls,
-            text="⛶",
-            command=self._toggle_in_app_fullscreen,
-            width=3,
-            padding=(2, 2),
-            takefocus=True,
-        )
-        fullscreen_button.pack(side="left", padx=(4, 0))
-        close_button = ttk.Button(
-            transport_controls,
-            text="×",
-            command=self._close_in_app_player,
-            width=3,
-            padding=(2, 2),
-            takefocus=True,
-        )
-        close_button.pack(side="right")
-
-        volume_controls = ttk.Frame(controls, style="Card.TFrame")
-        volume_controls.grid(row=2, column=0, sticky="ew", pady=(3, 0))
-        volume_controls.columnconfigure(2, weight=1)
-        volume_icon = ttk.Label(volume_controls, text="◖))")
-        volume_icon.pack(side="left", padx=(0, 4))
-        volume = tk.IntVar(value=80)
-        self._in_app_volume_var = volume
-        self._in_app_volume_label = tk.StringVar(value="80%")
-        volume_value_label = ttk.Label(
-            volume_controls,
-            textvariable=self._in_app_volume_label,
-            width=5,
+        self._in_app_position_var = tk.DoubleVar(value=0)
+        current_time_label = tk.Label(
+            controls_overlay,
+            textvariable=self._in_app_current_time,
+            width=6,
             anchor="e",
+            background="#000000",
+            foreground="#FFFFFF",
+            font=("Segoe UI", 9),
         )
-        volume_value_label.pack(side="left", padx=(0, 5))
-        volume_scale = ttk.Scale(
-            volume_controls,
-            from_=0,
-            to=100,
-            variable=volume,
-            command=lambda value: self._set_in_app_volume(value),
-            takefocus=True,
+        current_time_label.grid(row=0, column=4, padx=(8, 6))
+        self._in_app_timeline = tk.Canvas(
+            controls_overlay,
+            height=20,
+            background="#000000",
+            highlightthickness=0,
+            cursor="hand2",
         )
-        volume_scale.pack(side="left", fill="x", expand=True)
-
-        track_controls = ttk.Frame(controls, style="Card.TFrame")
-        track_controls.grid(row=2, column=1, sticky="ew", padx=(8, 0), pady=(3, 0))
-        track_controls.columnconfigure(1, weight=1)
-        audio_icon = ttk.Label(track_controls, text="♫")
-        audio_icon.pack(side="left", padx=(0, 4))
+        self._in_app_timeline.grid(row=0, column=5, sticky="ew", padx=4)
+        self._in_app_timeline.bind("<ButtonPress-1>", self._begin_in_app_seek, add="+")
+        self._in_app_timeline.bind("<B1-Motion>", self._update_in_app_seek, add="+")
+        self._in_app_timeline.bind("<ButtonRelease-1>", self._seek_in_app_player, add="+")
+        self._in_app_timeline.bind(
+            "<Enter>", lambda _event: self._set_in_app_timeline_hover(True), add="+"
+        )
+        self._in_app_timeline.bind(
+            "<Leave>", lambda _event: self._set_in_app_timeline_hover(False), add="+"
+        )
+        duration_label = tk.Label(
+            controls_overlay,
+            textvariable=self._in_app_duration,
+            width=6,
+            anchor="w",
+            background="#000000",
+            foreground="#D0D0D0",
+            font=("Segoe UI", 9),
+        )
+        duration_label.grid(row=0, column=6, padx=(6, 8))
         self._in_app_audio_track = tk.StringVar(value="")
         self._in_app_audio_tracks: dict[str, int] = {}
         self._in_app_audio_tracks_loaded = False
-        self._in_app_audio_track_combo = ttk.Combobox(
-            track_controls,
-            textvariable=self._in_app_audio_track,
-            state="disabled",
-            width=14,
+        self._in_app_playback_rate = tk.StringVar(value="1.0x")
+        self._in_app_subtitle_track = tk.StringVar(value="")
+        self._in_app_subtitle_tracks: dict[str, int] = {}
+        self._in_app_subtitle_tracks_loaded = False
+        self._in_app_cc_button = make_button(
+            controls_overlay,
+            "CC",
+            self._toggle_in_app_subtitles,
+            10,
+        )
+        self._in_app_cc_button.grid(row=0, column=7, padx=(0, 4))
+        self._in_app_cc_button.grid_remove()
+        self._in_app_settings_button = make_button(
+            controls_overlay,
+            "⚙",
+            lambda: self._show_in_app_settings_menu(
+                self._in_app_settings_button
+            ),
+            14,
+        )
+        self._in_app_settings_button.grid(row=0, column=8, padx=(2, 2))
+
+        volume_icon = tk.Label(
+            controls_overlay,
+            text="◖))",
+            background="#000000",
+            foreground="#FFFFFF",
+            font=("Segoe UI", 9),
+        )
+        volume_icon.grid(row=0, column=1, padx=(2, 3))
+        volume = tk.IntVar(value=80)
+        self._in_app_volume_var = volume
+        self._in_app_volume_label = tk.StringVar(value="80%")
+        volume_value_label = tk.Label(
+            controls_overlay,
+            textvariable=self._in_app_volume_label,
+            width=4,
+            anchor="e",
+            background="#000000",
+            foreground="#D0D0D0",
+            font=("Segoe UI", 9),
+        )
+        volume_value_label.grid(row=0, column=2, padx=(0, 2))
+        volume_scale = tk.Scale(
+            controls_overlay,
+            from_=0,
+            to=100,
+            orient="horizontal",
+            variable=volume,
+            command=lambda value: self._set_in_app_volume(value),
+            length=76,
+            showvalue=False,
+            sliderlength=10,
+            troughcolor="#707070",
+            background="#000000",
+            foreground="#FFFFFF",
+            activebackground="#FF3333",
+            highlightthickness=0,
+            borderwidth=0,
+            relief="flat",
             takefocus=True,
         )
-        self._in_app_audio_track_combo.pack(side="left", fill="x", expand=True)
-        self._in_app_audio_track_combo.bind(
-            "<<ComboboxSelected>>", self._select_in_app_audio_track
+        volume_scale.grid(row=0, column=3, padx=(0, 4))
+
+        fullscreen_button = make_button(
+            controls_overlay,
+            "⛶",
+            self._toggle_in_app_fullscreen,
+            14,
         )
-        footer_help_button = ttk.Button(
-            controls,
-            text="?",
-            command=self._show_in_app_player_help,
-            width=3,
-            padding=(2, 2),
-            takefocus=True,
+        fullscreen_button.grid(row=0, column=9, padx=(0, 2))
+        self._in_app_fullscreen_button = fullscreen_button
+
+        top_widgets = (
+            self._in_app_top_back_button,
+            self._in_app_top_title_label,
+            self._in_app_top_settings_button,
         )
-        footer_help_button.grid(row=2, column=2, sticky="e", padx=(8, 0), pady=(3, 0))
-        window.update_idletasks()
+        for widget in top_widgets:
+            widget.bind("<Enter>", self._show_in_app_controls, add="+")
+            widget.bind("<Motion>", self._show_in_app_controls, add="+")
+            widget.bind(
+                "<ButtonPress-1>",
+                self._begin_in_app_control_interaction,
+                add="+",
+            )
+            widget.bind(
+                "<ButtonRelease-1>",
+                self._end_in_app_control_interaction,
+                add="+",
+            )
 
         self._in_app_vlc = vlc
-        self._in_app_fullscreen_button = fullscreen_button
         self._in_app_player_status_text = self._t("Playback started")
-        for widget, hint in (
-            (playback_button, "Pause"),
-            (stop_button, "Stop"),
-            (fullscreen_button, "Full screen"),
-            (close_button, "Close player"),
-            (volume_icon, "Volume"),
-            (volume_value_label, "Volume"),
-            (volume_scale, "Volume"),
-            (audio_icon, "Audio track"),
-            (self._in_app_audio_track_combo, "Audio track"),
-            (footer_help_button, "Help"),
-        ):
-            self._bind_in_app_control_hint(widget, self._t(hint))
-        self._in_app_fullscreen = False
         self._in_app_audio_refresh_ticks = 0
         self._in_app_playback_after = None
-        self._in_app_seeking = False
+        self._in_app_fullscreen = False
+        for widget in (
+            playback_button,
+            current_time_label,
+            self._in_app_timeline,
+            duration_label,
+            self._in_app_cc_button,
+            self._in_app_settings_button,
+            volume_icon,
+            volume_value_label,
+            volume_scale,
+            fullscreen_button,
+        ):
+            widget.bind("<Enter>", self._show_in_app_controls, add="+")
+            widget.bind("<Motion>", self._show_in_app_controls, add="+")
+            widget.bind(
+                "<ButtonPress-1>",
+                self._begin_in_app_control_interaction,
+                add="+",
+            )
+            widget.bind(
+                "<ButtonRelease-1>",
+                self._end_in_app_control_interaction,
+                add="+",
+            )
+
+        window.update_idletasks()
+
         try:
             instance = vlc.Instance()
             self._in_app_vlc_instance = instance
             player = instance.media_player_new()
             self._in_app_player = player
             player.set_media(instance.media_new(str(path)))
-            self._in_app_video_surface = video_surface
             self._set_in_app_video_target(video_surface)
-            playback_button.configure(command=self._toggle_in_app_playback)
-            self._in_app_playback_button = playback_button
             window.lift()
+            player.audio_set_mute(False)
             player.audio_set_volume(volume.get())
             if player.play() == -1:
                 raise RuntimeError(self._t("VLC could not start playback."))
@@ -723,7 +1395,14 @@ class MediaMixin:
             self._close_in_app_player()
             raise
         self._refresh_in_app_audio_tracks()
+        self._refresh_in_app_subtitle_tracks()
+        self._draw_in_app_timeline()
         self._poll_in_app_playback()
+        self._show_in_app_controls()
+        self._in_app_pointer_after = self.root.after(
+            150,
+            self._poll_in_app_pointer,
+        )
 
     def _prepare_bundled_vlc_runtime(self) -> None:
         global _VLC_DLL_DIRECTORY
@@ -770,28 +1449,27 @@ class MediaMixin:
         state = player.get_state()
         duration = max(0, player.get_length())
         current_time = max(0, player.get_time())
+        self._in_app_duration_ms = duration
         self._in_app_duration.set(self._format_in_app_time(duration))
         self._in_app_current_time.set(self._format_in_app_time(current_time))
-        seek_scale = getattr(self, "_in_app_seek_scale", None)
-        if seek_scale is not None:
-            seekable = duration > 0 and player.is_seekable()
-            seek_scale.configure(state="normal" if seekable else "disabled")
-            if seekable and not getattr(self, "_in_app_seeking", False):
-                self._in_app_position_var.set(
-                    min(100, current_time * 100 / duration)
-                )
+        if duration > 0 and player.is_seekable() and not self._in_app_seeking:
+            self._in_app_position_var.set(min(100, current_time * 100 / duration))
+        self._draw_in_app_timeline()
         self._in_app_audio_refresh_ticks = (
             getattr(self, "_in_app_audio_refresh_ticks", 0) + 1
         )
         if self._in_app_audio_refresh_ticks % 4 == 0:
             self._refresh_in_app_audio_tracks()
+            self._refresh_in_app_subtitle_tracks()
         if state == vlc.State.Ended:
             self._in_app_playback_button.configure(text="▶")
             self._set_in_app_player_status(self._t("Playback finished"))
+            self._show_in_app_controls()
             return
         if state == vlc.State.Error:
             self._in_app_playback_button.configure(text="▶")
             self._set_in_app_player_status(self._t("Playback failed"))
+            self._show_in_app_controls()
             messagebox.showerror(
                 self._t("Could not play media"),
                 self._t("VLC could not play this media file."),
@@ -809,17 +1487,294 @@ class MediaMixin:
             return f"{hours}:{minutes:02}:{seconds:02}"
         return f"{minutes:02}:{seconds:02}"
 
-    def _begin_in_app_seek(self, _event=None) -> None:
-        self._in_app_seeking = True
+    def _draw_in_app_timeline(self) -> None:
+        timeline = getattr(self, "_in_app_timeline", None)
+        if timeline is None:
+            return
+        width = max(1, timeline.winfo_width())
+        height = max(1, timeline.winfo_height())
+        start = 5
+        end = max(start + 1, width - 5)
+        center_y = height / 2
+        active = (
+            getattr(self, "_in_app_timeline_hover", False)
+            or getattr(self, "_in_app_seeking", False)
+        )
+        thickness = 8 if active else 4
+        timeline.delete("all")
+        timeline.create_line(
+            start,
+            center_y,
+            end,
+            center_y,
+            fill="#707070",
+            width=thickness,
+            capstyle="round",
+        )
+        position_var = getattr(self, "_in_app_position_var", None)
+        progress = (
+            max(0.0, min(100.0, float(position_var.get())))
+            if position_var is not None
+            else 0.0
+        )
+        played_end = start + (end - start) * progress / 100
+        if played_end > start:
+            timeline.create_line(
+                start,
+                center_y,
+                played_end,
+                center_y,
+                fill="#FF3333",
+                width=thickness,
+                capstyle="butt",
+            )
+        if active:
+            radius = 6
+            timeline.create_oval(
+                played_end - radius,
+                center_y - radius,
+                played_end + radius,
+                center_y + radius,
+                fill="#FFFFFF",
+                outline="#FFFFFF",
+            )
 
-    def _seek_in_app_player(self, _event=None) -> None:
+    def _set_in_app_timeline_hover(self, hovering: bool) -> None:
+        self._in_app_timeline_hover = hovering
+        self._draw_in_app_timeline()
+        if hovering:
+            self._cancel_in_app_controls_hide()
+        else:
+            self._show_in_app_controls()
+
+    def _set_in_app_seek_from_event(self, event) -> None:
+        timeline = getattr(self, "_in_app_timeline", None)
+        if timeline is None:
+            return
+        width = max(1, timeline.winfo_width())
+        usable_width = max(1, width - 10)
+        position = (float(event.x) - 5) * 100 / usable_width
+        position = max(0.0, min(100.0, position))
+        self._in_app_position_var.set(position)
+        current_time = getattr(self, "_in_app_current_time", None)
+        duration_ms = getattr(self, "_in_app_duration_ms", 0)
+        if current_time is not None and duration_ms > 0:
+            current_time.set(
+                self._format_in_app_time(round(duration_ms * position / 100))
+            )
+        self._draw_in_app_timeline()
+
+    def _begin_in_app_seek(self, event=None) -> None:
         player = getattr(self, "_in_app_player", None)
-        if player is not None:
+        if player is None or self._in_app_duration_ms <= 0 or not player.is_seekable():
+            return
+        self._in_app_seeking = True
+        self._in_app_control_interaction = True
+        self._cancel_in_app_controls_hide()
+        if event is not None:
+            self._set_in_app_seek_from_event(event)
+
+    def _update_in_app_seek(self, event=None) -> None:
+        if not self._in_app_seeking:
+            return
+        if event is not None:
+            self._set_in_app_seek_from_event(event)
+
+    def _seek_in_app_player(self, event=None) -> None:
+        player = getattr(self, "_in_app_player", None)
+        if player is not None and self._in_app_seeking:
+            if event is not None:
+                self._set_in_app_seek_from_event(event)
             duration = max(0, player.get_length())
             if duration > 0 and player.is_seekable():
                 position = max(0.0, min(100.0, float(self._in_app_position_var.get())))
                 player.set_time(round(duration * position / 100))
         self._in_app_seeking = False
+        self._in_app_control_interaction = False
+        self._draw_in_app_timeline()
+        self._show_in_app_controls()
+
+    def _begin_in_app_control_interaction(self, _event=None) -> None:
+        self._in_app_control_interaction = True
+        self._cancel_in_app_controls_hide()
+        self._show_in_app_controls()
+
+    def _end_in_app_control_interaction(self, _event=None) -> None:
+        self._in_app_control_interaction = False
+        self._show_in_app_controls()
+
+    def _show_in_app_controls(self, _event=None) -> None:
+        overlay = getattr(self, "_in_app_controls_overlay", None)
+        overlay_window = getattr(self, "_in_app_controls_overlay_window", None)
+        if overlay is None or overlay_window is None:
+            return
+        top_window = getattr(self, "_in_app_top_controls_overlay_window", None)
+        if not getattr(self, "_in_app_controls_visible", False):
+            self._in_app_controls_opacity = 0.0
+            for control_window in (overlay_window, top_window):
+                if control_window is not None:
+                    control_window.attributes("-alpha", 0.0)
+            self._in_app_controls_visible = True
+        overlay_window.deiconify()
+        if top_window is not None:
+            if getattr(self, "_in_app_fullscreen", False):
+                top_window.deiconify()
+            else:
+                top_window.withdraw()
+        self._raise_in_app_controls_overlay()
+        if getattr(self, "_in_app_controls_opacity", 0.0) < 0.92:
+            self._start_in_app_controls_fade(0.92)
+        self._schedule_in_app_controls_hide()
+
+    def _cancel_in_app_controls_hide(self) -> None:
+        after_id = getattr(self, "_in_app_controls_after", None)
+        if after_id is not None:
+            try:
+                self.root.after_cancel(after_id)
+            except tk.TclError:
+                pass
+        self._in_app_controls_after = None
+
+    def _cancel_in_app_controls_fade(self) -> None:
+        after_id = getattr(self, "_in_app_controls_fade_after", None)
+        if after_id is not None:
+            try:
+                self.root.after_cancel(after_id)
+            except tk.TclError:
+                pass
+        self._in_app_controls_fade_after = None
+
+    def _start_in_app_controls_fade(self, target: float) -> None:
+        self._cancel_in_app_controls_fade()
+        self._in_app_controls_fade_target = target
+        self._in_app_controls_fade_remaining = 4
+        self._advance_in_app_controls_fade()
+
+    def _advance_in_app_controls_fade(self) -> None:
+        overlay_window = getattr(self, "_in_app_controls_overlay_window", None)
+        if overlay_window is None:
+            self._in_app_controls_fade_after = None
+            return
+        top_window = getattr(self, "_in_app_top_controls_overlay_window", None)
+        remaining = self._in_app_controls_fade_remaining
+        target = self._in_app_controls_fade_target
+        current = self._in_app_controls_opacity
+        self._in_app_controls_opacity = current + (target - current) / remaining
+        for control_window in (overlay_window, top_window):
+            if control_window is not None:
+                control_window.attributes("-alpha", self._in_app_controls_opacity)
+        self._in_app_controls_fade_remaining = remaining - 1
+        if self._in_app_controls_fade_remaining == 0:
+            self._in_app_controls_fade_after = None
+            if target == 0.0:
+                for control_window in (overlay_window, top_window):
+                    if control_window is not None:
+                        control_window.withdraw()
+                self._in_app_controls_visible = False
+            return
+        self._in_app_controls_fade_after = self.root.after(
+            40,
+            self._advance_in_app_controls_fade,
+        )
+
+    def _schedule_in_app_controls_hide(self) -> None:
+        self._cancel_in_app_controls_hide()
+        player = getattr(self, "_in_app_player", None)
+        if (
+            player is None
+            or not player.is_playing()
+            or self._in_app_seeking
+            or self._in_app_control_interaction
+            or getattr(self, "_in_app_timeline_hover", False)
+        ):
+            return
+        self._in_app_controls_after = self.root.after(
+            5000,
+            self._hide_in_app_controls,
+        )
+
+    def _hide_in_app_controls(self) -> None:
+        self._in_app_controls_after = None
+        player = getattr(self, "_in_app_player", None)
+        if player is None or not player.is_playing():
+            self._show_in_app_controls()
+            return
+        if (
+            self._in_app_seeking
+            or self._in_app_control_interaction
+            or getattr(self, "_in_app_timeline_hover", False)
+        ):
+            return
+        self._start_in_app_controls_fade(0.0)
+
+    def _left_mouse_button_down(self) -> bool:
+        if sys.platform != "win32":
+            return False
+        import ctypes
+
+        return bool(ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000)
+
+    def _poll_in_app_pointer(self) -> None:
+        window = getattr(self, "_in_app_player_window", None)
+        if window is None:
+            return
+        try:
+            if not window.winfo_exists():
+                return
+            pointer = (window.winfo_pointerx(), window.winfo_pointery())
+            left = window.winfo_rootx()
+            top = window.winfo_rooty()
+            inside = (
+                left <= pointer[0] < left + window.winfo_width()
+                and top <= pointer[1] < top + window.winfo_height()
+            )
+            pressed = self._left_mouse_button_down()
+            moved = pointer != self._in_app_last_pointer
+            if inside and (moved or (pressed and not self._in_app_pointer_down)):
+                self._show_in_app_controls()
+            if inside and pressed:
+                self._in_app_control_interaction = True
+                self._cancel_in_app_controls_hide()
+            if self._in_app_pointer_down and not pressed:
+                self._in_app_control_interaction = False
+                self._show_in_app_controls()
+            self._in_app_last_pointer = pointer
+            self._in_app_pointer_down = pressed
+            self._in_app_pointer_after = self.root.after(
+                150,
+                self._poll_in_app_pointer,
+            )
+        except tk.TclError:
+            return
+
+    def _raise_in_app_controls_overlay(self, _event=None) -> None:
+        overlay = getattr(self, "_in_app_controls_overlay", None)
+        overlay_window = getattr(self, "_in_app_controls_overlay_window", None)
+        top_overlay = getattr(self, "_in_app_top_controls_overlay", None)
+        top_window = getattr(self, "_in_app_top_controls_overlay_window", None)
+        surface = getattr(self, "_in_app_video_surface", None)
+        if (
+            overlay is None
+            or overlay_window is None
+            or surface is None
+            or not getattr(self, "_in_app_controls_visible", False)
+        ):
+            return
+        width = max(1, surface.winfo_width())
+        height = max(1, overlay.winfo_reqheight())
+        x = surface.winfo_rootx()
+        surface_y = surface.winfo_rooty()
+        surface_height = surface.winfo_height()
+        bottom_y = surface_y + surface_height - height
+        overlay_window.geometry(f"{width}x{height}{x:+d}{bottom_y:+d}")
+        overlay_window.lift()
+        if top_overlay is not None and top_window is not None:
+            if getattr(self, "_in_app_fullscreen", False):
+                top_height = max(1, top_overlay.winfo_reqheight())
+                top_window.geometry(f"{width}x{top_height}{x:+d}{surface_y:+d}")
+                top_window.lift()
+            else:
+                top_window.withdraw()
 
     def _toggle_in_app_playback(self) -> None:
         player = getattr(self, "_in_app_player", None)
@@ -837,6 +1792,47 @@ class MediaMixin:
         if button is not None:
             button.configure(text="▶" if label == self._t("Play") else "Ⅱ")
         self._set_in_app_player_status(status)
+        self._show_in_app_controls()
+
+    def _set_in_app_playback_rate(self, _event=None) -> None:
+        player = getattr(self, "_in_app_player", None)
+        rate_var = getattr(self, "_in_app_playback_rate", None)
+        if player is None or rate_var is None:
+            return
+        self._show_in_app_controls()
+        selected_rate = rate_var.get()
+        try:
+            rate = float(selected_rate.removesuffix("x"))
+        except ValueError:
+            messagebox.showerror(
+                self._t("Invalid playback speed"),
+                self._t("Choose one of the available playback speeds."),
+                parent=self._in_app_player_window,
+            )
+            return
+        if selected_rate not in _IN_APP_PLAYBACK_RATES:
+            messagebox.showerror(
+                self._t("Invalid playback speed"),
+                self._t("Choose one of the available playback speeds."),
+                parent=self._in_app_player_window,
+            )
+            return
+        if player.set_rate(rate) == -1:
+            current_rate = player.get_rate()
+            restored_rate = next(
+                (
+                    option
+                    for option in _IN_APP_PLAYBACK_RATES
+                    if float(option.removesuffix("x")) == current_rate
+                ),
+                f"{current_rate:g}x",
+            )
+            rate_var.set(restored_rate)
+            messagebox.showerror(
+                self._t("Playback speed unavailable"),
+                self._t("VLC could not change the playback speed."),
+                parent=self._in_app_player_window,
+            )
 
     def _set_in_app_player_status(self, text: str) -> None:
         self._in_app_player_status_text = text
@@ -906,9 +1902,8 @@ class MediaMixin:
 
     def _refresh_in_app_audio_tracks(self) -> None:
         player = getattr(self, "_in_app_player", None)
-        combo = getattr(self, "_in_app_audio_track_combo", None)
         variable = getattr(self, "_in_app_audio_track", None)
-        if player is None or combo is None or variable is None:
+        if player is None or variable is None:
             return
 
         descriptions = player.audio_get_track_description() or []
@@ -930,19 +1925,10 @@ class MediaMixin:
             return
         self._in_app_audio_tracks = track_labels
         self._in_app_audio_tracks_loaded = True
-        combos = (
-            getattr(self, "_in_app_audio_track_combo", None),
-        )
         if not track_labels:
-            variable.set(self._t("No audio tracks available"))
-            for track_combo in combos:
-                if track_combo is not None:
-                    track_combo.configure(values=(), state="disabled")
+            variable.set("")
             return
 
-        for track_combo in combos:
-            if track_combo is not None:
-                track_combo.configure(values=tuple(track_labels), state="readonly")
         active_track = player.audio_get_track()
         selected = next(
             (
@@ -954,11 +1940,58 @@ class MediaMixin:
         )
         variable.set(selected)
 
+    def _refresh_in_app_subtitle_tracks(self) -> None:
+        player = getattr(self, "_in_app_player", None)
+        variable = getattr(self, "_in_app_subtitle_track", None)
+        button = getattr(self, "_in_app_cc_button", None)
+        if player is None or variable is None or button is None:
+            return
+
+        descriptions = player.video_get_spu_description() or []
+        subtitle_tracks: dict[str, int] = {}
+        for track_id, description in descriptions:
+            track_id = int(track_id)
+            if track_id < 0:
+                continue
+            if isinstance(description, bytes):
+                name = description.decode("utf-8", errors="replace")
+            else:
+                name = str(description)
+            label = name or self._t("Subtitles")
+            if label.strip().lower() in {"disable", "off", "none"}:
+                continue
+            if label in subtitle_tracks:
+                label = f"{label} ({track_id})"
+            subtitle_tracks[label] = track_id
+
+        self._in_app_subtitle_tracks = subtitle_tracks
+        self._in_app_subtitle_tracks_loaded = True
+        if not subtitle_tracks:
+            variable.set(self._t("Off"))
+            button.grid_remove()
+            return
+
+        button.grid()
+        active_track = player.video_get_spu()
+        selected = next(
+            (
+                label
+                for label, track_id in subtitle_tracks.items()
+                if track_id == active_track
+            ),
+            self._t("Off"),
+        )
+        variable.set(selected)
+        button.configure(
+            foreground="#FF3333" if active_track >= 0 else "#FFFFFF"
+        )
+
     def _select_in_app_audio_track(self, _event=None) -> None:
         player = getattr(self, "_in_app_player", None)
         variable = getattr(self, "_in_app_audio_track", None)
         if player is None or variable is None:
             return
+        self._show_in_app_controls()
         track_id = (getattr(self, "_in_app_audio_tracks", None) or {}).get(
             variable.get()
         )
@@ -970,6 +2003,165 @@ class MediaMixin:
                 self._t("VLC could not select this audio track."),
                 parent=self._in_app_player_window,
             )
+
+    def _set_in_app_subtitle_track(self, _event=None) -> None:
+        player = getattr(self, "_in_app_player", None)
+        variable = getattr(self, "_in_app_subtitle_track", None)
+        if player is None or variable is None:
+            return
+        self._show_in_app_controls()
+        if variable.get() == self._t("Off"):
+            self._disable_in_app_subtitles()
+            return
+        track_id = (getattr(self, "_in_app_subtitle_tracks", None) or {}).get(
+            variable.get()
+        )
+        if track_id is None:
+            return
+        if player.video_set_spu(track_id) == -1:
+            messagebox.showerror(
+                self._t("Subtitle track unavailable"),
+                self._t("VLC could not select this subtitle track."),
+                parent=self._in_app_player_window,
+            )
+            self._refresh_in_app_subtitle_tracks()
+            return
+        self._refresh_in_app_subtitle_tracks()
+
+    def _disable_in_app_subtitles(self) -> None:
+        player = getattr(self, "_in_app_player", None)
+        variable = getattr(self, "_in_app_subtitle_track", None)
+        button = getattr(self, "_in_app_cc_button", None)
+        if player is None or variable is None:
+            return
+        self._show_in_app_controls()
+        if player.video_get_spu() < 0:
+            variable.set(self._t("Off"))
+            if button is not None:
+                button.configure(foreground="#FFFFFF")
+            return
+        if player.video_set_spu(-1) == -1:
+            messagebox.showerror(
+                self._t("Subtitle track unavailable"),
+                self._t("VLC could not change subtitle visibility."),
+                parent=self._in_app_player_window,
+            )
+            return
+        variable.set(self._t("Off"))
+        if button is not None:
+            button.configure(foreground="#FFFFFF")
+
+    def _toggle_in_app_subtitles(self) -> None:
+        player = getattr(self, "_in_app_player", None)
+        variable = getattr(self, "_in_app_subtitle_track", None)
+        tracks = getattr(self, "_in_app_subtitle_tracks", {})
+        if player is None or variable is None or not tracks:
+            return
+        self._show_in_app_controls()
+        if player.video_get_spu() >= 0:
+            self._disable_in_app_subtitles()
+            return
+        selected = variable.get()
+        if selected not in tracks:
+            selected = next(iter(tracks))
+        variable.set(selected)
+        self._set_in_app_subtitle_track()
+
+    def _show_in_app_settings_menu(self, button=None) -> None:
+        if button is None or not getattr(self, "_in_app_player_window", None):
+            return
+        self._begin_in_app_control_interaction()
+        self._refresh_in_app_audio_tracks()
+        self._refresh_in_app_subtitle_tracks()
+        menu = tk.Menu(
+            self._in_app_player_window,
+            tearoff=False,
+            background="#202020",
+            foreground="#FFFFFF",
+            activebackground="#333333",
+            activeforeground="#FFFFFF",
+        )
+        speed_menu = tk.Menu(
+            menu,
+            tearoff=False,
+            background="#202020",
+            foreground="#FFFFFF",
+            activebackground="#333333",
+            activeforeground="#FFFFFF",
+        )
+        for rate in _IN_APP_PLAYBACK_RATES:
+            speed_menu.add_radiobutton(
+                label=rate,
+                variable=self._in_app_playback_rate,
+                value=rate,
+                command=self._set_in_app_playback_rate,
+            )
+        menu.add_cascade(
+            label=self._t("Playback speed"),
+            menu=speed_menu,
+        )
+
+        audio_menu = tk.Menu(
+            menu,
+            tearoff=False,
+            background="#202020",
+            foreground="#FFFFFF",
+            activebackground="#333333",
+            activeforeground="#FFFFFF",
+        )
+        if self._in_app_audio_tracks:
+            for label in self._in_app_audio_tracks:
+                audio_menu.add_radiobutton(
+                    label=label,
+                    variable=self._in_app_audio_track,
+                    value=label,
+                    command=self._select_in_app_audio_track,
+                )
+        else:
+            audio_menu.add_command(
+                label=self._t("No audio tracks available"),
+                state="disabled",
+            )
+        menu.add_cascade(
+            label=self._t("Audio track"),
+            menu=audio_menu,
+        )
+
+        subtitle_menu = tk.Menu(
+            menu,
+            tearoff=False,
+            background="#202020",
+            foreground="#FFFFFF",
+            activebackground="#333333",
+            activeforeground="#FFFFFF",
+        )
+        subtitle_menu.add_radiobutton(
+            label=self._t("Off"),
+            variable=self._in_app_subtitle_track,
+            value=self._t("Off"),
+            command=self._disable_in_app_subtitles,
+        )
+        for label in self._in_app_subtitle_tracks:
+            subtitle_menu.add_radiobutton(
+                label=label,
+                variable=self._in_app_subtitle_track,
+                value=label,
+                command=self._set_in_app_subtitle_track,
+            )
+        menu.add_cascade(
+            label=self._t("Subtitles"),
+            menu=subtitle_menu,
+        )
+
+        try:
+            menu.tk_popup(
+                button.winfo_rootx(),
+                max(0, button.winfo_rooty() - menu.winfo_reqheight()),
+            )
+        finally:
+            menu.grab_release()
+            menu.destroy()
+            self._end_in_app_control_interaction()
 
     def _toggle_in_app_fullscreen(self, _event=None) -> str:
         window = getattr(self, "_in_app_player_window", None)
@@ -983,6 +2175,8 @@ class MediaMixin:
         window.lift()
         self._in_app_fullscreen = True
         self._in_app_fullscreen_button.configure(text="⛶")
+        self._show_in_app_controls()
+        window.after(150, self._refresh_in_app_video_target)
         return "break"
 
     def _exit_in_app_fullscreen(self, _event=None) -> str:
@@ -992,10 +2186,27 @@ class MediaMixin:
         self._in_app_fullscreen = False
         if window is not None:
             window.attributes("-fullscreen", False)
+            window.after(150, self._refresh_in_app_video_target)
+            self._show_in_app_controls()
         button = getattr(self, "_in_app_fullscreen_button", None)
         if button is not None:
             button.configure(text="⛶")
         return "break"
+
+    def _refresh_in_app_video_target(self) -> None:
+        window = getattr(self, "_in_app_player_window", None)
+        surface = getattr(self, "_in_app_video_surface", None)
+        player = getattr(self, "_in_app_player", None)
+        if window is None or surface is None or player is None:
+            return
+        try:
+            if not window.winfo_exists() or not surface.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        window.update_idletasks()
+        self._set_in_app_video_target(surface)
+        self._raise_in_app_controls_overlay()
 
     def _show_in_app_player_help(self) -> None:
         messagebox.showinfo(
@@ -1005,8 +2216,9 @@ class MediaMixin:
                 "preview remains available. Use Full screen or F11 to expand the "
                 "player without changing the main app window. Press Escape or F11 "
                 "to return to windowed playback. Use the timeline to seek, and "
-                "the controls to pause, stop, change volume, or select an audio "
-                "track. Close player to stop playback and close the player window."
+                "the controls to pause, stop, or change volume. Select playback "
+                "speed, audio tracks, and subtitles from Settings. Close player "
+                "to stop playback and close the player window."
             ),
             parent=self.root,
         )
@@ -1021,18 +2233,26 @@ class MediaMixin:
         status = getattr(self, "_in_app_player_status", None)
         if status is not None:
             self._set_in_app_player_status(self._t("Playback stopped"))
+        self._show_in_app_controls()
 
     def _close_in_app_player(self) -> None:
         window = getattr(self, "_in_app_player_window", None)
         if window is not None:
             if getattr(self, "_in_app_fullscreen", False):
                 self._exit_in_app_fullscreen()
-            after_id = getattr(self, "_in_app_playback_after", None)
+        for attribute in (
+            "_in_app_playback_after",
+            "_in_app_controls_after",
+            "_in_app_controls_fade_after",
+            "_in_app_pointer_after",
+        ):
+            after_id = getattr(self, attribute, None)
             if after_id is not None:
                 try:
                     self.root.after_cancel(after_id)
                 except tk.TclError:
                     pass
+            setattr(self, attribute, None)
         player = getattr(self, "_in_app_player", None)
         if player is not None:
             player.stop()
@@ -1043,22 +2263,47 @@ class MediaMixin:
         self._in_app_player = None
         self._in_app_vlc_instance = None
         self._in_app_player_window = None
+        controls_window = getattr(self, "_in_app_controls_overlay_window", None)
+        if controls_window is not None:
+            try:
+                controls_window.destroy()
+            except tk.TclError:
+                pass
+        self._in_app_controls_overlay_window = None
+        top_window = getattr(self, "_in_app_top_controls_overlay_window", None)
+        if top_window is not None:
+            try:
+                top_window.destroy()
+            except tk.TclError:
+                pass
+        self._in_app_top_controls_overlay_window = None
         self._in_app_vlc = None
         self._in_app_playback_after = None
         self._in_app_audio_tracks = {}
         self._in_app_audio_tracks_loaded = False
-        self._in_app_audio_track_combo = None
         self._in_app_audio_track = None
+        self._in_app_subtitle_tracks = {}
+        self._in_app_subtitle_tracks_loaded = False
+        self._in_app_subtitle_track = None
+        self._in_app_cc_button = None
         self._in_app_fullscreen = False
         self._in_app_playback_button = None
         self._in_app_player_status = None
         self._in_app_player_status_text = None
         self._in_app_fullscreen_button = None
         self._in_app_video_surface = None
+        self._in_app_controls_overlay = None
+        self._in_app_top_controls_overlay = None
+        self._in_app_top_back_button = None
+        self._in_app_top_title_label = None
+        self._in_app_top_settings_button = None
+        self._in_app_settings_button = None
+        self._in_app_timeline = None
+        self._in_app_controls_visible = False
         self._in_app_volume_var = None
-        self._in_app_seek_scale = None
         self._in_app_position_var = None
         self._in_app_seeking = False
+        self._in_app_control_interaction = False
         if window is not None:
             window.destroy()
 
@@ -1139,10 +2384,14 @@ class MediaMixin:
             self._clear_thumbnail(f"Preview unavailable:\n{error}")
             return
         self.current_thumbnail = None
-        self.preview_image_label.configure(
-            image="",
-            text=f"{media_kind}\n{path.suffix.lstrip('.').upper()}",
-        )
+        if media_kind == "VIDEO":
+            self._show_video_preview(path)
+        else:
+            self._clear_video_preview()
+            self.preview_image_label.configure(
+                image="",
+                text=f"{media_kind}\n{path.suffix.lstrip('.').upper()}",
+            )
         self.preview_details.configure(
             text=f"{path.name}\n{self._t('Existing local file')}\n{size_mb:.1f} MB"
         )
@@ -1181,6 +2430,7 @@ class MediaMixin:
     def _show_selected_thumbnail(self, _event=None) -> None:
         selected = self.jobs.selection()
         self._local_media_path = None
+        self._clear_video_preview()
         if not selected:
             self.inspector_status.set(self._t("No item selected"))
             self._clear_thumbnail("Select a task to inspect")
@@ -1207,10 +2457,13 @@ class MediaMixin:
                 else "FILE"
             )
             self.current_thumbnail = None
-            self.preview_image_label.configure(
-                image="",
-                text=f"{media_kind}\n{path.suffix.lstrip('.').upper()}",
-            )
+            if media_kind == "VIDEO":
+                self._show_video_preview(path)
+            else:
+                self.preview_image_label.configure(
+                    image="",
+                    text=f"{media_kind}\n{path.suffix.lstrip('.').upper()}",
+                )
             try:
                 size_mb = path.stat().st_size / (1024 * 1024)
             except OSError as error:
@@ -1247,6 +2500,7 @@ class MediaMixin:
         )
 
     def _clear_thumbnail(self, message: str) -> None:
+        self._clear_video_preview()
         self.current_thumbnail = None
         self.preview_image_label.configure(image="", text=message)
         self.preview_details.configure(text="")
