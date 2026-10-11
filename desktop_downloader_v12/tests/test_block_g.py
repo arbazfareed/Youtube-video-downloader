@@ -8,13 +8,14 @@ import tempfile
 import unittest
 from concurrent.futures import Future
 from pathlib import Path
+from urllib.error import HTTPError
 from unittest.mock import Mock, patch
 
 import diagnostics
 import update_engine
 from app import DownloaderApp
 from localization import LANGUAGES, translate
-from update_engine import ReleaseUpdate, UpdateError
+from update_engine import NoPublishedReleaseError, ReleaseUpdate, UpdateError
 
 
 class _Response:
@@ -122,6 +123,20 @@ class UpdateEngineTests(unittest.TestCase):
             "update_engine.urlopen", return_value=_Response(self._release_document())
         ):
             with self.assertRaisesRegex(UpdateError, "no valid SHA-256"):
+                update_engine.check_for_update("12.0", system="Windows")
+
+    def test_missing_latest_release_reports_that_none_is_published(self):
+        error = HTTPError(
+            "https://api.github.com/repos/example/repo/releases/latest",
+            404,
+            "Not Found",
+            {},
+            None,
+        )
+        with patch("update_engine.urlopen", side_effect=error):
+            with self.assertRaisesRegex(
+                NoPublishedReleaseError, "no published GitHub release yet"
+            ):
                 update_engine.check_for_update("12.0", system="Windows")
 
     def test_release_check_rejects_untrusted_asset_urls(self):

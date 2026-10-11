@@ -85,7 +85,9 @@ matching Windows or Linux portable ZIP and refuses assets without a valid
 published SHA-256 digest or whose downloaded digest does not match. The
 verified ZIP is staged in the app's local data folder; replace the portable
 files manually to finish updating. This release flow does not silently replace
-or restart the running program.
+or restart the running program. Until this repository has a published GitHub
+release, update checks report that no release is available; publishing a public
+repository or pushing commits alone does not create a release.
 
 Diagnostic recording is **off by default**. If enabled, v12 records only the
 event time, component, and error type in a local JSON Lines file; exception

@@ -8,7 +8,7 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
@@ -20,6 +20,10 @@ _SHA256_PATTERN = re.compile(r"^sha256:([0-9a-fA-F]{64})$")
 
 
 class UpdateError(RuntimeError):
+    pass
+
+
+class NoPublishedReleaseError(UpdateError):
     pass
 
 
@@ -65,6 +69,13 @@ def check_for_update(
     try:
         with urlopen(request, timeout=timeout) as response:
             release = json.load(response)
+    except HTTPError as error:
+        if error.code == 404:
+            raise NoPublishedReleaseError(
+                "This public repository has no published GitHub release yet. "
+                "Publish a release before update checks can find versions."
+            ) from error
+        raise UpdateError(f"Could not check GitHub Releases: {error}") from error
     except (OSError, URLError, TimeoutError, json.JSONDecodeError) as error:
         raise UpdateError(f"Could not check GitHub Releases: {error}") from error
     if not isinstance(release, dict):

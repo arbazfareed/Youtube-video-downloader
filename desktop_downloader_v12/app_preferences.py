@@ -16,6 +16,7 @@ from app_support import (
     record_diagnostic,
     diagnostics_path,
     export_diagnostics,
+    NoPublishedReleaseError,
     UpdateError,
     check_for_update,
     download_verified_update,
@@ -107,6 +108,13 @@ class PreferencesMixin:
             self._update_check_active = False
             try:
                 update = future.result()
+            except NoPublishedReleaseError as error:
+                self.progress_summary.set(str(error))
+                if interactive:
+                    messagebox.showinfo(
+                        "No release published yet", str(error), parent=self.root
+                    )
+                return
             except (UpdateError, OSError) as error:
                 self._capture_diagnostic("update check", error)
                 self.progress_summary.set(f"Update check failed: {error}")

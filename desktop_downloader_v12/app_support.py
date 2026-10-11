@@ -57,7 +57,13 @@ from torrent_engine import is_torrent_url
 from zip_archive import create_zip_archive
 from diagnostics import diagnostics_path, export_diagnostics, record_diagnostic
 from localization import LANGUAGES, translate
-from update_engine import APP_VERSION, UpdateError, check_for_update, download_verified_update
+from update_engine import (
+    APP_VERSION,
+    NoPublishedReleaseError,
+    UpdateError,
+    check_for_update,
+    download_verified_update,
+)
 
 
 MAX_SPEEDS = {
@@ -149,6 +155,7 @@ __all__ = [
     'check_for_update',
     'download_verified_update',
     'APP_VERSION',
+    'NoPublishedReleaseError',
     'is_configured',
     'save_credentials',
     'select_upload_source',
