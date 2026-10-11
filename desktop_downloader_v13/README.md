@@ -24,9 +24,10 @@ The interface keeps its light/dark palettes and high-contrast mode, with a
 compact header, grouped download controls, and clear queue actions. Select a
 downloaded audio/video task and choose **Play in app**, or choose
 **Browse local media** to play an existing audio/video file without downloading
-it into the queue first. In-app playback uses VLC; install the VLC desktop
-application so its native playback library is available. If in-app playback
-cannot start, the app offers to open the file in the system player instead.
+it into the queue first. The portable Windows ZIP includes VLC's native
+playback runtime; source installs and the portable Linux release need the VLC
+desktop application installed separately. If in-app playback cannot start,
+the app offers to open the file in the system player instead.
 **Open in system player** remains available at any time. Theme preferences are
 saved.
 Version 13.0 inherits v12's in-app BitTorrent downloads for magnet URIs and direct
@@ -58,11 +59,13 @@ change when sites change. No downloader can promise every link or every site.
 ## Portable releases
 
 The **SmartDownloader13-Windows.zip** and **SmartDownloader13-Linux.zip**
-release assets are self-contained for their named operating system. Extract the
-matching ZIP and start its executable; Python and the app's Python packages do
-not need to be installed, and launching the packaged app does not need internet.
-A Windows executable will not run on Linux, or vice versa. Linux portable builds
-target x86-64 distributions with glibc 2.35 or newer.
+release assets bundle the app, Python, and its Python packages for their named
+operating system. Extract the matching ZIP and start its executable; a Python
+installation is not required. The Windows ZIP also bundles the VideoLAN VLC
+3.0.23 runtime and license notices for in-app media playback. The Linux ZIP
+needs the VLC desktop application's native runtime installed separately; see
+[SETUP.md](SETUP.md). A Windows executable will not run on Linux, or vice versa.
+Linux portable builds target x86-64 distributions with glibc 2.35 or newer.
 
 The same portable executable also supports command-line downloads and the REST
 API. In PowerShell, use `.\SmartDownloader13.exe --cli --help` or
@@ -96,10 +99,11 @@ announcements and Urdu text shaping depend on the operating system, screen
 reader, fonts, and Tk version; verify those combinations manually.
 
 The **Play in app** action opens a separate, resizable **Smart VLC** window and
-leaves the downloader's **Media preview** available. The player has a compact
-control strip with a seekable timeline, elapsed/total time, play/pause, stop,
-volume, and audio-track selection; playback status sits beside the shortened
-title instead of taking a full footer row. **Full screen** or **F11** expands
+leaves the downloader's **Media preview** available. The player has a compact icon-led control strip with a seekable timeline,
+elapsed/total time, play/pause, stop, volume, audio-track selection, and Help;
+hovering or keyboard-focusing a control shows its label in the status area.
+Playback status sits beside the shortened title instead of taking a full footer
+row. **Full screen** or **F11** expands
 that same player window; the video stays attached to its original surface and
 the main Smart Downloader window remains unchanged. Press **Escape** or
 **F11** to return to windowed playback. **Close player** stops playback and

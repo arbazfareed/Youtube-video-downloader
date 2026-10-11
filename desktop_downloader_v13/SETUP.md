@@ -45,9 +45,11 @@ and extract a newer ZIP or use the Git method above.
   network features still require connectivity.
 - Native desktop notifications use Plyer, which is installed from
   `requirements.txt`; notification support depends on the operating system.
-- In-app audio/video playback uses `python-vlc` and the VLC desktop
-  application's native playback library. Install VLC separately for in-app
-  playback; the **Open in system player** action remains available without it.
+- In-app audio/video playback uses `python-vlc` and VLC's native playback
+  library. The portable Windows ZIP includes the VideoLAN VLC 3.0.23 runtime and
+  its license files; no separate VLC installation is needed there. Source
+  installs and the portable Linux ZIP require VLC to be installed separately.
+  The **Open in system player** action remains available without VLC.
 - FFmpeg is optional. Install it only for MP3 conversion or merging separate
   audio/video streams.
 - PDF-to-DOCX conversion is included in the Python requirements. DOCX-to-PDF

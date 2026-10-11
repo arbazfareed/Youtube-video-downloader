@@ -78,6 +78,21 @@ def _smoke_test_app(app_class) -> None:
         root.destroy()
 
 
+def _smoke_test_vlc_runtime() -> int:
+    from app_media import MediaMixin
+
+    MediaMixin._prepare_bundled_vlc_runtime(MediaMixin())
+    import vlc
+
+    instance = vlc.Instance("--intf=dummy", "--no-audio", "--no-video")
+    if instance is None:
+        raise RuntimeError("The VLC native runtime could not be initialized.")
+    version = vlc.libvlc_get_version()
+    instance.release()
+    print(f"VLC native runtime initialized: {version.decode('ascii', errors='replace')}")
+    return 0
+
+
 def _attach_console() -> None:
     if os.name != "nt" or (sys.stdout is not None and sys.stderr is not None):
         return
@@ -97,6 +112,9 @@ def _attach_console() -> None:
 
 def main() -> int:
     arguments = sys.argv[1:]
+    if arguments == ["--vlc-smoke-test"]:
+        _attach_console()
+        return _smoke_test_vlc_runtime()
     if arguments and arguments[0] == "--cli":
         _attach_console()
         _ensure_dependencies()

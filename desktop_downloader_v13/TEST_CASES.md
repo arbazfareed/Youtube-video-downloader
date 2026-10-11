@@ -91,10 +91,11 @@ on a real display.
 | PV-5 | Play portrait and ultrawide media, then resize the player window. | Video maintains its source aspect ratio within the video area; letterboxing is acceptable, unintended cropping is not. | Manual — pending. |
 | PV-6 | Move volume through 0%, intermediate values, and 100%. | VLC receives a value in the 0–100 range and the displayed integer percentage matches the slider. | Automated callback test; real output loudness/mute verification manual. |
 | PV-7 | Open media with multiple audio tracks; switch between tracks during playback. | Track names are listed, the chosen VLC track becomes active, and playback continues. Media with no tracks shows a disabled track selector. | Automated list/selection/no-track tests; real multi-track playback manual. |
-| PV-8 | Enter player fullscreen using the button and F11; press Escape, then enter/exit again. | The separate player window becomes fullscreen without reparenting the video surface; the main app stays windowed and unchanged, and Escape/F11 returns to windowed playback. | Unit test plus Windows smoke test confirmed playback time advances across fullscreen with the same video handle and unchanged host geometry; visible frame output still requires manual inspection. |
+| PV-8 | Enter player fullscreen using the button and F11; press Escape, then enter/exit again. | The separate player window becomes fullscreen without reparenting the video surface; the main app stays windowed and unchanged, and Escape/F11 returns to windowed playback. | Unit test plus live Windows synthetic-video test with bundled VLC 3.0.23: invoking the fullscreen button expanded the player to 1280×720, advanced playback to 1,800 ms, restored the original 800×500 player size, and left the visible host window at 500×300+30+30 throughout. |
 | PV-9 | Drag the timeline and repeat PV-1 through PV-8 with audio-only media. | Seeking updates playback position and elapsed/total time; help explains the separate window, seek, Stop/Close, volume, and tracks. | Automated seek/time/help tests plus mocked audio path; real audio/video playback manual. |
 | PV-10 | Run Smart Downloader on a narrow/portrait display or resize the window below 760 px, then inspect the downloader and media preview. | Navigation collapses and the media inspector reflows below the downloader area; labels and the two-column action buttons remain reachable rather than clipped off the right edge. | Automated 600/900/1300 px layout transition; physical resolution/high-DPI verification manual. |
 | PV-11 | Enter player fullscreen on a narrow display and inspect controls. | The video remains visible on the same surface and playback controls remain accessible; Escape/F11 restores windowed playback. | Automated same-surface fullscreen test; real VLC rendering manual. |
+| PV-12 | Hover over or keyboard-focus the icon-only player controls and inspect the compact footer. | Each icon's label appears in the status area; audio-track selection and Help remain in the bottom row without adding a full-height text-button row. | Automated control construction, footer placement, and focus/hover hint regression tests. |
 
 ## Failure report template
 
@@ -119,7 +120,7 @@ Retest result:
 
 ## Results and limitations
 
-The current v13 unit suite passes 209 tests. That result is evidence for
+The current v13 unit suite passes 213 tests. That result is evidence for
 those automated tests only. Cases labelled manual, partial, or not separately
 evidenced above remain open for their stated environment or scenario. Update
 the evidence label only after running and recording the exact case; do not infer

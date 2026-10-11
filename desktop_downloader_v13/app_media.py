@@ -31,6 +31,9 @@ from app_support import (
     calculate_checksum,
 )
 
+_VLC_DLL_DIRECTORY = None
+
+
 class MediaMixin:
     def _integrity_guard(self, job_id: str) -> bool:
         baseline = getattr(self, "_integrity_baselines", {}).get(job_id)
@@ -522,6 +525,7 @@ class MediaMixin:
     def _play_media_in_app(self, path: Path) -> None:
         import importlib
 
+        self._prepare_bundled_vlc_runtime()
         vlc = importlib.import_module("vlc")
         if getattr(self, "_in_app_player_window", None) is not None:
             self._close_in_app_player()
@@ -560,11 +564,12 @@ class MediaMixin:
         video_surface = tk.Frame(window, background="#000000")
         video_surface.grid(row=1, column=0, sticky="nsew", padx=6, pady=6)
 
-        controls = ttk.Frame(window, style="Card.TFrame", padding=(8, 6))
+        controls = ttk.Frame(window, style="Card.TFrame", padding=(6, 4))
         controls.grid(row=2, column=0, sticky="ew", padx=6, pady=(0, 6))
-        controls.columnconfigure(1, weight=1)
+        for column in range(3):
+            controls.columnconfigure(column, weight=1)
         timeline = ttk.Frame(controls, style="Card.TFrame")
-        timeline.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 5))
+        timeline.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 3))
         timeline.columnconfigure(1, weight=1)
         self._in_app_position_var = tk.DoubleVar(value=0)
         self._in_app_current_time = tk.StringVar(value="00:00")
@@ -592,71 +597,69 @@ class MediaMixin:
         )
 
         transport_controls = ttk.Frame(controls, style="Card.TFrame")
-        transport_controls.grid(row=1, column=0, columnspan=2, sticky="ew")
+        transport_controls.grid(row=1, column=0, columnspan=3, sticky="ew")
         playback_button = ttk.Button(
-            transport_controls, text=self._t("Pause"), padding=(8, 3), takefocus=True
+            transport_controls, text="Ⅱ", width=3, padding=(2, 2), takefocus=True
         )
         playback_button.pack(side="left")
-        ttk.Button(
+        stop_button = ttk.Button(
             transport_controls,
-            text=self._t("Stop"),
+            text="■",
             command=self._stop_in_app_player,
-            padding=(8, 3),
+            width=3,
+            padding=(2, 2),
             takefocus=True,
-        ).pack(side="left", padx=(6, 0))
-        ttk.Button(
-            transport_controls,
-            text=self._t("Close player"),
-            command=self._close_in_app_player,
-            padding=(8, 3),
-            takefocus=True,
-        ).pack(side="right")
+        )
+        stop_button.pack(side="left", padx=(4, 0))
         fullscreen_button = ttk.Button(
             transport_controls,
-            text=self._t("Full screen"),
+            text="⛶",
             command=self._toggle_in_app_fullscreen,
-            padding=(8, 3),
+            width=3,
+            padding=(2, 2),
             takefocus=True,
         )
-        fullscreen_button.pack(side="left", padx=(6, 0))
-        ttk.Button(
+        fullscreen_button.pack(side="left", padx=(4, 0))
+        close_button = ttk.Button(
             transport_controls,
-            text=self._t("Help"),
-            command=self._show_in_app_player_help,
-            padding=(8, 3),
+            text="×",
+            command=self._close_in_app_player,
+            width=3,
+            padding=(2, 2),
             takefocus=True,
-        ).pack(side="left", padx=(6, 0))
+        )
+        close_button.pack(side="right")
 
         volume_controls = ttk.Frame(controls, style="Card.TFrame")
-        volume_controls.grid(row=2, column=0, sticky="ew", pady=(5, 0))
+        volume_controls.grid(row=2, column=0, sticky="ew", pady=(3, 0))
         volume_controls.columnconfigure(2, weight=1)
-        ttk.Label(volume_controls, text=self._t("Volume")).pack(
-            side="left", padx=(0, 5)
-        )
+        volume_icon = ttk.Label(volume_controls, text="◖))")
+        volume_icon.pack(side="left", padx=(0, 4))
         volume = tk.IntVar(value=80)
         self._in_app_volume_var = volume
         self._in_app_volume_label = tk.StringVar(value="80%")
-        ttk.Label(
+        volume_value_label = ttk.Label(
             volume_controls,
             textvariable=self._in_app_volume_label,
             width=5,
             anchor="e",
-        ).pack(side="left", padx=(0, 5))
-        ttk.Scale(
+        )
+        volume_value_label.pack(side="left", padx=(0, 5))
+        volume_scale = ttk.Scale(
             volume_controls,
             from_=0,
             to=100,
             variable=volume,
             command=lambda value: self._set_in_app_volume(value),
             takefocus=True,
-        ).pack(side="left", fill="x", expand=True)
+        )
+        volume_scale.pack(side="left", fill="x", expand=True)
 
         track_controls = ttk.Frame(controls, style="Card.TFrame")
-        track_controls.grid(row=2, column=1, sticky="ew", padx=(12, 0), pady=(5, 0))
+        track_controls.grid(row=2, column=1, sticky="ew", padx=(8, 0), pady=(3, 0))
         track_controls.columnconfigure(1, weight=1)
-        ttk.Label(track_controls, text=self._t("Audio track")).pack(
-            side="left", padx=(0, 5)
-        )
+        audio_icon = ttk.Label(track_controls, text="♫")
+        audio_icon.pack(side="left", padx=(0, 4))
         self._in_app_audio_track = tk.StringVar(value="")
         self._in_app_audio_tracks: dict[str, int] = {}
         self._in_app_audio_tracks_loaded = False
@@ -664,17 +667,40 @@ class MediaMixin:
             track_controls,
             textvariable=self._in_app_audio_track,
             state="disabled",
-            width=20,
+            width=14,
             takefocus=True,
         )
         self._in_app_audio_track_combo.pack(side="left", fill="x", expand=True)
         self._in_app_audio_track_combo.bind(
             "<<ComboboxSelected>>", self._select_in_app_audio_track
         )
+        footer_help_button = ttk.Button(
+            controls,
+            text="?",
+            command=self._show_in_app_player_help,
+            width=3,
+            padding=(2, 2),
+            takefocus=True,
+        )
+        footer_help_button.grid(row=2, column=2, sticky="e", padx=(8, 0), pady=(3, 0))
         window.update_idletasks()
 
         self._in_app_vlc = vlc
         self._in_app_fullscreen_button = fullscreen_button
+        self._in_app_player_status_text = self._t("Playback started")
+        for widget, hint in (
+            (playback_button, "Pause"),
+            (stop_button, "Stop"),
+            (fullscreen_button, "Full screen"),
+            (close_button, "Close player"),
+            (volume_icon, "Volume"),
+            (volume_value_label, "Volume"),
+            (volume_scale, "Volume"),
+            (audio_icon, "Audio track"),
+            (self._in_app_audio_track_combo, "Audio track"),
+            (footer_help_button, "Help"),
+        ):
+            self._bind_in_app_control_hint(widget, self._t(hint))
         self._in_app_fullscreen = False
         self._in_app_audio_refresh_ticks = 0
         self._in_app_playback_after = None
@@ -698,6 +724,36 @@ class MediaMixin:
             raise
         self._refresh_in_app_audio_tracks()
         self._poll_in_app_playback()
+
+    def _prepare_bundled_vlc_runtime(self) -> None:
+        global _VLC_DLL_DIRECTORY
+
+        if sys.platform != "win32":
+            return
+        app_directory = (
+            Path(sys.executable).resolve().parent
+            if getattr(sys, "frozen", False)
+            else Path(__file__).resolve().parent
+        )
+        vlc_directory = app_directory / "VLC"
+        plugin_directory = vlc_directory / "plugins"
+        libvlc_path = vlc_directory / "libvlc.dll"
+        if not libvlc_path.is_file() or not plugin_directory.is_dir():
+            return
+
+        os.environ["PYTHON_VLC_LIB_PATH"] = str(libvlc_path)
+        os.environ["PYTHON_VLC_MODULE_PATH"] = str(plugin_directory)
+        os.environ["VLC_PLUGIN_PATH"] = str(plugin_directory)
+        path_entries = os.environ.get("PATH", "").split(os.pathsep)
+        normalized_vlc_directory = os.path.normcase(str(vlc_directory))
+        if normalized_vlc_directory not in {
+            os.path.normcase(entry) for entry in path_entries
+        }:
+            os.environ["PATH"] = str(vlc_directory) + os.pathsep + os.environ.get(
+                "PATH", ""
+            )
+        if _VLC_DLL_DIRECTORY is None and hasattr(os, "add_dll_directory"):
+            _VLC_DLL_DIRECTORY = os.add_dll_directory(str(vlc_directory))
 
     @staticmethod
     def _compact_in_app_title(title: str, max_length: int = 72) -> str:
@@ -730,12 +786,12 @@ class MediaMixin:
         if self._in_app_audio_refresh_ticks % 4 == 0:
             self._refresh_in_app_audio_tracks()
         if state == vlc.State.Ended:
-            self._in_app_playback_button.configure(text=self._t("Play"))
-            self._in_app_player_status.set(self._t("Playback finished"))
+            self._in_app_playback_button.configure(text="▶")
+            self._set_in_app_player_status(self._t("Playback finished"))
             return
         if state == vlc.State.Error:
-            self._in_app_playback_button.configure(text=self._t("Play"))
-            self._in_app_player_status.set(self._t("Playback failed"))
+            self._in_app_playback_button.configure(text="▶")
+            self._set_in_app_player_status(self._t("Playback failed"))
             messagebox.showerror(
                 self._t("Could not play media"),
                 self._t("VLC could not play this media file."),
@@ -779,10 +835,49 @@ class MediaMixin:
             status = self._t("Playback started")
         button = getattr(self, "_in_app_playback_button", None)
         if button is not None:
-            button.configure(text=label)
-        player_status = getattr(self, "_in_app_player_status", None)
-        if player_status is not None:
-            player_status.set(status)
+            button.configure(text="▶" if label == self._t("Play") else "Ⅱ")
+        self._set_in_app_player_status(status)
+
+    def _set_in_app_player_status(self, text: str) -> None:
+        self._in_app_player_status_text = text
+        status = getattr(self, "_in_app_player_status", None)
+        if status is not None:
+            status.set(text)
+
+    def _bind_in_app_control_hint(self, widget, text: str) -> None:
+        widget.bind(
+            "<Enter>",
+            lambda _event: self._show_in_app_control_hint(text),
+            add="+",
+        )
+        widget.bind(
+            "<Leave>",
+            lambda _event: self._restore_in_app_player_status(),
+            add="+",
+        )
+        widget.bind(
+            "<FocusIn>",
+            lambda _event: self._show_in_app_control_hint(text),
+            add="+",
+        )
+        widget.bind(
+            "<FocusOut>",
+            lambda _event: self._restore_in_app_player_status(),
+            add="+",
+        )
+
+    def _show_in_app_control_hint(self, text: str) -> None:
+        status = getattr(self, "_in_app_player_status", None)
+        if status is not None:
+            status.set(text)
+
+    def _restore_in_app_player_status(self) -> None:
+        status = getattr(self, "_in_app_player_status", None)
+        if status is not None:
+            status_text = getattr(self, "_in_app_player_status_text", None)
+            if status_text is None:
+                status_text = self._t("Playback started")
+            status.set(status_text)
 
     def _set_in_app_video_target(self, surface) -> None:
         player = getattr(self, "_in_app_player", None)
@@ -887,9 +982,7 @@ class MediaMixin:
         window.attributes("-fullscreen", True)
         window.lift()
         self._in_app_fullscreen = True
-        self._in_app_fullscreen_button.configure(
-            text=self._t("Exit full screen")
-        )
+        self._in_app_fullscreen_button.configure(text="⛶")
         return "break"
 
     def _exit_in_app_fullscreen(self, _event=None) -> str:
@@ -901,7 +994,7 @@ class MediaMixin:
             window.attributes("-fullscreen", False)
         button = getattr(self, "_in_app_fullscreen_button", None)
         if button is not None:
-            button.configure(text=self._t("Full screen"))
+            button.configure(text="⛶")
         return "break"
 
     def _show_in_app_player_help(self) -> None:
@@ -924,10 +1017,10 @@ class MediaMixin:
             player.stop()
         playback_button = getattr(self, "_in_app_playback_button", None)
         if playback_button is not None:
-            playback_button.configure(text=self._t("Play"))
+            playback_button.configure(text="▶")
         status = getattr(self, "_in_app_player_status", None)
         if status is not None:
-            status.set(self._t("Playback stopped"))
+            self._set_in_app_player_status(self._t("Playback stopped"))
 
     def _close_in_app_player(self) -> None:
         window = getattr(self, "_in_app_player_window", None)
@@ -959,6 +1052,7 @@ class MediaMixin:
         self._in_app_fullscreen = False
         self._in_app_playback_button = None
         self._in_app_player_status = None
+        self._in_app_player_status_text = None
         self._in_app_fullscreen_button = None
         self._in_app_video_surface = None
         self._in_app_volume_var = None

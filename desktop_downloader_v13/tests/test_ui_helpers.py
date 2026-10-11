@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 import unittest
@@ -5,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import app_media
 from app import DownloaderApp, _convert_media_to_mp3
 from app_media import MediaMixin
 
@@ -316,6 +318,51 @@ class UiStartupWiringTests(unittest.TestCase):
 
 
 class MediaPlaybackTests(unittest.TestCase):
+    def test_bundled_vlc_runtime_is_selected_before_import(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app_directory = Path(directory)
+            vlc_directory = app_directory / "VLC"
+            plugin_directory = vlc_directory / "plugins"
+            plugin_directory.mkdir(parents=True)
+            (vlc_directory / "libvlc.dll").write_bytes(b"test")
+            executable = app_directory / "SmartDownloader13.exe"
+            dll_directory = Mock()
+
+            with (
+                patch("app_media.sys.platform", "win32"),
+                patch("app_media.sys.frozen", True, create=True),
+                patch("app_media.sys.executable", str(executable)),
+                patch.dict("os.environ", {}, clear=True),
+                patch(
+                    "app_media.os.add_dll_directory",
+                    return_value=dll_directory,
+                    create=True,
+                ),
+                patch("app_media._VLC_DLL_DIRECTORY", None),
+            ):
+                MediaMixin._prepare_bundled_vlc_runtime(MediaMixin())
+                MediaMixin._prepare_bundled_vlc_runtime(MediaMixin())
+
+                self.assertEqual(
+                    os.environ["PYTHON_VLC_LIB_PATH"],
+                    str(vlc_directory.resolve() / "libvlc.dll"),
+                )
+                self.assertEqual(
+                    os.environ["PYTHON_VLC_MODULE_PATH"],
+                    str(plugin_directory.resolve()),
+                )
+                normalized_runtime = os.path.normcase(str(vlc_directory.resolve()))
+                self.assertEqual(
+                    sum(
+                        os.path.normcase(entry) == normalized_runtime
+                        for entry in os.environ["PATH"].split(os.pathsep)
+                    ),
+                    1,
+                )
+                app_media.os.add_dll_directory.assert_called_once_with(
+                    str(vlc_directory.resolve())
+                )
+
     def test_play_action_uses_separate_player_for_existing_local_media(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "existing-video.mp4"
@@ -437,6 +484,7 @@ class MediaPlaybackTests(unittest.TestCase):
                     volume = Mock()
                     volume.get.return_value = 80
                     variables = [Mock() for _ in range(5)]
+                    player_buttons = [Mock() for _ in range(5)]
                     with (
                         patch("app_media.sys.platform", "win32"),
                         patch.dict("sys.modules", {"vlc": vlc_module}),
@@ -462,7 +510,10 @@ class MediaPlaybackTests(unittest.TestCase):
                                 Mock(),
                             ],
                         ),
-                        patch("app_media.ttk.Button"),
+                        patch(
+                            "app_media.ttk.Button",
+                            side_effect=player_buttons,
+                        ) as button_factory,
                         patch("app_media.ttk.Label"),
                         patch("app_media.ttk.Scale"),
                         patch("app_media.ttk.Combobox"),
@@ -487,6 +538,17 @@ class MediaPlaybackTests(unittest.TestCase):
                     player_window.destroy.assert_not_called()
                     app.preview_image_label.grid_remove.assert_not_called()
                     self.assertIs(app._in_app_player_window, player_window)
+                    self.assertEqual(
+                        [
+                            call.kwargs["text"]
+                            for call in button_factory.call_args_list
+                        ],
+                        ["Ⅱ", "■", "⛶", "×", "?"],
+                    )
+                    player_buttons[-1].grid.assert_called_once()
+                    self.assertEqual(
+                        player_buttons[-1].grid.call_args.kwargs["row"], 2
+                    )
 
     def test_stop_keeps_separate_player_interface_open(self):
         app = MediaMixin()
@@ -499,7 +561,7 @@ class MediaPlaybackTests(unittest.TestCase):
         MediaMixin._stop_in_app_player(app)
 
         app._in_app_player.stop.assert_called_once_with()
-        app._in_app_playback_button.configure.assert_called_once_with(text="Play")
+        app._in_app_playback_button.configure.assert_called_once_with(text="▶")
         app._in_app_player_status.set.assert_called_once_with("Playback stopped")
         app._close_in_app_player.assert_not_called()
 
@@ -514,7 +576,7 @@ class MediaPlaybackTests(unittest.TestCase):
         MediaMixin._toggle_in_app_playback(app)
 
         app._in_app_player.pause.assert_called_once_with()
-        app._in_app_playback_button.configure.assert_called_once_with(text="Play")
+        app._in_app_playback_button.configure.assert_called_once_with(text="▶")
         app._in_app_player_status.set.assert_called_once_with("Playback paused")
 
     def test_playback_title_is_shortened_without_losing_full_filename(self):
@@ -549,7 +611,7 @@ class MediaPlaybackTests(unittest.TestCase):
 
         MediaMixin._poll_in_app_playback(app)
 
-        app._in_app_playback_button.configure.assert_called_once_with(text="Play")
+        app._in_app_playback_button.configure.assert_called_once_with(text="▶")
         app._in_app_player_status.set.assert_called_once_with("Playback finished")
         app._close_in_app_player.assert_not_called()
 
@@ -650,7 +712,7 @@ class MediaPlaybackTests(unittest.TestCase):
         app.root.geometry.assert_not_called()
         self.assertTrue(app._in_app_fullscreen)
         app._in_app_fullscreen_button.configure.assert_called_once_with(
-            text="Exit full screen"
+            text="⛶"
         )
 
         self.assertEqual(MediaMixin._exit_in_app_fullscreen(app), "break")
@@ -661,8 +723,24 @@ class MediaPlaybackTests(unittest.TestCase):
         app.root.attributes.assert_not_called()
         app.root.geometry.assert_not_called()
         self.assertFalse(app._in_app_fullscreen)
-        app._in_app_fullscreen_button.configure.assert_called_with(
-            text="Full screen"
+        app._in_app_fullscreen_button.configure.assert_called_with(text="⛶")
+
+    def test_icon_control_hint_is_restored_to_current_player_status(self):
+        app = MediaMixin()
+        app._in_app_player_status = Mock()
+        app._in_app_player_status_text = "Playback paused"
+        widget = Mock()
+
+        MediaMixin._bind_in_app_control_hint(app, widget, "Pause")
+        MediaMixin._show_in_app_control_hint(app, "Pause")
+        MediaMixin._restore_in_app_player_status(app)
+
+        self.assertEqual(
+            [call.args[0] for call in widget.bind.call_args_list],
+            ["<Enter>", "<Leave>", "<FocusIn>", "<FocusOut>"],
+        )
+        app._in_app_player_status.set.assert_has_calls(
+            [unittest.mock.call("Pause"), unittest.mock.call("Playback paused")]
         )
 
     def test_player_time_format_supports_long_media(self):

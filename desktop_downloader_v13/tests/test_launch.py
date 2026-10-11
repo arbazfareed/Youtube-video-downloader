@@ -7,7 +7,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import launch
-from launch import _ensure_dependencies, _smoke_test_app
+from launch import (
+    _ensure_dependencies,
+    _smoke_test_app,
+    _smoke_test_vlc_runtime,
+)
 
 
 class FrozenLauncherTests(unittest.TestCase):
@@ -96,6 +100,29 @@ class PackagedSmokeTestTests(unittest.TestCase):
                 _smoke_test_app(lambda _root: None)
         self.assertTrue(hidden_root.destroyed)
 
+    def test_vlc_smoke_test_initializes_and_releases_native_runtime(self):
+        import app_media
+
+        instance = unittest.mock.Mock()
+        vlc_module = type(
+            "VlcModule",
+            (),
+            {
+                "Instance": staticmethod(lambda *_args: instance),
+                "libvlc_get_version": staticmethod(lambda: b"3.0.23"),
+            },
+        )
+        with (
+            patch.object(app_media.MediaMixin, "_prepare_bundled_vlc_runtime") as prepare,
+            patch.dict(sys.modules, {"vlc": vlc_module}),
+            patch("builtins.print") as print_version,
+        ):
+            self.assertEqual(_smoke_test_vlc_runtime(), 0)
+
+        prepare.assert_called_once_with(unittest.mock.ANY)
+        instance.release.assert_called_once_with()
+        print_version.assert_called_once_with("VLC native runtime initialized: 3.0.23")
+
 
 class PortableLauncherModeTests(unittest.TestCase):
     def test_cli_mode_forwards_arguments_and_returns_the_cli_status(self):
@@ -121,6 +148,18 @@ class PortableLauncherModeTests(unittest.TestCase):
         attach_console.assert_called_once_with()
         ensure_dependencies.assert_called_once_with()
         run_api.assert_called_once_with()
+
+    def test_vlc_smoke_mode_initializes_runtime_without_starting_gui(self):
+        with (
+            patch.object(sys, "argv", ["launch.py", "--vlc-smoke-test"]),
+            patch("launch._attach_console") as attach_console,
+            patch("launch._ensure_dependencies") as ensure_dependencies,
+            patch("launch._smoke_test_vlc_runtime", return_value=0) as run_smoke,
+        ):
+            self.assertEqual(launch.main(), 0)
+        attach_console.assert_called_once_with()
+        ensure_dependencies.assert_not_called()
+        run_smoke.assert_called_once_with()
 
 
 if __name__ == "__main__":

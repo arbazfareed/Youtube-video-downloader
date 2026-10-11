@@ -67,6 +67,29 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check -r requirements.txt
           python -m pip install --disable-pip-version-check pyinstaller
+      - name: Download verified VLC runtime for portable Windows player
+        if: matrix.app-directory == 'desktop_downloader_v13' && matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "vlc-3.0.23-win64.zip"
+          $uri = "https://mirror.del.albony.in/videolan-ftp/vlc/3.0.23/win64/vlc-3.0.23-win64.zip"
+          Invoke-WebRequest -Uri $uri -OutFile $archive
+          $expectedHash = "992d19dbd0b8a7cde9167d2f7780b1ef6f92acc8a71acfa736101a21f35181e1"
+          $actualHash = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) {
+            throw "The downloaded VLC runtime did not match VideoLAN's published SHA-256."
+          }
+          $extractDirectory = Join-Path $env:RUNNER_TEMP "vlc-extracted"
+          Expand-Archive -Path $archive -DestinationPath $extractDirectory
+          $vlcSource = Join-Path $extractDirectory "vlc-3.0.23"
+          $vlcRuntime = Join-Path $env:RUNNER_TEMP "SmartDownloader13-VLC"
+          if (-not (Test-Path (Join-Path $vlcSource "libvlc.dll")) -or
+              -not (Test-Path (Join-Path $vlcSource "plugins"))) {
+            throw "The downloaded VLC archive is missing its runtime files."
+          }
+          New-Item -ItemType Directory -Path $vlcRuntime | Out-Null
+          Get-ChildItem -LiteralPath $vlcSource -Force |
+            Copy-Item -Destination $vlcRuntime -Recurse
       - name: Run application tests
         run: python -m unittest discover -s tests -v
       - name: Build standalone executable
@@ -206,9 +229,26 @@ jobs:
               "Add trusted Python plugin files to the included plugins folder."
             )
           }
+          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v13") {
+            $vlcDestination = Join-Path $packageDirectory "VLC"
+            New-Item -ItemType Directory -Path $vlcDestination | Out-Null
+            Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP "SmartDownloader13-VLC") -Force |
+              Copy-Item -Destination $vlcDestination -Recurse
+            $setupLines += @(
+              "Smart VLC includes the VideoLAN VLC 3.0.23 runtime and license files in the VLC folder."
+              "No separate VLC installation is required for in-app audio/video playback."
+            )
+          }
           $setupPath = Join-Path $packageDirectory "PORTABLE-SETUP.txt"
           $setupLines | Set-Content -Path $setupPath -Encoding utf8
-          Compress-Archive -Path "$packageDirectory\*" -DestinationPath "$env:RUNNER_TEMP\$packageName.zip"
+          $packageZip = Join-Path $env:RUNNER_TEMP "$packageName.zip"
+          Compress-Archive -Path "$packageDirectory\*" -DestinationPath $packageZip
+          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v13") {
+            & (Join-Path $packageDirectory "${{ matrix.executable }}.exe") --vlc-smoke-test
+            if ($LASTEXITCODE -ne 0) {
+              throw "The portable VLC runtime failed its packaged smoke test."
+            }
+          }
       - name: Package portable Linux ZIP
         if: matrix.platform == 'Linux'
         shell: bash

@@ -21,9 +21,11 @@ change network adapters, sleep the computer, or access normal user history.
 Earlier passes completed Sections 1–14 and passed 181 tests. The Section 15–20
 extension added 10 regression tests, bringing the suite to 191. This
 localization/accessibility pass added four tests, bringing the total to 195.
-The suite now passes 209 automated tests, including separate-player, compact
-control-layout, same-surface fullscreen, seek/time, and responsive-layout
-regression coverage.
+The suite now passes 213 automated tests, including separate-player, compact
+control-layout, bundled VLC startup, same-surface fullscreen, seek/time, and
+responsive-layout regression coverage. A live Windows test using a verified
+portable VLC runtime also rendered a generated video in fullscreen and restored
+the player window to its original size.
 
 | Behavior | Before this extension | After this extension |
 | --- | --- | --- |
@@ -149,10 +151,10 @@ media merge; speed-cap accuracy on a real high-throughput link; system clock
 changes or daylight-saving transitions; live notification delivery on
 Windows/macOS/Linux; real aria2 peer discovery/RPC disconnects; a real
 100,000-by-100,000 image; memory use on a multi-gigabyte checksum; image gallery
-downloads against external sites; or playback against an installed VLC runtime.
-Actual player resolution, aspect-ratio behavior while resizing, audio output,
-multi-track switching, and fullscreen movement across displays also require
-manual testing with suitable media and installed VLC.
+downloads against external sites; or representative playback beyond the
+generated fullscreen test. Actual player resolution, aspect-ratio behavior
+while resizing, audio output, multi-track switching, and fullscreen movement
+across displays still require manual testing with suitable media.
 Rapid cancel/re-add timing, zombie socket/thread counts, measured RAM/CPU,
 24-hour stability, 5 GB transfers, real antivirus locks, paths beyond Windows
 `MAX_PATH`, and 10,000-row scrolling performance also need a live GUI/network
