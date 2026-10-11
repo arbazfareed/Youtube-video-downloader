@@ -205,6 +205,7 @@ class ThemeMixin:
         self.speed_graph.configure(background=field)
         self._draw_speed_graph()
 
+    @staticmethod
     def _style_menu(
         menu: tk.Menu,
         background: str,

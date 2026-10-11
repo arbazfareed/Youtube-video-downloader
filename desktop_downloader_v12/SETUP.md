@@ -69,7 +69,8 @@ and extract a newer ZIP or use the Git method above.
 3. Open the `desktop_downloader_v12` folder in File Explorer.
 4. Double-click **Create Desktop Shortcut.bat**. It creates `.venv`, installs
    `requirements.txt`, and creates a **Smart Downloader 12.0** desktop shortcut. The
-   first installation needs internet and may take several minutes.
+   first installation needs internet and may take several minutes. The shortcut
+   launches the GUI without leaving a console window open.
 5. Open **Smart Downloader 12.0** from the desktop. You do not need to open VS Code
    or enter a Python command to use the app.
 

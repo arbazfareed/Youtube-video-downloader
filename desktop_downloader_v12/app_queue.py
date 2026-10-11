@@ -185,6 +185,7 @@ class QueueMixin:
             options, self._download_paths.get(job_id)
         )
 
+    @staticmethod
     def _persistent_job_options_values(
         options: dict,
         output_path: Path | None = None,

@@ -66,12 +66,27 @@ def _ensure_dependencies() -> None:
     stamp_path.write_text(digest, encoding="ascii")
 
 
+def _smoke_test_app(app_class) -> None:
+    root = tk.Tk()
+    try:
+        app_class(root)
+        root.update()
+        if root.title() != "Smart Downloader 12.0" or not root.winfo_viewable():
+            raise RuntimeError("The Smart Downloader window did not become visible.")
+    finally:
+        root.destroy()
+
+
 def main() -> None:
+    smoke_test = "--smoke-test" in sys.argv[1:]
     try:
         _ensure_dependencies()
-        from app import main as run_app
+        from app import DownloaderApp, main as run_app
 
-        run_app()
+        if smoke_test:
+            _smoke_test_app(DownloaderApp)
+        else:
+            run_app()
     except Exception as error:
         app_dir = Path(sys.executable).resolve().parent if getattr(
             sys, "frozen", False,
@@ -82,6 +97,9 @@ def main() -> None:
             details = f"{error}\n\nDetails were saved to:\n{log_path}"
         except OSError:
             details = str(error)
+
+        if smoke_test:
+            raise
 
         root = tk.Tk()
         root.withdraw()

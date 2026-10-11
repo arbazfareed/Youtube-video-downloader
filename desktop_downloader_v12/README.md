@@ -50,11 +50,12 @@ change when sites change. No downloader can promise every link or every site.
    winget install --id aria2.aria2 --exact
    ```
 
-3. Double-click **Create Desktop Shortcut.bat** in this folder once.
+3. Double-click **Create Desktop Shortcut.bat** in this folder once. It creates
+   the private `.venv`, installs the app packages, and then creates a shortcut
+   that opens the GUI without a console window.
 4. Double-click **Smart Downloader 12.0** on your desktop to open the app. The first
-   launch creates a private `.venv` and installs the required Python packages;
-   this can take several minutes. Once set up, the desktop shortcut opens the
-   graphical app directly without a terminal. You do not need to open VS Code or
+   setup needs internet access and can take several minutes. Later launches
+   check dependencies before opening the app. You do not need to open VS Code or
    type a Python command. Startup errors are shown in a message box and recorded
    in `startup-error.log`.
 

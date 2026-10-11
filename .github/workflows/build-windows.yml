@@ -42,29 +42,28 @@ jobs:
         run: >-
           pyinstaller --noconfirm --clean --onefile --windowed
           --name "${{ matrix.executable }}"
+          --paths .
+          --hidden-import app
           --collect-all yt_dlp
           --collect-submodules plugins
           launch.py
-      - name: Verify packaged GUI opens
+      - name: Verify packaged GUI initializes
         shell: pwsh
         run: |
-          $process = Start-Process -FilePath "dist\${{ matrix.executable }}.exe" -PassThru
-          try {
-            $deadline = (Get-Date).AddSeconds(30)
-            do {
-              Start-Sleep -Seconds 1
-              $process.Refresh()
-              if ($process.HasExited) {
-                throw "Packaged app exited with code $($process.ExitCode)."
-              }
-            } until ($process.MainWindowTitle -like "*Smart Downloader*" -or (Get-Date) -ge $deadline)
-            if ($process.MainWindowTitle -notlike "*Smart Downloader*") {
-              throw "Packaged app did not create its main window."
-            }
-          } finally {
-            if (-not $process.HasExited) {
-              Stop-Process -Id $process.Id
-            }
+          $process = Start-Process `
+            -FilePath "dist\${{ matrix.executable }}.exe" `
+            -ArgumentList "--smoke-test" -PassThru
+          $deadline = (Get-Date).AddSeconds(60)
+          do {
+            Start-Sleep -Seconds 1
+            $process.Refresh()
+          } until ($process.HasExited -or (Get-Date) -ge $deadline)
+          if (-not $process.HasExited) {
+            Stop-Process -Id $process.Id
+            throw "Packaged app GUI initialization timed out."
+          }
+          if ($process.ExitCode -ne 0) {
+            throw "Packaged app GUI initialization failed with code $($process.ExitCode)."
           }
       - name: Package executable
         shell: pwsh

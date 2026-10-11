@@ -28,6 +28,7 @@ from app_support import (
 )
 
 class DownloadsMixin:
+    @staticmethod
     def _parse_scheduled_start(value: str) -> float | None:
         value = value.strip()
         if not value:

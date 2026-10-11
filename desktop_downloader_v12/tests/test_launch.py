@@ -1,8 +1,12 @@
+import hashlib
+import subprocess
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from launch import _ensure_dependencies
+from launch import _ensure_dependencies, _smoke_test_app
 
 
 class FrozenLauncherTests(unittest.TestCase):
@@ -12,6 +16,84 @@ class FrozenLauncherTests(unittest.TestCase):
             patch("launch.subprocess.run", side_effect=AssertionError("pip must not run")),
         ):
             _ensure_dependencies()
+
+
+class DependencyBootstrapTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary_directory.cleanup)
+        self.app_directory = Path(self.temporary_directory.name)
+        self.requirements_path = self.app_directory / "requirements.txt"
+        self.requirements_path.write_text("example-package>=1\n", encoding="utf-8")
+        (self.app_directory / ".venv").mkdir()
+
+    def test_installs_requirements_once_and_reinstalls_when_the_file_changes(self):
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with (
+            patch("launch.__file__", str(self.app_directory / "launch.py")),
+            patch("launch.importlib.metadata.distribution", return_value=object()),
+            patch("launch.subprocess.run", return_value=completed) as run,
+            patch.object(sys, "frozen", False, create=True),
+        ):
+            _ensure_dependencies()
+            run.assert_called_once()
+
+            stamp = self.app_directory / ".venv" / ".requirements-sha256"
+            digest = hashlib.sha256(self.requirements_path.read_bytes()).hexdigest()
+            self.assertEqual(stamp.read_text(encoding="ascii"), digest)
+
+            run.reset_mock()
+            _ensure_dependencies()
+            run.assert_not_called()
+
+            self.requirements_path.write_text("example-package>=2\n", encoding="utf-8")
+            _ensure_dependencies()
+            run.assert_called_once()
+
+    def test_failed_install_does_not_record_a_successful_requirements_stamp(self):
+        failed = subprocess.CompletedProcess([], 1, "", "package installation failed")
+        with (
+            patch("launch.__file__", str(self.app_directory / "launch.py")),
+            patch("launch.importlib.metadata.distribution", return_value=object()),
+            patch("launch.subprocess.run", return_value=failed),
+            patch.object(sys, "frozen", False, create=True),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "package installation failed"):
+                _ensure_dependencies()
+
+        stamp = self.app_directory / ".venv" / ".requirements-sha256"
+        self.assertFalse(stamp.exists())
+
+
+class PackagedSmokeTestTests(unittest.TestCase):
+    def test_smoke_test_requires_visible_window_and_always_closes_root(self):
+        class FakeRoot:
+            def __init__(self, visible):
+                self.visible = visible
+                self.destroyed = False
+
+            def update(self):
+                return None
+
+            def title(self):
+                return "Smart Downloader 12.0"
+
+            def winfo_viewable(self):
+                return self.visible
+
+            def destroy(self):
+                self.destroyed = True
+
+        root = FakeRoot(visible=True)
+        with patch("launch.tk.Tk", return_value=root):
+            _smoke_test_app(lambda _root: None)
+        self.assertTrue(root.destroyed)
+
+        hidden_root = FakeRoot(visible=False)
+        with patch("launch.tk.Tk", return_value=hidden_root):
+            with self.assertRaisesRegex(RuntimeError, "did not become visible"):
+                _smoke_test_app(lambda _root: None)
+        self.assertTrue(hidden_root.destroyed)
 
 
 if __name__ == "__main__":
