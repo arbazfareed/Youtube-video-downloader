@@ -26,9 +26,35 @@ from app_support import (
     _convert_media_to_mp3,
     create_zip_archive,
     parse_custom_headers,
+    calculate_checksum,
 )
 
 class MediaMixin:
+    def _integrity_guard(self, job_id: str) -> bool:
+        baseline = getattr(self, "_integrity_baselines", {}).get(job_id)
+        if baseline is None:
+            return True
+        path, expected_digest = baseline
+        try:
+            actual_digest = calculate_checksum(path, "sha256")
+        except OSError as error:
+            messagebox.showerror(
+                "Integrity check failed",
+                f"The downloaded file is missing or unreadable:\n{path}\n\n{error}",
+                parent=self.root,
+            )
+            return False
+        if actual_digest.casefold() != expected_digest.casefold():
+            messagebox.showerror(
+                "File changed after download",
+                f"SHA-256 verification failed for:\n{path}\n\n"
+                f"Expected: {expected_digest}\nActual: {actual_digest}\n\n"
+                "The file was not opened or extracted.",
+                parent=self.root,
+            )
+            return False
+        return True
+
     def convert_local_file_to_mp3(self) -> None:
         source_name = filedialog.askopenfilename(
             parent=self.root,
@@ -292,6 +318,9 @@ class MediaMixin:
         )
 
     def open_selected_image_tools(self) -> None:
+        selected = self.jobs.selection()
+        if selected and not self._integrity_guard(selected[0]):
+            return
         path = self._selected_output_path()
         if (
             path is None
@@ -328,6 +357,9 @@ class MediaMixin:
         )
 
     def extract_selected_archive(self) -> None:
+        selected = self.jobs.selection()
+        if selected and not self._integrity_guard(selected[0]):
+            return
         path = self._selected_output_path()
         if path is None or not path.is_file():
             messagebox.showinfo(
@@ -447,6 +479,9 @@ class MediaMixin:
         self.root.after(100, check_result)
 
     def play_selected_media(self) -> None:
+        selected = self.jobs.selection()
+        if selected and not self._integrity_guard(selected[0]):
+            return
         path = self._selected_output_path()
         if path is None or not path.is_file():
             messagebox.showinfo(
@@ -502,6 +537,8 @@ class MediaMixin:
             return
         self.jobs.selection_set(row_id)
         if self.jobs.identify_column(event.x) == "#4":
+            if not self._integrity_guard(row_id):
+                return
             location = self.jobs.set(row_id, "location").strip()
             if location and not location.startswith(
                 ("Amazon S3 /", "Google Drive /", "Dropbox /")

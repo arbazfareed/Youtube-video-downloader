@@ -85,6 +85,7 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         self.download_options: dict[str, dict] = {}
         self.bandwidth_limiter = GlobalBandwidthLimiter()
         self.verified_checksums: dict[str, tuple[str, str]] = {}
+        self._integrity_baselines: dict[str, tuple[Path, str]] = {}
         self.destination = tk.StringVar(value=str(Path.home() / "Downloads"))
         self.destination_label = tk.StringVar(value="Save to")
         self.cloud_provider = tk.StringVar(
@@ -100,6 +101,24 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         self.global_max_speed = tk.StringVar(value="Unlimited")
         self.expected_checksum = tk.StringVar(value="")
         self.checksum_algorithm = tk.StringVar(value="SHA256")
+        self.language = tk.StringVar(
+            value=self.history.get_setting("language", "English")
+        )
+        self.large_text = tk.BooleanVar(
+            value=self.history.get_setting("large_text", "0") == "1"
+        )
+        self.high_contrast = tk.BooleanVar(
+            value=self.history.get_setting("high_contrast", "0") == "1"
+        )
+        self.check_updates = tk.BooleanVar(
+            value=self.history.get_setting("check_updates", "1") == "1"
+        )
+        self.diagnostics_enabled = tk.BooleanVar(
+            value=self.history.get_setting("diagnostics_enabled", "0") == "1"
+        )
+        self._diagnostics_enabled = self.history.get_setting(
+            "diagnostics_enabled", "0"
+        ) == "1"
         self.proxy_list = tk.StringVar(value="")
         self.browser_cookies = tk.StringVar(value="None")
         self.retry_attempts = tk.StringVar(
@@ -143,6 +162,12 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         self.global_max_speed.trace_add("write", self._update_global_bandwidth)
         self.root.after(100, self._process_events)
         self.root.after(800, self._watch_clipboard)
+        self.root.bind_all("<Control-comma>", self._open_settings_shortcut, add="+")
+        self.root.bind_all("<F1>", self._help_shortcut, add="+")
+        self.root.bind_all("<Control-Return>", self._add_download_shortcut, add="+")
+        self.root.bind_all("<Control-o>", self._open_location_shortcut, add="+")
+        if self.check_updates.get():
+            self.root.after(2500, lambda: self._check_for_updates(interactive=False))
         self.root.protocol("WM_DELETE_WINDOW", self._close)
 
 

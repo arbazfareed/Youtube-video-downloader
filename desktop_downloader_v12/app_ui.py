@@ -4,9 +4,30 @@ from app_support import (
     tk,
     ttk,
     MAX_SPEEDS,
+    LANGUAGES,
+    translate,
 )
 
 class UiMixin:
+    def _t(self, text: str) -> str:
+        return translate(text, self.language.get())
+
+    def _open_settings_shortcut(self, _event=None) -> str:
+        self.open_download_settings()
+        return "break"
+
+    def _help_shortcut(self, _event=None) -> str:
+        self.show_help()
+        return "break"
+
+    def _add_download_shortcut(self, _event=None) -> str:
+        self.add_download()
+        return "break"
+
+    def _open_location_shortcut(self, _event=None) -> str:
+        self.open_selected_location()
+        return "break"
+
     def _build_ui(self) -> None:
         outer = ttk.Frame(self.root)
         outer.pack(fill="both", expand=True)
@@ -47,10 +68,10 @@ class UiMixin:
         ).grid(row=0, column=0, sticky="w", padx=8, pady=(2, 20))
         self.navigation_buttons: dict[str, ttk.Button] = {}
         navigation_items = (
-            ("all", "All tasks"),
-            ("downloading", "Downloading"),
-            ("completed", "Completed"),
-            ("media", "Media library"),
+            ("all", self._t("All tasks")),
+            ("downloading", self._t("Downloading")),
+            ("completed", self._t("Completed")),
+            ("media", self._t("Media library")),
         )
         for row, (filter_name, label) in enumerate(navigation_items, start=1):
             button = ttk.Button(
@@ -61,11 +82,11 @@ class UiMixin:
             self.navigation_buttons[filter_name] = button
         ttk.Separator(sidebar).grid(row=5, column=0, sticky="ew", pady=12)
         ttk.Button(
-            sidebar, text="Settings", style="Navigation.TButton",
+            sidebar, text=self._t("Settings"), style="Navigation.TButton",
             command=self.open_download_settings,
         ).grid(row=6, column=0, sticky="ew", pady=2)
         tools_button = ttk.Menubutton(
-            sidebar, text="Tools & utilities", style="Navigation.TMenubutton",
+            sidebar, text=self._t("Tools & utilities"), style="Navigation.TMenubutton",
         )
         self.tools_menu = tk.Menu(tools_button, tearoff=False)
         self.tools_menu.add_command(
@@ -116,19 +137,19 @@ class UiMixin:
         tools_button.configure(menu=self.tools_menu)
         tools_button.grid(row=7, column=0, sticky="ew", pady=2)
         ttk.Button(
-            sidebar, text="Convert to MP3", style="Navigation.TButton",
+            sidebar, text=self._t("Convert to MP3"), style="Navigation.TButton",
             command=self.convert_local_file_to_mp3,
         ).grid(row=8, column=0, sticky="ew", pady=2)
         ttk.Button(
-            sidebar, text="Image tools", style="Navigation.TButton",
+            sidebar, text=self._t("Image tools"), style="Navigation.TButton",
             command=self.open_selected_image_tools,
         ).grid(row=9, column=0, sticky="ew", pady=2)
         ttk.Button(
-            sidebar, text="Image gallery", style="Navigation.TButton",
+            sidebar, text=self._t("Image gallery"), style="Navigation.TButton",
             command=self._select_image_gallery_mode,
         ).grid(row=10, column=0, sticky="ew", pady=2)
         ttk.Label(
-            sidebar, text="Download and organize\nlocal media", style="SidebarHint.TLabel",
+            sidebar, text=self._t("Download and organize\nlocal media"), style="SidebarHint.TLabel",
             justify="left",
         ).grid(row=11, column=0, sticky="sw", padx=8, pady=(24, 0))
 
@@ -145,25 +166,25 @@ class UiMixin:
             font=("Segoe UI", 16, "bold"),
         ).grid(row=0, column=0, sticky="w")
         ttk.Label(
-            header, text="Paste a link, choose where to save it, and add it to your queue.",
+            header, text=self._t("Paste a link, choose where to save it, and add it to your queue."),
             style="Card.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(2, 0))
         ttk.Button(
-            header, text="Use recommended", command=self._use_recommended_settings,
+            header, text=self._t("Use recommended"), command=self._use_recommended_settings,
         ).grid(row=0, column=1, sticky="e", padx=(8, 0))
         ttk.Checkbutton(
-            header, text="Auto-fill copied links", variable=self.clipboard_autofill,
+            header, text=self._t("Auto-fill copied links"), variable=self.clipboard_autofill,
             command=self._save_clipboard_preference,
         ).grid(row=1, column=1, sticky="e", padx=(8, 0), pady=(4, 0))
         ttk.Checkbutton(
-            header, text="Dark mode", variable=self.dark_mode,
+            header, text=self._t("Dark mode"), variable=self.dark_mode,
             command=self._save_theme_preference,
         ).grid(row=0, column=2, rowspan=2, sticky="e", padx=(16, 0))
 
         add_card = ttk.Frame(frame, style="Card.TFrame", padding=12)
         add_card.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         add_card.columnconfigure(1, weight=1)
-        ttk.Label(add_card, text="Link", style="Card.TLabel").grid(
+        ttk.Label(add_card, text=self._t("Link"), style="Card.TLabel").grid(
             row=0, column=0, sticky="w", padx=(0, 10)
         )
         self.url_entry = ttk.Entry(add_card)
@@ -172,13 +193,13 @@ class UiMixin:
         add_buttons = ttk.Frame(add_card, style="Card.TFrame")
         add_buttons.grid(row=0, column=2, sticky="e", padx=(10, 0), pady=(0, 8))
         ttk.Button(
-            add_buttons, text="Add download", command=self.add_download,
+            add_buttons, text=self._t("Add download"), command=self.add_download,
             style="Accent.TButton",
         ).pack(side="left")
-        ttk.Button(add_buttons, text="Batch", command=self.open_batch_dialog).pack(
+        ttk.Button(add_buttons, text=self._t("Batch"), command=self.open_batch_dialog).pack(
             side="left", padx=(6, 0)
         )
-        ttk.Button(add_buttons, text="Sequence", command=self.open_sequence_dialog).pack(
+        ttk.Button(add_buttons, text=self._t("Sequence"), command=self.open_sequence_dialog).pack(
             side="left", padx=(6, 0)
         )
         ttk.Label(add_card, textvariable=self.destination_label, style="Card.TLabel").grid(
@@ -187,7 +208,7 @@ class UiMixin:
         self.destination_entry = ttk.Entry(add_card, textvariable=self.destination)
         self.destination_entry.grid(row=1, column=1, sticky="ew")
         self.destination_browse_button = ttk.Button(
-            add_card, text="Browse", command=self._choose_folder,
+            add_card, text=self._t("Browse"), command=self._choose_folder,
         )
         self.destination_browse_button.grid(row=1, column=2, padx=(10, 0))
         self._build_remaining_ui(frame)
@@ -207,9 +228,9 @@ class UiMixin:
         self._update_destination_labels()
 
         self.settings_window = tk.Toplevel(self.root)
-        self.settings_window.title("Download settings")
-        self.settings_window.geometry("700x500")
-        self.settings_window.minsize(620, 440)
+        self.settings_window.title(self._t("Settings"))
+        self.settings_window.geometry("760x560")
+        self.settings_window.minsize(660, 480)
         self.settings_window.transient(self.root)
         self.settings_window.protocol("WM_DELETE_WINDOW", self.settings_window.withdraw)
         self.settings_window.bind("<Escape>", lambda _event: self.settings_window.withdraw())
@@ -248,7 +269,7 @@ class UiMixin:
                 state="readonly", width=18,
             ).grid(row=1, column=column, sticky="ew", padx=(0, 12))
         ttk.Button(
-            options, text="More settings", command=self.open_download_settings,
+            options, text=self._t("More settings"), command=self.open_download_settings,
         ).grid(row=0, column=4, rowspan=2, sticky="e", padx=(8, 0))
 
         progress_card = ttk.Frame(frame, style="Card.TFrame", padding=(12, 9))
@@ -257,7 +278,7 @@ class UiMixin:
         progress_header = ttk.Frame(progress_card, style="Card.TFrame")
         progress_header.grid(row=0, column=0, sticky="ew")
         ttk.Label(
-            progress_header, text="Overall progress", style="Card.TLabel",
+            progress_header, text=self._t("Overall progress"), style="Card.TLabel",
         ).pack(side="left")
         self.progress_summary = tk.StringVar(value="No active downloads")
         ttk.Label(
@@ -277,13 +298,13 @@ class UiMixin:
         queue_header.grid(row=4, column=0, sticky="ew", pady=(0, 6))
         queue_header.columnconfigure(0, weight=1)
         self.queue_title_label = ttk.Label(
-            queue_header, text="All tasks", font=("Segoe UI", 12, "bold"),
+            queue_header, text=self._t("All tasks"), font=("Segoe UI", 12, "bold"),
         )
         self.queue_title_label.grid(
             row=0, column=0, sticky="w"
         )
         self.queue_hint_label = ttk.Label(
-            queue_header, text="Right-click an image download for image tools.",
+            queue_header, text=self._t("Right-click an image download for image tools."),
         )
         self.queue_hint_label.grid(row=0, column=1, sticky="e")
 
@@ -295,11 +316,11 @@ class UiMixin:
         self.jobs = ttk.Treeview(
             queue_frame, columns=columns, show="headings", selectmode="browse",
         )
-        self.jobs.heading("status", text="Status")
-        self.jobs.heading("progress", text="Progress")
-        self.jobs.heading("details", text="Transfer details")
-        self.jobs.heading("location", text="Saving to")
-        self.jobs.heading("link", text="Link")
+        self.jobs.heading("status", text=self._t("Status"))
+        self.jobs.heading("progress", text=self._t("Progress"))
+        self.jobs.heading("details", text=self._t("Transfer details"))
+        self.jobs.heading("location", text=self._t("Saving to"))
+        self.jobs.heading("link", text=self._t("Link"))
         self.jobs.column("status", width=105, stretch=False)
         self.jobs.column("progress", width=85, stretch=False)
         self.jobs.column("details", width=155, stretch=False)
@@ -320,11 +341,11 @@ class UiMixin:
         self.jobs.bind("<Double-1>", self._open_clicked_row_action)
         self.jobs.bind("<<TreeviewSelect>>", self._show_selected_thumbnail)
 
-        preview = ttk.Labelframe(queue_frame, text="Image preview", padding=8)
+        preview = ttk.Labelframe(queue_frame, text=self._t("Image preview"), padding=8)
         preview.grid(row=0, column=2, sticky="nsew", padx=(10, 0))
         preview.columnconfigure(0, weight=1)
         queue_frame.columnconfigure(2, minsize=190)
-        self.preview_image_label = ttk.Label(preview, text="Select a downloaded image")
+        self.preview_image_label = ttk.Label(preview, text=self._t("Select a downloaded image"))
         self.preview_image_label.grid(row=0, column=0, sticky="nsew")
         self.preview_details = ttk.Label(preview, text="", wraplength=190)
         self.preview_details.grid(row=1, column=0, sticky="ew", pady=(6, 0))
@@ -333,31 +354,31 @@ class UiMixin:
         controls = ttk.Frame(frame)
         controls.grid(row=6, column=0, sticky="ew", pady=(10, 0))
         ttk.Button(
-            controls, text="Pause / resume", command=self.toggle_pause_selected,
+            controls, text=self._t("Pause / resume"), command=self.toggle_pause_selected,
         ).pack(side="left")
         ttk.Button(
-            controls, text="Resume / retry", command=self.resume_selected,
+            controls, text=self._t("Resume / retry"), command=self.resume_selected,
         ).pack(side="left", padx=(6, 0))
         ttk.Button(
-            controls, text="Cancel selected", command=self.cancel_selected,
+            controls, text=self._t("Cancel selected"), command=self.cancel_selected,
         ).pack(side="left", padx=(6, 0))
         ttk.Button(
-            controls, text="Open selected location", command=self.open_selected_location,
+            controls, text=self._t("Open selected location"), command=self.open_selected_location,
         ).pack(side="left", padx=(8, 0))
         ttk.Button(
-            controls, text="Open downloads folder", command=self.open_download_folder,
+            controls, text=self._t("Open downloads folder"), command=self.open_download_folder,
         ).pack(side="left", padx=(6, 0))
-        more_button = ttk.Menubutton(controls, text="History")
+        more_button = ttk.Menubutton(controls, text=self._t("History"))
         more_menu = tk.Menu(more_button, tearoff=False)
         self.history_menu = more_menu
-        more_menu.add_command(label="Hide selected", command=self.hide_selected)
-        more_menu.add_command(label="Restore selected", command=self.restore_selected)
-        more_menu.add_command(label="Clear finished", command=self.clear_finished)
+        more_menu.add_command(label=self._t("Hide selected"), command=self.hide_selected)
+        more_menu.add_command(label=self._t("Restore selected"), command=self.restore_selected)
+        more_menu.add_command(label=self._t("Clear finished"), command=self.clear_finished)
         more_menu.add_checkbutton(
-            label="Show hidden", variable=self.show_hidden, command=self._refresh_history,
+            label=self._t("Show hidden"), variable=self.show_hidden, command=self._refresh_history,
         )
         more_menu.add_separator()
-        more_menu.add_command(label="Help", command=self.show_help)
+        more_menu.add_command(label=self._t("Help"), command=self.show_help)
         more_button.configure(menu=more_menu)
         more_button.pack(side="left", padx=(6, 0))
 
@@ -402,22 +423,93 @@ class UiMixin:
         notebook = ttk.Notebook(container)
         notebook.pack(fill="both", expand=True)
 
+        general = ttk.Frame(notebook, padding=16)
+        general.columnconfigure(1, weight=1)
+        notebook.add(general, text=self._t("General"))
+        ttk.Label(general, text=self._t("Language")).grid(
+            row=0, column=0, sticky="w", pady=7
+        )
+        ttk.Combobox(
+            general,
+            textvariable=self.language,
+            values=tuple(LANGUAGES),
+            state="readonly",
+            width=18,
+        ).grid(row=0, column=1, sticky="w", padx=10, pady=7)
+        self.language.trace_add("write", self._save_language_preference)
+        ttk.Separator(general).grid(
+            row=1, column=0, columnspan=2, sticky="ew", pady=10
+        )
+        ttk.Label(general, text=self._t("Accessibility")).grid(
+            row=2, column=0, sticky="w", pady=7
+        )
+        ttk.Checkbutton(
+            general,
+            text=self._t("Use larger text"),
+            variable=self.large_text,
+            command=self._save_accessibility_preferences,
+        ).grid(row=2, column=1, sticky="w", padx=10, pady=5)
+        ttk.Checkbutton(
+            general,
+            text=self._t("High contrast"),
+            variable=self.high_contrast,
+            command=self._save_accessibility_preferences,
+        ).grid(row=3, column=1, sticky="w", padx=10, pady=5)
+        ttk.Label(
+            general,
+            text="Keyboard: Ctrl+, Settings · F1 Help · Ctrl+Enter Add download · Ctrl+O Open selected location",
+            wraplength=580,
+        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(4, 14))
+        ttk.Separator(general).grid(
+            row=5, column=0, columnspan=2, sticky="ew", pady=8
+        )
+        ttk.Checkbutton(
+            general,
+            text=self._t("Check for updates at startup"),
+            variable=self.check_updates,
+            command=self._save_update_preference,
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=6)
+        ttk.Button(
+            general,
+            text=self._t("Check for updates now"),
+            command=lambda: self._check_for_updates(interactive=True),
+        ).grid(row=7, column=0, sticky="w", pady=5)
+        ttk.Separator(general).grid(
+            row=8, column=0, columnspan=2, sticky="ew", pady=10
+        )
+        ttk.Checkbutton(
+            general,
+            text=self._t("Record local diagnostic events"),
+            variable=self.diagnostics_enabled,
+            command=self._save_diagnostics_preference,
+        ).grid(row=9, column=0, columnspan=2, sticky="w", pady=6)
+        ttk.Label(
+            general,
+            text="Off by default. When enabled, only event time, component, and error type are stored locally. Nothing is sent automatically.",
+            wraplength=580,
+        ).grid(row=10, column=0, columnspan=2, sticky="w", pady=(0, 6))
+        ttk.Button(
+            general,
+            text=self._t("Export local diagnostics…"),
+            command=self._export_local_diagnostics,
+        ).grid(row=11, column=0, sticky="w", pady=5)
+
         transfer = ttk.Frame(notebook, padding=16)
         transfer.columnconfigure(1, weight=1)
-        notebook.add(transfer, text="Speed & checks")
-        ttk.Label(transfer, text="Download speed").grid(row=0, column=0, sticky="w", pady=7)
+        notebook.add(transfer, text=self._t("Speed & checks"))
+        ttk.Label(transfer, text=self._t("Download speed")).grid(row=0, column=0, sticky="w", pady=7)
         ttk.Combobox(
             transfer, textvariable=self.speed_mode,
             values=("Balanced", "Fast", "Maximum"), state="readonly", width=18,
         ).grid(row=0, column=1, sticky="w", padx=10, pady=7)
-        ttk.Label(transfer, text="Limit for this download").grid(
+        ttk.Label(transfer, text=self._t("Limit for this download")).grid(
             row=1, column=0, sticky="w", pady=7
         )
         ttk.Combobox(
             transfer, textvariable=self.max_speed, values=tuple(MAX_SPEEDS),
             state="readonly", width=18,
         ).grid(row=1, column=1, sticky="w", padx=10, pady=7)
-        ttk.Label(transfer, text="Shared limit for all downloads").grid(
+        ttk.Label(transfer, text=self._t("Shared limit for all downloads")).grid(
             row=2, column=0, sticky="w", pady=7
         )
         ttk.Combobox(
@@ -430,7 +522,7 @@ class UiMixin:
             wraplength=540,
         ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(0, 14))
         ttk.Separator(transfer).grid(row=4, column=0, columnspan=2, sticky="ew", pady=5)
-        ttk.Label(transfer, text="Verify downloaded file").grid(
+        ttk.Label(transfer, text=self._t("Verify downloaded file")).grid(
             row=5, column=0, sticky="w", pady=7
         )
         checksum_controls = ttk.Frame(transfer)
@@ -448,8 +540,8 @@ class UiMixin:
 
         connection = ttk.Frame(notebook, padding=16)
         connection.columnconfigure(1, weight=1)
-        notebook.add(connection, text="Connection")
-        ttk.Label(connection, text="Proxy (optional)").grid(
+        notebook.add(connection, text=self._t("Connection"))
+        ttk.Label(connection, text=self._t("Proxy (optional)")).grid(
             row=0, column=0, sticky="w", pady=7
         )
         ttk.Entry(connection, textvariable=self.proxy_list).grid(
@@ -459,7 +551,7 @@ class UiMixin:
             connection, text="HTTP or SOCKS5 address. Separate retry addresses with commas.",
             wraplength=540,
         ).grid(row=1, column=1, sticky="w", padx=10, pady=(0, 10))
-        ttk.Label(connection, text="Browser cookies").grid(
+        ttk.Label(connection, text=self._t("Browser cookies")).grid(
             row=2, column=0, sticky="w", pady=7
         )
         ttk.Combobox(
@@ -467,7 +559,7 @@ class UiMixin:
             values=("None", "Chrome", "Firefox", "Edge", "Brave"),
             state="readonly", width=18,
         ).grid(row=2, column=1, sticky="w", padx=10, pady=7)
-        ttk.Label(connection, text="Custom HTTP headers").grid(
+        ttk.Label(connection, text=self._t("Custom HTTP headers")).grid(
             row=3, column=0, sticky="nw", pady=7
         )
         header_frame = ttk.Frame(connection)
@@ -487,7 +579,7 @@ class UiMixin:
             text="One Name: value header per line. Headers may be sent to redirected hosts.",
             wraplength=540,
         ).grid(row=4, column=1, sticky="w", padx=10, pady=(0, 8))
-        ttk.Label(connection, text="Retry attempts").grid(
+        ttk.Label(connection, text=self._t("Retry attempts")).grid(
             row=5, column=0, sticky="w", pady=7
         )
         retry_controls = ttk.Frame(connection)
@@ -513,8 +605,8 @@ class UiMixin:
 
         automation = ttk.Frame(notebook, padding=16)
         automation.columnconfigure(1, weight=1)
-        notebook.add(automation, text="Schedule & files")
-        ttk.Label(automation, text="Start at (local time)").grid(
+        notebook.add(automation, text=self._t("Schedule & files"))
+        ttk.Label(automation, text=self._t("Start at (local time)")).grid(
             row=0, column=0, sticky="w", pady=7
         )
         ttk.Entry(automation, textvariable=self.scheduled_start, width=24).grid(
@@ -534,7 +626,7 @@ class UiMixin:
         ttk.Separator(automation).grid(
             row=4, column=0, columnspan=2, sticky="ew", pady=12
         )
-        ttk.Label(automation, text="Save to cloud").grid(
+        ttk.Label(automation, text=self._t("Save to cloud")).grid(
             row=5, column=0, sticky="w", pady=7
         )
         cloud_controls = ttk.Frame(automation)

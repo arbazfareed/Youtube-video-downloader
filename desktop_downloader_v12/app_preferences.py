@@ -13,9 +13,157 @@ from app_support import (
     save_credentials,
     is_torrent_url,
     MAX_SPEEDS,
+    record_diagnostic,
+    diagnostics_path,
+    export_diagnostics,
+    UpdateError,
+    check_for_update,
+    download_verified_update,
+    LANGUAGES,
+    APP_VERSION,
 )
 
 class PreferencesMixin:
+    def _save_language_preference(self, *_args: object) -> None:
+        language = self.language.get()
+        if language not in LANGUAGES:
+            raise ValueError(f"Unsupported language: {language}")
+        self.history.set_setting("language", language)
+        messagebox.showinfo(
+            "Language saved",
+            "Restart Smart Downloader to apply the selected language.",
+            parent=self.settings_window,
+        )
+
+    def _save_accessibility_preferences(self) -> None:
+        self.history.set_setting("large_text", "1" if self.large_text.get() else "0")
+        self.history.set_setting(
+            "high_contrast", "1" if self.high_contrast.get() else "0"
+        )
+        self._apply_theme()
+
+    def _save_update_preference(self) -> None:
+        self.history.set_setting(
+            "check_updates", "1" if self.check_updates.get() else "0"
+        )
+
+    def _save_diagnostics_preference(self) -> None:
+        self._diagnostics_enabled = self.diagnostics_enabled.get()
+        self.history.set_setting(
+            "diagnostics_enabled",
+            "1" if self._diagnostics_enabled else "0",
+        )
+
+    def _capture_diagnostic(self, component: str, error: BaseException) -> None:
+        try:
+            record_diagnostic(
+                getattr(self, "_diagnostics_enabled", False),
+                component,
+                error,
+            )
+        except OSError as write_error:
+            self.events.put(("diagnostic_failed", str(write_error)))
+
+    def _export_local_diagnostics(self) -> None:
+        destination_name = filedialog.asksaveasfilename(
+            parent=self.settings_window,
+            title="Export local diagnostics",
+            defaultextension=".jsonl",
+            filetypes=(("JSON Lines", "*.jsonl"),),
+        )
+        if not destination_name:
+            return
+        try:
+            exported = export_diagnostics(Path(destination_name))
+        except (OSError, ValueError) as error:
+            messagebox.showerror(
+                "Could not export diagnostics", str(error), parent=self.settings_window
+            )
+            return
+        messagebox.showinfo(
+            "Diagnostics exported",
+            f"Saved local diagnostic events to:\n{exported}",
+            parent=self.settings_window,
+        )
+
+    def _check_for_updates(self, *, interactive: bool) -> None:
+        if getattr(self, "_update_check_active", False):
+            return
+        self._update_check_active = True
+        if interactive:
+            self.progress_summary.set("Checking for updates…")
+        try:
+            future = self.executor.submit(check_for_update, APP_VERSION)
+        except RuntimeError as error:
+            self._update_check_active = False
+            self._capture_diagnostic("update check", error)
+            messagebox.showerror("Update check failed", str(error), parent=self.root)
+            return
+
+        def poll() -> None:
+            if not future.done():
+                self.root.after(100, poll)
+                return
+            self._update_check_active = False
+            try:
+                update = future.result()
+            except (UpdateError, OSError) as error:
+                self._capture_diagnostic("update check", error)
+                self.progress_summary.set(f"Update check failed: {error}")
+                if interactive:
+                    messagebox.showerror(
+                        "Update check failed", str(error), parent=self.root
+                    )
+                return
+            if update is None:
+                self.progress_summary.set("Smart Downloader is up to date.")
+                if interactive:
+                    messagebox.showinfo(
+                        "No update available",
+                        "You are using the latest release.",
+                        parent=self.root,
+                    )
+                return
+            if messagebox.askyesno(
+                "Update available",
+                f"Version {update.version} is available. Download it now?\n\n"
+                "The package SHA-256 will be verified before it is saved. "
+                "Diagnostics are never included.",
+                parent=self.root,
+            ):
+                self._download_update(update)
+
+        self.root.after(100, poll)
+
+    def _download_update(self, update) -> None:
+        updates_directory = diagnostics_path().parent / "updates"
+        filename = f"SmartDownloader12-{update.version}.zip"
+        destination = updates_directory / filename
+        self.progress_summary.set(f"Downloading verified update {update.version}…")
+        future = self.executor.submit(download_verified_update, update, destination)
+
+        def poll() -> None:
+            if not future.done():
+                self.root.after(100, poll)
+                return
+            try:
+                package = future.result()
+            except (UpdateError, OSError) as error:
+                self._capture_diagnostic("update download", error)
+                self.progress_summary.set(f"Update download failed: {error}")
+                messagebox.showerror("Update download failed", str(error), parent=self.root)
+                return
+            self.progress_summary.set(f"Verified update saved to {package}")
+            messagebox.showinfo(
+                "Update verified",
+                f"The release package passed SHA-256 verification and was saved to:\n"
+                f"{package}\n\nClose the app, extract the ZIP, and replace the "
+                "portable app files to finish updating.",
+                parent=self.root,
+            )
+
+        self.root.after(100, poll)
+
     def _save_clipboard_preference(self) -> None:
         self.history.set_setting(
             "clipboard_autofill",

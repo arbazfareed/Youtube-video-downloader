@@ -7,6 +7,7 @@ from app_support import (
     normalize_url,
     FINISHED_STATUSES,
     MEDIA_EXTENSIONS,
+    translate,
 )
 
 class QueueMixin:
@@ -18,7 +19,9 @@ class QueueMixin:
             "completed": "Completed",
             "media": "Media library",
         }
-        self.queue_title_label.configure(text=labels[filter_name])
+        self.queue_title_label.configure(
+            text=translate(labels[filter_name], self.language.get())
+        )
         for name, button in self.navigation_buttons.items():
             button.configure(
                 style="NavigationActive.TButton" if name == filter_name else "Navigation.TButton"
@@ -89,6 +92,13 @@ class QueueMixin:
                 ("Amazon S3 /", "Google Drive /", "Dropbox /")
             ):
                 self._job_destinations[job_id] = record.destination
+            integrity_path = options.get("integrity_path")
+            integrity_sha256 = options.get("integrity_sha256")
+            if isinstance(integrity_path, str) and isinstance(integrity_sha256, str):
+                self._integrity_baselines[job_id] = (
+                    Path(integrity_path),
+                    integrity_sha256,
+                )
             if record.status != "Complete":
                 try:
                     self.download_options[job_id] = self._options_for_record(record)
@@ -130,6 +140,13 @@ class QueueMixin:
                 ("Amazon S3 /", "Google Drive /", "Dropbox /")
             ):
                 self._job_destinations[job_id] = record.destination
+            integrity_path = options.get("integrity_path")
+            integrity_sha256 = options.get("integrity_sha256")
+            if isinstance(integrity_path, str) and isinstance(integrity_sha256, str):
+                self._integrity_baselines[job_id] = (
+                    Path(integrity_path),
+                    integrity_sha256,
+                )
             if record.status != "Complete":
                 try:
                     self.download_options[job_id] = self._options_for_record(record)
@@ -197,6 +214,7 @@ class QueueMixin:
                 "source", "mode", "quality", "playlist_scope", "speed_mode",
                 "max_speed", "checksum_algorithm", "expected_checksum",
                 "browser_cookies", "auto_extract", "cloud_provider", "cloud_folder",
+                "integrity_path", "integrity_sha256",
             )
             if key in options
         }

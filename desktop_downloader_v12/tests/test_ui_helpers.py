@@ -168,6 +168,8 @@ class UiStartupWiringTests(unittest.TestCase):
         app.root = Mock()
         app.root.winfo_rootx.return_value = 0
         app.root.winfo_rooty.return_value = 0
+        app.jobs = Mock()
+        app.jobs.selection.return_value = ()
         app._selected_output_path = Mock(return_value=None)
         app._style_context_menu = Mock()
         app._add_image_tools = Mock()
@@ -187,6 +189,8 @@ class UiStartupWiringTests(unittest.TestCase):
     def test_image_tools_reject_unsupported_local_file_selection(self):
         app = DownloaderApp.__new__(DownloaderApp)
         app.root = Mock()
+        app.jobs = Mock()
+        app.jobs.selection.return_value = ()
         app._selected_output_path = Mock(return_value=None)
 
         with (

@@ -58,6 +58,40 @@ includes the unpacked browser extension and a `plugins` folder for trusted
 additional plugins. Keep the API on localhost unless you configure a strong
 token before exposing it to a trusted network.
 
+## Application settings, accessibility, and privacy
+
+The **Settings** window groups speed/checksum, connection, schedule/files, and
+general application preferences. The General tab provides language selection
+(English, Urdu, Arabic, Spanish, Hindi, and Bangla), larger text, high contrast,
+update checks, and local diagnostics. Core navigation and settings labels have
+translations; untranslated interface and error text falls back to English.
+Restart the app after changing languages.
+
+Keyboard shortcuts include **Ctrl+,** for Settings, **F1** for Help,
+**Ctrl+Enter** to add a download, and **Ctrl+O** to open the selected location.
+Larger text, a high-contrast color palette, normal keyboard focus traversal, and
+these shortcuts improve accessibility. Screen-reader support can vary by
+operating system and Tk version.
+
+For completed local downloads, v12 saves a SHA-256 baseline in download history.
+Before opening, playing, editing, or extracting a selected download, the app
+checks the file against that baseline and blocks the action if the file changed
+or disappeared. Older history entries without a baseline retain their existing
+behavior.
+
+Update checks are enabled by default and may be disabled in Settings. A check
+contacts this project's GitHub Releases API. The app asks before downloading a
+matching Windows or Linux portable ZIP and refuses assets without a valid
+published SHA-256 digest or whose downloaded digest does not match. The
+verified ZIP is staged in the app's local data folder; replace the portable
+files manually to finish updating. This release flow does not silently replace
+or restart the running program.
+
+Diagnostic recording is **off by default**. If enabled, v12 records only the
+event time, component, and error type in a local JSON Lines file; exception
+messages, URLs, file paths, and credentials are not recorded. Nothing is sent
+automatically. Use **Export local diagnostics** to choose a file to share.
+
 Downloads, website scans, cloud uploads, and phone/API connections need network
 access by nature. ZIP creation/extraction and other local-file operations work
 offline. FFmpeg, LibreOffice, and aria2 remain optional external tools for

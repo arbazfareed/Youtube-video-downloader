@@ -24,7 +24,7 @@ from urllib.parse import urlsplit
 from requests.exceptions import RequestException
 
 from bandwidth import GlobalBandwidthLimiter
-from checksum import verify_checksum
+from checksum import calculate_checksum, verify_checksum
 from cloud_storage import (
     is_configured,
     save_credentials,
@@ -55,6 +55,9 @@ from plugins import load_plugins
 from proxy import parse_proxy_list
 from torrent_engine import is_torrent_url
 from zip_archive import create_zip_archive
+from diagnostics import diagnostics_path, export_diagnostics, record_diagnostic
+from localization import LANGUAGES, translate
+from update_engine import APP_VERSION, UpdateError, check_for_update, download_verified_update
 
 
 MAX_SPEEDS = {
@@ -136,6 +139,16 @@ __all__ = [
     'RequestException',
     'GlobalBandwidthLimiter',
     'verify_checksum',
+    'calculate_checksum',
+    'diagnostics_path',
+    'export_diagnostics',
+    'record_diagnostic',
+    'LANGUAGES',
+    'translate',
+    'UpdateError',
+    'check_for_update',
+    'download_verified_update',
+    'APP_VERSION',
     'is_configured',
     'save_credentials',
     'select_upload_source',

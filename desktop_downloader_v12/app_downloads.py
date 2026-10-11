@@ -496,6 +496,8 @@ class DownloadsMixin:
             return
 
         job_id = selected[0]
+        if not self._integrity_guard(job_id):
+            return
         cloud_destination = getattr(self, "_job_destinations", {}).get(job_id, "")
         if cloud_destination.startswith(
             ("Amazon S3 /", "Google Drive /", "Dropbox /")

@@ -7,6 +7,7 @@ from app_support import (
     Path,
     messagebox,
     verify_checksum,
+    calculate_checksum,
     select_upload_source,
     upload_path,
     DownloadCancelled,
@@ -32,6 +33,15 @@ class EventsMixin:
                         f"Expected {expected}; actual {actual}."
                     )
                 self.verified_checksums[job_id] = (algorithm, actual)
+            if (
+                options.get("cloud_provider", "local") == "local"
+                and Path(result).is_file()
+            ):
+                integrity_path = Path(result).resolve()
+                options["integrity_path"] = str(integrity_path)
+                options["integrity_sha256"] = calculate_checksum(
+                    integrity_path, "sha256"
+                )
             if options.get("auto_extract"):
                 extracted_folder = extract_archive(Path(result))
                 if extracted_folder is not None:
@@ -60,6 +70,7 @@ class EventsMixin:
         except DownloadCancelled:
             self.events.put(("finished", job_id, "Cancelled", ""))
         except Exception as error:
+            self._capture_diagnostic("download", error)
             self.events.put(("finished", job_id, "Failed", str(error)))
         else:
             self.events.put(("finished", job_id, "Complete", result))
@@ -79,8 +90,14 @@ class EventsMixin:
                     f"Saved MP3 file to:\n{output_path}",
                     parent=self.root,
                 )
+            elif event[0] == "diagnostic_failed":
+                _, error = event
+                self.progress_summary.set(
+                    f"Could not save local diagnostic event: {error}"
+                )
             elif event[0] == "conversion_failed":
                 _, error = event
+                self._capture_diagnostic("media conversion", RuntimeError(error))
                 self.progress_summary.set(f"MP3 conversion failed: {error}")
                 messagebox.showerror("MP3 conversion failed", error, parent=self.root)
             elif event[0] == "start":
@@ -139,6 +156,16 @@ class EventsMixin:
                 if self.jobs.exists(job_id):
                     self.jobs.set(job_id, "status", status)
                     if status == "Complete":
+                        options = self.download_options.get(job_id, {})
+                        integrity_path = options.get("integrity_path")
+                        integrity_sha256 = options.get("integrity_sha256")
+                        if isinstance(integrity_path, str) and isinstance(
+                            integrity_sha256, str
+                        ):
+                            self._integrity_baselines[job_id] = (
+                                Path(integrity_path),
+                                integrity_sha256,
+                            )
                         checksum = self.verified_checksums.pop(job_id, None)
                         if checksum:
                             algorithm, digest = checksum

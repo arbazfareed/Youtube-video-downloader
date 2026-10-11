@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import tkinter.font as tkfont
+
 from app_support import (
     tk,
     ttk,
@@ -9,7 +11,21 @@ class ThemeMixin:
     def _apply_theme(self) -> None:
         style = ttk.Style(self.root)
         style.theme_use("clam")
-        if self.dark_mode.get():
+        if self.high_contrast.get():
+            background = "#000000"
+            surface = "#000000"
+            sidebar_background = "#000000"
+            foreground = "#ffffff"
+            muted = "#e6e6e6"
+            field = "#000000"
+            accent = "#ffff00"
+            select_background = "#005fcc"
+            button_active = "#333333"
+            completed_color = "#7fff00"
+            active_color = "#00ffff"
+            failed_color = "#ff8080"
+            other_color = "#ffff00"
+        elif self.dark_mode.get():
             background = "#121214"
             surface = "#1a1a1e"
             sidebar_background = "#151519"
@@ -37,7 +53,16 @@ class ThemeMixin:
             active_color = "#087d9d"
             failed_color = "#b42318"
             other_color = "#805b00"
-        style.configure(".", background=background, foreground=foreground)
+        base_font = tkfont.nametofont("TkDefaultFont")
+        base_font.configure(size=12 if self.large_text.get() else 10)
+        self.root.option_add("*Font", base_font)
+        heading_font_size = 11 if self.large_text.get() else 9
+        title_font_size = 12 if self.large_text.get() else 10
+        hint_font_size = 11 if self.large_text.get() else 9
+        card_font_size = 12 if self.large_text.get() else 10
+        style.configure(
+            ".", background=background, foreground=foreground, font=base_font
+        )
         style.configure("TFrame", background=background)
         style.configure("TLabel", background=background, foreground=foreground)
         style.configure(
@@ -62,11 +87,11 @@ class ThemeMixin:
         style.configure("Sidebar.TFrame", background=sidebar_background)
         style.configure(
             "SidebarTitle.TLabel", background=sidebar_background, foreground=foreground,
-            font=("Segoe UI", 10, "bold"),
+            font=("Segoe UI", title_font_size, "bold"),
         )
         style.configure(
             "SidebarHint.TLabel", background=sidebar_background, foreground=muted,
-            font=("Segoe UI", 9),
+            font=("Segoe UI", hint_font_size),
         )
         style.configure(
             "Navigation.TButton", background=sidebar_background, foreground=foreground,
@@ -100,7 +125,7 @@ class ThemeMixin:
             "Card.TLabel",
             background=surface,
             foreground=foreground,
-            font=("Segoe UI", 10, "bold"),
+            font=("Segoe UI", card_font_size, "bold"),
         )
         style.configure(
             "TButton",
@@ -108,6 +133,7 @@ class ThemeMixin:
             foreground=foreground,
             padding=(10, 5),
             borderwidth=1,
+            focuscolor=accent,
         )
         style.map(
             "TButton",
@@ -159,7 +185,7 @@ class ThemeMixin:
             background=field,
             fieldbackground=field,
             foreground=foreground,
-            rowheight=28,
+            rowheight=36 if self.large_text.get() else 28,
             borderwidth=0,
         )
         style.map(
@@ -172,7 +198,7 @@ class ThemeMixin:
             background=surface,
             foreground=foreground,
             padding=(8, 7),
-            font=("Segoe UI", 9, "bold"),
+            font=("Segoe UI", heading_font_size, "bold"),
         )
         style.map(
             "Treeview.Heading",
@@ -226,7 +252,9 @@ class ThemeMixin:
         )
 
     def _style_context_menu(self, menu: tk.Menu) -> None:
-        if self.dark_mode.get():
+        if self.high_contrast.get():
+            palette = ("#000000", "#ffffff", "#e6e6e6", "#ffff00")
+        elif self.dark_mode.get():
             palette = ("#1a1a1e", "#ededed", "#b7b7c0", "#1ba987")
         else:
             palette = ("#ffffff", "#182230", "#526174", "#1769aa")
