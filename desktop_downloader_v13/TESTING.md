@@ -1,5 +1,11 @@
 # v13 test and behavior checklist
 
+Detailed case-by-case procedures for startup, URL input, and direct downloads
+are in [TEST_CASES.md](./TEST_CASES.md). The technical requirements and
+acceptance mapping are in [SOFTWARE_REQUIREMENTS.md](./SOFTWARE_REQUIREMENTS.md),
+and plain-language user stories and testing guidance are in
+[USER_GUIDE.md](./USER_GUIDE.md).
+
 Run the automated suite from this directory:
 
 ```powershell

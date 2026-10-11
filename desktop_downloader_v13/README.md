@@ -427,6 +427,10 @@ environment-specific checks that still require manual verification. Recent
 hardening includes bounded UI progress updates, safe filename truncation,
 retries for temporary file locks, and recovery from malformed parallel
 download state.
+Detailed acceptance requirements are in [SOFTWARE_REQUIREMENTS.md](./SOFTWARE_REQUIREMENTS.md),
+case-by-case procedures for startup, URL input, and the download engine are in
+[TEST_CASES.md](./TEST_CASES.md), and a plain-language overview with user
+stories is in [USER_GUIDE.md](./USER_GUIDE.md).
 
 The v13 implementation covers the supplied priority matrix: shared bandwidth
 limits, duplicate detection, notifications, dark mode, checksums, clipboard

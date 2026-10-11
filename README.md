@@ -116,6 +116,9 @@ unchanged.
 
 - [Version 13.0 features and refreshed interface](./desktop_downloader_v13/README.md)
 - [Version 13.0 setup and aria2 installation](./desktop_downloader_v13/SETUP.md)
+- [Version 13.0 technical requirements and acceptance criteria](./desktop_downloader_v13/SOFTWARE_REQUIREMENTS.md)
+- [Version 13.0 detailed startup, URL, and download test cases](./desktop_downloader_v13/TEST_CASES.md)
+- [Version 13.0 plain-language user and test guide](./desktop_downloader_v13/USER_GUIDE.md)
 - [Version 13.0 test coverage and manual verification checklist](./desktop_downloader_v13/TESTING.md)
 
 ## Smart Downloader 10.0
