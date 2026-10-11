@@ -534,6 +534,13 @@ class MediaMixin:
         player_container.rowconfigure(1, weight=1)
         self._in_app_player_window = self.root
         self._in_app_player_container = player_container
+        self._in_app_video_surface = None
+        self._in_app_fullscreen_window = None
+        self._in_app_fullscreen_surface = None
+        self._in_app_fullscreen_audio_track_combo = None
+        self._in_app_fullscreen_playback_button = None
+        self._in_app_volume_var = None
+        self._in_app_media_title = path.name
 
         ttk.Label(
             player_container,
@@ -583,6 +590,7 @@ class MediaMixin:
             side="left", padx=(0, 5)
         )
         volume = tk.IntVar(value=80)
+        self._in_app_volume_var = volume
         self._in_app_volume_label = tk.StringVar(value="80%")
         ttk.Label(
             volume_controls,
@@ -625,12 +633,8 @@ class MediaMixin:
         player = instance.media_player_new()
         self._in_app_player = player
         player.set_media(instance.media_new(str(path)))
-        if sys.platform == "win32":
-            player.set_hwnd(video_surface.winfo_id())
-        elif sys.platform == "darwin":
-            player.set_nsobject(video_surface.winfo_id())
-        else:
-            player.set_xwindow(video_surface.winfo_id())
+        self._in_app_video_surface = video_surface
+        self._set_in_app_video_target(video_surface)
 
         self._in_app_vlc = vlc
         self._in_app_fullscreen_button = fullscreen_button
@@ -681,11 +685,21 @@ class MediaMixin:
         if self._in_app_audio_refresh_ticks % 4 == 0:
             self._refresh_in_app_audio_tracks()
         if state == vlc.State.Ended:
-            self._in_app_playback_button.configure(text=self._t("Play"))
+            for button in (
+                self._in_app_playback_button,
+                getattr(self, "_in_app_fullscreen_playback_button", None),
+            ):
+                if button is not None:
+                    button.configure(text=self._t("Play"))
             self._in_app_player_status.set(self._t("Playback finished"))
             return
         if state == vlc.State.Error:
-            self._in_app_playback_button.configure(text=self._t("Play"))
+            for button in (
+                self._in_app_playback_button,
+                getattr(self, "_in_app_fullscreen_playback_button", None),
+            ):
+                if button is not None:
+                    button.configure(text=self._t("Play"))
             self._in_app_player_status.set(self._t("Playback failed"))
             messagebox.showerror(
                 self._t("Could not play media"),
@@ -701,10 +715,29 @@ class MediaMixin:
             return
         if player.is_playing():
             player.pause()
-            self._in_app_playback_button.configure(text=self._t("Play"))
+            label = self._t("Play")
         else:
             player.play()
-            self._in_app_playback_button.configure(text=self._t("Pause"))
+            label = self._t("Pause")
+        for button in (
+            getattr(self, "_in_app_playback_button", None),
+            getattr(self, "_in_app_fullscreen_playback_button", None),
+        ):
+            if button is not None:
+                button.configure(text=label)
+
+    def _set_in_app_video_target(self, surface) -> None:
+        player = getattr(self, "_in_app_player", None)
+        if player is None:
+            return
+        surface.update_idletasks()
+        handle = surface.winfo_id()
+        if sys.platform == "win32":
+            player.set_hwnd(handle)
+        elif sys.platform == "darwin":
+            player.set_nsobject(handle)
+        else:
+            player.set_xwindow(handle)
 
     def _set_in_app_volume(self, value: str) -> None:
         player = getattr(self, "_in_app_player", None)
@@ -712,6 +745,9 @@ class MediaMixin:
         volume_label = getattr(self, "_in_app_volume_label", None)
         if volume_label is not None:
             volume_label.set(f"{volume}%")
+        volume_var = getattr(self, "_in_app_volume_var", None)
+        if volume_var is not None and round(float(value)) != volume:
+            volume_var.set(volume)
         if player is not None:
             player.audio_set_volume(volume)
 
@@ -741,12 +777,20 @@ class MediaMixin:
             return
         self._in_app_audio_tracks = track_labels
         self._in_app_audio_tracks_loaded = True
+        combos = (
+            getattr(self, "_in_app_audio_track_combo", None),
+            getattr(self, "_in_app_fullscreen_audio_track_combo", None),
+        )
         if not track_labels:
             variable.set(self._t("No audio tracks available"))
-            combo.configure(values=(), state="disabled")
+            for track_combo in combos:
+                if track_combo is not None:
+                    track_combo.configure(values=(), state="disabled")
             return
 
-        combo.configure(values=tuple(track_labels), state="readonly")
+        for track_combo in combos:
+            if track_combo is not None:
+                track_combo.configure(values=tuple(track_labels), state="readonly")
         active_track = player.audio_get_track()
         selected = next(
             (
@@ -776,28 +820,115 @@ class MediaMixin:
             )
 
     def _toggle_in_app_fullscreen(self, _event=None) -> str:
-        window = getattr(self, "_in_app_player_window", None)
-        if window is None:
+        if getattr(self, "_in_app_player_window", None) is None:
             return "break"
-        is_fullscreen = not getattr(self, "_in_app_fullscreen", False)
-        self._in_app_fullscreen = is_fullscreen
-        if is_fullscreen:
-            self._in_app_windowed_geometry = window.geometry()
-            window.attributes("-fullscreen", True)
-            self._in_app_fullscreen_button.configure(
-                text=self._t("Exit full screen")
-            )
-        else:
-            window.attributes("-fullscreen", False)
-            window.geometry(self._in_app_windowed_geometry)
-            self._in_app_fullscreen_button.configure(
-                text=self._t("Full screen")
-            )
+        if getattr(self, "_in_app_fullscreen", False):
+            self._exit_in_app_fullscreen()
+            return "break"
+
+        fullscreen = tk.Toplevel(self.root)
+        fullscreen.transient(self.root)
+        fullscreen.configure(background="#000000")
+        fullscreen.attributes("-fullscreen", True)
+        fullscreen.lift()
+        fullscreen.focus_force()
+        fullscreen.protocol("WM_DELETE_WINDOW", self._exit_in_app_fullscreen)
+        fullscreen.bind("<Escape>", self._exit_in_app_fullscreen)
+        fullscreen.bind("<F11>", self._exit_in_app_fullscreen)
+        fullscreen.columnconfigure(0, weight=1)
+        fullscreen.rowconfigure(0, weight=1)
+        video_surface = tk.Frame(fullscreen, background="#000000")
+        video_surface.grid(row=0, column=0, sticky="nsew")
+        toolbar = ttk.Frame(fullscreen, padding=(18, 10))
+        toolbar.grid(row=1, column=0, sticky="ew")
+        toolbar.columnconfigure(0, weight=1)
+        ttk.Label(
+            toolbar,
+            text=f"{self._t('Full screen playback')} · {self._in_app_media_title}",
+            style="Card.TLabel",
+            font=("Segoe UI", 11, "bold"),
+        ).grid(row=0, column=0, sticky="w", padx=(0, 12))
+        playback_button = ttk.Button(
+            toolbar,
+            text=self._t("Pause") if self._in_app_player.is_playing() else self._t("Play"),
+            command=self._toggle_in_app_playback,
+            takefocus=True,
+        )
+        playback_button.grid(row=0, column=1, padx=4)
+        ttk.Button(
+            toolbar,
+            text=self._t("Stop"),
+            command=self._stop_in_app_player,
+            takefocus=True,
+        ).grid(row=0, column=2, padx=4)
+        ttk.Label(toolbar, text=self._t("Volume")).grid(
+            row=0, column=3, padx=(16, 4)
+        )
+        ttk.Label(
+            toolbar,
+            textvariable=self._in_app_volume_label,
+            width=5,
+            anchor="e",
+        ).grid(row=0, column=4, padx=4)
+        ttk.Scale(
+            toolbar,
+            from_=0,
+            to=100,
+            variable=self._in_app_volume_var,
+            command=self._set_in_app_volume,
+            takefocus=True,
+        ).grid(row=0, column=5, sticky="ew", padx=4)
+        ttk.Label(toolbar, text=self._t("Audio track")).grid(
+            row=0, column=6, padx=(16, 4)
+        )
+        track_combo = ttk.Combobox(
+            toolbar,
+            textvariable=self._in_app_audio_track,
+            state=(
+                "readonly"
+                if self._in_app_audio_tracks
+                else "disabled"
+            ),
+            values=tuple(self._in_app_audio_tracks),
+            width=20,
+            takefocus=True,
+        )
+        track_combo.grid(row=0, column=7, padx=4)
+        track_combo.bind("<<ComboboxSelected>>", self._select_in_app_audio_track)
+        ttk.Button(
+            toolbar,
+            text=self._t("Exit full screen"),
+            command=self._exit_in_app_fullscreen,
+            takefocus=True,
+        ).grid(row=0, column=8, padx=(12, 0))
+
+        fullscreen.update_idletasks()
+        self._in_app_fullscreen_window = fullscreen
+        self._in_app_fullscreen_surface = video_surface
+        self._in_app_fullscreen_audio_track_combo = track_combo
+        self._in_app_fullscreen_playback_button = playback_button
+        self._in_app_fullscreen = True
+        self._in_app_fullscreen_button.configure(
+            text=self._t("Exit full screen")
+        )
+        self._set_in_app_video_target(video_surface)
         return "break"
 
     def _exit_in_app_fullscreen(self, _event=None) -> str:
-        if getattr(self, "_in_app_fullscreen", False):
-            return self._toggle_in_app_fullscreen()
+        if not getattr(self, "_in_app_fullscreen", False):
+            return "break"
+        fullscreen = getattr(self, "_in_app_fullscreen_window", None)
+        self._in_app_fullscreen = False
+        if fullscreen is not None:
+            self._set_in_app_video_target(self._in_app_video_surface)
+            self._in_app_fullscreen_window = None
+            self._in_app_fullscreen_surface = None
+            self._in_app_fullscreen_audio_track_combo = None
+            self._in_app_fullscreen_playback_button = None
+            fullscreen.destroy()
+        button = getattr(self, "_in_app_fullscreen_button", None)
+        if button is not None:
+            button.configure(text=self._t("Full screen"))
         return "break"
 
     def _show_in_app_player_help(self) -> None:
@@ -805,12 +936,12 @@ class MediaMixin:
             self._t("Media player help"),
             self._t(
                 "Playback stays inside the Media preview area of Smart Downloader. "
-                "Minimize or restore the main app to hide or show the player. "
-                "Full screen or F11 makes the app full screen; press Escape to "
-                "restore its previous size. Use the volume slider to change sound; "
-                "the percentage is shown beside it. Choose an audio track when "
-                "the media provides multiple tracks. Use Stop to stop playback "
-                "without closing the player, or Close player to return to preview."
+                "Use Full screen or F11 to show the video on its own fullscreen "
+                "surface; the main app window stays windowed. Press Escape or "
+                "F11 to return to the app. Fullscreen playback includes its own "
+                "play/pause, stop, volume, and audio-track controls. Use Stop to "
+                "stop playback without closing the player, or Close player to "
+                "return to preview."
             ),
             parent=self.root,
         )
@@ -830,8 +961,7 @@ class MediaMixin:
         window = getattr(self, "_in_app_player_window", None)
         if window is not None:
             if getattr(self, "_in_app_fullscreen", False):
-                window.attributes("-fullscreen", False)
-                window.geometry(self._in_app_windowed_geometry)
+                self._exit_in_app_fullscreen()
             after_id = getattr(self, "_in_app_playback_after", None)
             if after_id is not None:
                 try:
@@ -863,6 +993,9 @@ class MediaMixin:
         self._in_app_key_bindings = ()
         self._in_app_playback_button = None
         self._in_app_player_status = None
+        self._in_app_fullscreen_button = None
+        self._in_app_video_surface = None
+        self._in_app_volume_var = None
         container = getattr(self, "_in_app_player_container", None)
         self._in_app_player_container = None
         if container is not None:

@@ -491,19 +491,26 @@ class MediaPlaybackTests(unittest.TestCase):
         app._in_app_player_window = app.root
         container = Mock()
         app._in_app_player_container = container
-        app._in_app_player = Mock()
+        player = Mock()
+        app._in_app_player = player
         app._in_app_vlc_instance = Mock()
         app._in_app_playback_after = None
         app._in_app_key_bindings = ()
         app._in_app_fullscreen = True
-        app._in_app_windowed_geometry = "900x650+20+30"
+        fullscreen = Mock()
+        app._in_app_fullscreen_window = fullscreen
+        app._in_app_video_surface = Mock()
+        app._in_app_video_surface.winfo_id.return_value = 303
 
-        MediaMixin._close_in_app_player(app)
+        with patch("app_media.sys.platform", "win32"):
+            MediaMixin._close_in_app_player(app)
 
         container.destroy.assert_called_once_with()
+        fullscreen.destroy.assert_called_once_with()
+        player.set_hwnd.assert_called_once_with(303)
         app.preview_image_label.grid.assert_called_once_with()
-        app.root.attributes.assert_called_once_with("-fullscreen", False)
-        app.root.geometry.assert_called_once_with("900x650+20+30")
+        app.root.attributes.assert_not_called()
+        app.root.geometry.assert_not_called()
         app.root.destroy.assert_not_called()
         self.assertIsNone(app._in_app_player_window)
 
@@ -559,34 +566,102 @@ class MediaPlaybackTests(unittest.TestCase):
         )
         app._in_app_audio_track.set.assert_called_once_with("No audio tracks available")
 
-    def test_fullscreen_toggle_restores_window_geometry_and_escape_exits(self):
+    def test_fullscreen_uses_separate_window_and_does_not_fullscreen_main_app(self):
         app = MediaMixin()
-        app._in_app_player_window = Mock()
-        app._in_app_player_window.geometry.return_value = "900x600+40+30"
-        app._in_app_fullscreen_button = Mock()
+        app.root = Mock()
+        app._in_app_player_window = app.root
+        app._in_app_player = Mock()
+        app._in_app_player.is_playing.return_value = True
+        app._in_app_video_surface = Mock()
+        app._in_app_video_surface.winfo_id.return_value = 101
         app._in_app_fullscreen = False
+        app._in_app_fullscreen_button = Mock()
+        app._in_app_volume_label = Mock()
+        app._in_app_volume_var = Mock()
+        app._in_app_audio_track = Mock()
+        app._in_app_audio_tracks = {"English": 1}
+        app._in_app_media_title = "movie.mp4"
         app._t = lambda text: text
 
-        self.assertEqual(MediaMixin._toggle_in_app_fullscreen(app), "break")
-        app._in_app_player_window.attributes.assert_called_once_with(
-            "-fullscreen",
-            True,
-        )
+        fullscreen = Mock()
+        fullscreen_surface = Mock()
+        fullscreen_surface.winfo_id.return_value = 202
+        toolbar = Mock()
+        with (
+            patch("app_media.tk.Toplevel", return_value=fullscreen) as toplevel,
+            patch("app_media.tk.Frame", return_value=fullscreen_surface),
+            patch("app_media.ttk.Frame", return_value=toolbar),
+            patch("app_media.ttk.Label"),
+            patch("app_media.ttk.Button"),
+            patch("app_media.ttk.Scale"),
+            patch("app_media.ttk.Combobox"),
+        ):
+            self.assertEqual(MediaMixin._toggle_in_app_fullscreen(app), "break")
+
+        toplevel.assert_called_once_with(app.root)
+        fullscreen.transient.assert_called_once_with(app.root)
+        fullscreen.attributes.assert_called_once_with("-fullscreen", True)
+        fullscreen.bind.assert_any_call("<Escape>", app._exit_in_app_fullscreen)
+        fullscreen.bind.assert_any_call("<F11>", app._exit_in_app_fullscreen)
+        app._in_app_player.set_hwnd.assert_called_once_with(202)
+        app.root.attributes.assert_not_called()
+        app.root.geometry.assert_not_called()
+        self.assertTrue(app._in_app_fullscreen)
+        self.assertIs(app._in_app_fullscreen_window, fullscreen)
         app._in_app_fullscreen_button.configure.assert_called_once_with(
             text="Exit full screen"
         )
 
         self.assertEqual(MediaMixin._exit_in_app_fullscreen(app), "break")
-        app._in_app_player_window.attributes.assert_called_with(
-            "-fullscreen",
-            False,
-        )
-        app._in_app_player_window.geometry.assert_called_with("900x600+40+30")
+        app._in_app_player.set_hwnd.assert_called_with(101)
+        fullscreen.destroy.assert_called_once_with()
+        app.root.attributes.assert_not_called()
+        app.root.geometry.assert_not_called()
+        self.assertFalse(app._in_app_fullscreen)
         app._in_app_fullscreen_button.configure.assert_called_with(
             text="Full screen"
         )
 
-    def test_player_help_explains_resize_fullscreen_volume_and_audio_tracks(self):
+    def test_fullscreen_has_its_own_playback_volume_and_track_controls(self):
+        app = MediaMixin()
+        app.root = Mock()
+        app._in_app_player_window = app.root
+        app._in_app_player = Mock()
+        app._in_app_player.is_playing.return_value = False
+        app._in_app_video_surface = Mock()
+        app._in_app_video_surface.winfo_id.return_value = 101
+        app._in_app_fullscreen_button = Mock()
+        app._in_app_volume_label = Mock()
+        app._in_app_volume_var = Mock()
+        app._in_app_audio_track = Mock()
+        app._in_app_audio_tracks = {"English": 1}
+        app._in_app_media_title = "movie.mp4"
+        app._t = lambda text: text
+
+        with (
+            patch("app_media.tk.Toplevel", return_value=Mock()),
+            patch("app_media.tk.Frame", return_value=Mock(winfo_id=Mock(return_value=202))),
+            patch("app_media.ttk.Frame", return_value=Mock()),
+            patch("app_media.ttk.Label"),
+            patch("app_media.ttk.Button") as buttons,
+            patch("app_media.ttk.Scale") as scale,
+            patch("app_media.ttk.Combobox") as track_combo,
+        ):
+            MediaMixin._toggle_in_app_fullscreen(app)
+
+        self.assertEqual(buttons.call_count, 3)
+        scale.assert_called_once()
+        track_combo.assert_called_once()
+        self.assertEqual(
+            track_combo.call_args.kwargs["values"],
+            ("English",),
+        )
+        self.assertEqual(
+            buttons.call_args_list[0].kwargs["text"],
+            "Play",
+        )
+
+    def test_player_help_explains_separate_fullscreen_and_controls(self):
         app = MediaMixin()
         app.root = Mock()
         app._t = lambda text: text
@@ -597,11 +672,12 @@ class MediaPlaybackTests(unittest.TestCase):
         title, help_text = show_info.call_args.args
         self.assertEqual(title, "Media player help")
         self.assertIn("stays inside the Media preview", help_text)
-        self.assertIn("Minimize or restore", help_text)
+        self.assertIn("own fullscreen surface", help_text)
+        self.assertIn("main app window stays windowed", help_text)
         self.assertIn("F11", help_text)
         self.assertIn("Escape", help_text)
-        self.assertIn("percentage", help_text)
-        self.assertIn("audio track", help_text)
+        self.assertIn("play/pause, stop, volume", help_text)
+        self.assertIn("audio-track controls", help_text)
         self.assertIn("Close player", help_text)
         self.assertEqual(show_info.call_args.kwargs["parent"], app.root)
 

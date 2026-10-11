@@ -21,9 +21,9 @@ change network adapters, sleep the computer, or access normal user history.
 Earlier passes completed Sections 1–14 and passed 181 tests. The Section 15–20
 extension added 10 regression tests, bringing the suite to 191. This
 localization/accessibility pass added four tests, bringing the total to 195.
-The previous VLC player pass brought the suite to 200 tests. The embedded
-player regression coverage adds three tests; the complete suite now passes 203
-tests.
+The previous embedded-player pass brought the suite to 203 tests. The
+independent fullscreen-player regression coverage adds one test; the complete
+suite now passes 204 tests.
 
 | Behavior | Before this extension | After this extension |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ tests.
 | Filename and assembly locks | Long names could lose useful extensions, and a transient Windows file lock could fail assembly immediately. | Long names preserve ordinary extensions; atomic replacement retries transient permission locks and reports a persistent lock clearly. |
 | Parallel state recovery | Corrupt range metadata or an externally enlarged segment could interfere with a later retry. | Malformed metadata starts with fresh range state, and segments with a size mismatch are discarded and fetched again. |
 | Urdu and keyboard accessibility | Urdu coverage did not include several primary controls, and link/queue/status focus shortcuts were not available. | Primary navigation and download controls have Urdu labels; shortcuts focus the URL field, queue, and progress status; Space toggles pause/resume while the queue has focus. |
-| VLC player window and controls | VLC opened in a separate `Toplevel` window and taskbar entry; closing it destroyed the player interface. | VLC video and controls are embedded in the main Media preview, with no separate player window; Stop retains controls, Close restores preview, and fullscreen applies to the main app. |
+| VLC fullscreen behavior | Full-screen action applied the fullscreen attribute to the Smart Downloader root, expanding the entire app instead of only the video. | VLC is reattached to a dedicated fullscreen video surface with its own playback/volume/audio-track controls; main app geometry stays unchanged and Escape/F11 restores embedded playback. |
 
 The suite also covers bandwidth-limit edge cases, schedule validation,
 concurrent history writes, SQL-like URL text, chunked checksum reads,
@@ -120,7 +120,8 @@ substitute for device, OS, network, or packaged-app tests.
 - **VLC player controls:** automated tests verify video/audio file acceptance,
   embedding without a second top-level window, stop/close lifecycle, volume
   percentage, audio-track listing/selection and empty-track handling,
-  fullscreen geometry restoration, Escape behavior, and player help. The test environment does not have
+  separate fullscreen surface targeting, unchanged main-app geometry, Escape/F11
+  return-to-preview behavior, fullscreen controls, and player help. The test environment does not have
   python-vlc installed, so VLC is mocked; these tests do not verify real codecs,
   playback at actual resolutions, aspect ratio, sound output, track switching
   against a media file, or fullscreen rendering on a physical display.
@@ -198,11 +199,11 @@ SECTION 22 — VLC PLAYER / DISPLAY / AUDIO
 22.3 [M] Minimize/restore app and verify the embedded interface stays available
 22.4 [A] Volume slider applies 0–100 values and shows rounded percentage
 22.5 [A] Track list maps displayed tracks to VLC IDs; no-track state is disabled
-22.6 [A] Fullscreen restores prior geometry and Escape exits fullscreen
-22.7 [A] Player Help explains embedding/minimize/restore/fullscreen/controls
-22.8 [M] Test available 240p/360p/480p/720p/1080p/1440p/2160p media
-22.9 [M] Test portrait/ultrawide clips, aspect ratio, and resizing
-22.10 [M] Test real volume output and multi-track switching
+22.6 [A] Dedicated video fullscreen does not change main-app geometry
+22.7 [A] Escape/F11 returns video to preview; fullscreen has playback/audio controls
+22.8 [A] Player Help explains separate fullscreen and controls
+22.9 [M] Test available 240p/360p/480p/720p/1080p/1440p/2160p media
+22.10 [M] Test portrait/ultrawide clips, aspect ratio, resizing, volume, and tracks
 PV-1–PV-9 [A/M] Detailed VLC checks and manual resolution matrix are in TEST_CASES.md
 
 FAILURES ENCOUNTERED AND ADDRESSED

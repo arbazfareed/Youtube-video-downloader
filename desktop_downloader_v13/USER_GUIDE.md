@@ -58,7 +58,7 @@ system, fonts, screen reader, and Tk version; test these directly rather than
 assuming every combination behaves the same. The whole window layout is not
 automatically mirrored for right-to-left reading.
 
-The current automated v13 suite passes 203 tests. That count does **not**
+The current automated v13 suite passes 204 tests. That count does **not**
 mean every real-device or environment-specific check passed. In particular,
 offline packaged launches, 10,000-row startup time, actual network changes,
 sleep/wake behavior, real authentication, long-duration stability, measured

@@ -99,12 +99,13 @@ The VLC player is embedded in the **Media preview** panel, so playback does not
 open a separate VLC window or taskbar icon. Minimizing Smart Downloader hides
 the player with the app; restoring the app returns to the same player interface.
 **Stop** stops playback but leaves its controls open; **Close player** restores
-the normal preview. The video surface expands with the app window. **Full
-screen** or **F11** makes the app full screen, and **Escape** restores its
-previous size. Volume shows its percentage, and available audio tracks can be
-selected from the **Audio track** list. Actual resolution/codec playback depends
-on the media, VLC build, hardware, and display and must be checked with
-representative files.
+the normal preview. The video surface expands with the app window. **Full screen** or **F11** opens
+a dedicated fullscreen video surface with its own playback, stop, volume, and
+audio-track controls; the Smart Downloader window stays windowed. Press
+**Escape** or **F11** to return video to the preview. Volume shows its
+percentage, and available audio tracks can be selected from the **Audio track**
+list. Actual resolution/codec playback depends on the media, VLC build,
+hardware, and display and must be checked with representative files.
 
 For completed local downloads, v13 saves a SHA-256 baseline in download history.
 Before opening, playing, editing, or extracting a selected download, the app

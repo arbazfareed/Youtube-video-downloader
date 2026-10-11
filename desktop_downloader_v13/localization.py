@@ -145,15 +145,19 @@ TRANSLATIONS = {
         "ar": "مساعدة مشغل الوسائط", "hi": "मीडिया प्लेयर सहायता",
         "bn": "মিডিয়া প্লেয়ার সহায়তা",
     },
-    "Playback stays inside the Media preview area of Smart Downloader. Minimize or restore the main app to hide or show the player. Full screen or F11 makes the app full screen; press Escape to restore its previous size. Use the volume slider to change sound; the percentage is shown beside it. Choose an audio track when the media provides multiple tracks. Use Stop to stop playback without closing the player, or Close player to return to preview.": {
+    "Playback stays inside the Media preview area of Smart Downloader. Use Full screen or F11 to show the video on its own fullscreen surface; the main app window stays windowed. Press Escape or F11 to return to the app. Fullscreen playback includes its own play/pause, stop, volume, and audio-track controls. Use Stop to stop playback without closing the player, or Close player to return to preview.": {
         "ur": (
-            "پلے بیک اسمارٹ ڈاؤن لوڈر کے میڈیا پیش نظارہ میں رہتا ہے۔ پلیئر چھپانے "
-            "یا دکھانے کے لیے مرکزی ایپ کو minimize یا restore کریں۔ مکمل اسکرین یا "
-            "F11 سے ایپ مکمل اسکرین ہو جاتی ہے؛ واپس آنے کے لیے Escape دبائیں۔ آواز "
-            "بدلنے کے لیے والیوم سلائیڈر استعمال کریں، فیصد ساتھ دکھائی جاتی ہے۔ "
-            "متعدد آڈیو ٹریک ہوں تو منتخب کریں۔ Stop پلے بیک روکتا ہے، Close player "
-            "پیش نظارہ پر واپس آتا ہے۔"
+            "پلے بیک اسمارٹ ڈاؤن لوڈر کے میڈیا پیش نظارہ میں رہتا ہے۔ Full screen "
+            "یا F11 سے ویڈیو اپنی مکمل اسکرین پر چلے گی جبکہ مرکزی ایپ ونڈو معمول "
+            "کے مطابق رہے گی۔ ایپ پر واپس آنے کے لیے Escape یا F11 دبائیں۔ مکمل "
+            "اسکرین پر چلانے کے لیے الگ پلے/پاز، اسٹاپ، والیوم اور آڈیو ٹریک کنٹرول "
+            "موجود ہیں۔ Stop پلے بیک روکتا ہے؛ Close player پیش نظارہ پر واپس آتا ہے۔"
         ),
+    },
+    "Full screen playback": {
+        "es": "Reproducción a pantalla completa", "ur": "مکمل اسکرین پلے بیک",
+        "ar": "تشغيل بملء الشاشة", "hi": "पूर्ण स्क्रीन प्लेबैक",
+        "bn": "পূর্ণ পর্দায় প্লেব্যাক",
     },
     "Now playing": {
         "es": "Reproduciendo", "ur": "اب چل رہا ہے",

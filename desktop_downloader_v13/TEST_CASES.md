@@ -91,8 +91,8 @@ on a real display.
 | PV-5 | Play portrait and ultrawide media, then resize the main app. | Video maintains its source aspect ratio within the embedded video area; letterboxing is acceptable, unintended cropping is not. | Manual — pending. |
 | PV-6 | Move volume through 0%, intermediate values, and 100%. | VLC receives a value in the 0–100 range and the displayed integer percentage matches the slider. | Automated callback test; real output loudness/mute verification manual. |
 | PV-7 | Open media with multiple audio tracks; switch between tracks during playback. | Track names are listed, the chosen VLC track becomes active, and playback continues. Media with no tracks shows a disabled track selector. | Automated list/selection/no-track tests; real multi-track playback manual. |
-| PV-8 | Enter fullscreen using the button and F11; press Escape, then enter/exit again. | The app enters fullscreen and Escape restores its previous geometry; VLC remains embedded in the main window. | Automated fullscreen state/geometry tests; real display behavior manual. |
-| PV-9 | Open player Help and repeat PV-1 through PV-8 with audio-only media. | Help explains embedding, minimize/restore, Stop/Close, fullscreen, volume, and tracks; audio-only playback does not require an external VLC window. | Automated help-text test plus mocked audio path; real audio playback manual. |
+| PV-8 | Enter player fullscreen using the button and F11; press Escape, then enter/exit again. | VLC video uses its own fullscreen surface and toolbar while the Smart Downloader main window stays windowed and unchanged; Escape/F11 returns video to the preview. | Automated separate-window target and unchanged-root-geometry tests; physical display behavior manual. |
+| PV-9 | Open player Help and repeat PV-1 through PV-8 with audio-only media. | Help explains embedded playback, dedicated fullscreen, Stop/Close, volume, and tracks; audio-only playback does not require an external VLC window. | Automated help-text test plus mocked audio path; real audio playback manual. |
 
 ## Failure report template
 
@@ -117,7 +117,7 @@ Retest result:
 
 ## Results and limitations
 
-The current v13 unit suite passes 203 tests. That result is evidence for
+The current v13 unit suite passes 204 tests. That result is evidence for
 those automated tests only. Cases labelled manual, partial, or not separately
 evidenced above remain open for their stated environment or scenario. Update
 the evidence label only after running and recording the exact case; do not infer
