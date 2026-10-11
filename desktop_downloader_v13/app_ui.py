@@ -587,6 +587,7 @@ class UiMixin:
         preview = ttk.Frame(inspector, style="Card.TFrame", padding=6)
         preview.grid(row=2, column=0, columnspan=2, sticky="nsew")
         preview.columnconfigure(0, weight=1)
+        preview.rowconfigure(0, weight=1)
         self.preview_image_label = ttk.Label(
             preview,
             text=self._t("Select a file to preview"),

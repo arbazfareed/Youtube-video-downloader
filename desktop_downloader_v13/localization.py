@@ -145,14 +145,39 @@ TRANSLATIONS = {
         "ar": "مساعدة مشغل الوسائط", "hi": "मीडिया प्लेयर सहायता",
         "bn": "মিডিয়া প্লেয়ার সহায়তা",
     },
-    "Resize the player using its window edges, or choose Full screen or press F11. Press Escape to leave full screen. Use the volume slider to change sound; the percentage is shown beside it. Choose an audio track from the track list when the media provides multiple tracks. Video scales to the available player area.": {
+    "Playback stays inside the Media preview area of Smart Downloader. Minimize or restore the main app to hide or show the player. Full screen or F11 makes the app full screen; press Escape to restore its previous size. Use the volume slider to change sound; the percentage is shown beside it. Choose an audio track when the media provides multiple tracks. Use Stop to stop playback without closing the player, or Close player to return to preview.": {
         "ur": (
-            "پلیئر کا سائز بدلنے کے لیے ونڈو کے کنارے کھینچیں، یا مکمل اسکرین "
-            "منتخب کریں یا F11 دبائیں۔ مکمل اسکرین سے نکلنے کے لیے Escape دبائیں۔ "
-            "آواز بدلنے کے لیے والیوم سلائیڈر استعمال کریں؛ اس کے ساتھ فیصد دکھائی "
-            "جاتی ہے۔ اگر میڈیا میں متعدد ٹریک ہوں تو فہرست سے آڈیو ٹریک منتخب کریں۔ "
-            "ویڈیو دستیاب پلیئر حصے کے مطابق ہو جائے گی۔"
+            "پلے بیک اسمارٹ ڈاؤن لوڈر کے میڈیا پیش نظارہ میں رہتا ہے۔ پلیئر چھپانے "
+            "یا دکھانے کے لیے مرکزی ایپ کو minimize یا restore کریں۔ مکمل اسکرین یا "
+            "F11 سے ایپ مکمل اسکرین ہو جاتی ہے؛ واپس آنے کے لیے Escape دبائیں۔ آواز "
+            "بدلنے کے لیے والیوم سلائیڈر استعمال کریں، فیصد ساتھ دکھائی جاتی ہے۔ "
+            "متعدد آڈیو ٹریک ہوں تو منتخب کریں۔ Stop پلے بیک روکتا ہے، Close player "
+            "پیش نظارہ پر واپس آتا ہے۔"
         ),
+    },
+    "Now playing": {
+        "es": "Reproduciendo", "ur": "اب چل رہا ہے",
+        "ar": "يعمل الآن", "hi": "अभी चल रहा है", "bn": "এখন চলছে",
+    },
+    "Close player": {
+        "es": "Cerrar reproductor", "ur": "پلیئر بند کریں",
+        "ar": "إغلاق المشغل", "hi": "प्लेयर बंद करें", "bn": "প্লেয়ার বন্ধ করুন",
+    },
+    "Playback started": {
+        "es": "Reproducción iniciada", "ur": "پلے بیک شروع ہو گیا",
+        "ar": "بدأ التشغيل", "hi": "प्लेबैक शुरू हुआ", "bn": "প্লেব্যাক শুরু হয়েছে",
+    },
+    "Playback stopped": {
+        "es": "Reproducción detenida", "ur": "پلے بیک روک دیا گیا",
+        "ar": "تم إيقاف التشغيل", "hi": "प्लेबैक रोका गया", "bn": "প্লেব্যাক থামানো হয়েছে",
+    },
+    "Playback finished": {
+        "es": "Reproducción finalizada", "ur": "پلے بیک مکمل ہو گیا",
+        "ar": "انتهى التشغيل", "hi": "प्लेबैक समाप्त हुआ", "bn": "প্লেব্যাক শেষ হয়েছে",
+    },
+    "Playback failed": {
+        "es": "Error de reproducción", "ur": "پلے بیک ناکام ہو گیا",
+        "ar": "فشل التشغيل", "hi": "प्लेबैक विफल हुआ", "bn": "প্লেব্যাক ব্যর্থ হয়েছে",
     },
     "Pause": {
         "es": "Pausar", "ur": "روکیں", "ar": "إيقاف مؤقت",

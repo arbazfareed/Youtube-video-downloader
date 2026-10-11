@@ -95,13 +95,16 @@ Larger text and a high-contrast palette are also available. Screen-reader
 announcements and Urdu text shaping depend on the operating system, screen
 reader, fonts, and Tk version; verify those combinations manually.
 
-The VLC in-app player opens at a size fitted to the current display and remains
-resizable. Its video area expands with the window; use **Full screen** or **F11**
-to fill the display, and **Escape** to leave full screen. The volume control
-shows its current percentage. When VLC reports multiple audio tracks, select
-one from the **Audio track** list. Player **Help** explains resizing and these
-controls. Actual resolution/codec playback depends on the media, VLC build,
-hardware, and display and must be checked with representative files.
+The VLC player is embedded in the **Media preview** panel, so playback does not
+open a separate VLC window or taskbar icon. Minimizing Smart Downloader hides
+the player with the app; restoring the app returns to the same player interface.
+**Stop** stops playback but leaves its controls open; **Close player** restores
+the normal preview. The video surface expands with the app window. **Full
+screen** or **F11** makes the app full screen, and **Escape** restores its
+previous size. Volume shows its percentage, and available audio tracks can be
+selected from the **Audio track** list. Actual resolution/codec playback depends
+on the media, VLC build, hardware, and display and must be checked with
+representative files.
 
 For completed local downloads, v13 saves a SHA-256 baseline in download history.
 Before opening, playing, editing, or extracting a selected download, the app

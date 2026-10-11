@@ -526,25 +526,25 @@ class MediaMixin:
         if getattr(self, "_in_app_player_window", None) is not None:
             self._close_in_app_player()
 
-        window = tk.Toplevel(self.root)
-        window.title(f"{self._t('Media player')} — {path.name}")
-        screen_width = window.winfo_screenwidth()
-        screen_height = window.winfo_screenheight()
-        width = max(1, min(1100, screen_width - 40))
-        height = max(1, min(760, screen_height - 80))
-        window.minsize(min(320, width), min(240, height))
-        window.geometry(
-            f"{width}x{height}+{max(0, (screen_width - width) // 2)}"
-            f"+{max(0, (screen_height - height) // 2)}"
-        )
-        window.resizable(True, True)
-        window.transient(self.root)
-        self._in_app_player_window = window
+        preview = self.preview_image_label.master
+        self.preview_image_label.grid_remove()
+        player_container = ttk.Frame(preview, style="Card.TFrame", padding=4)
+        player_container.grid(row=0, column=0, sticky="nsew")
+        player_container.columnconfigure(0, weight=1)
+        player_container.rowconfigure(1, weight=1)
+        self._in_app_player_window = self.root
+        self._in_app_player_container = player_container
 
-        video_surface = tk.Frame(window, background="#000000")
-        video_surface.pack(fill="both", expand=True, padx=8, pady=(8, 4))
-        controls = ttk.Frame(window, padding=(8, 4, 8, 8))
-        controls.pack(fill="x")
+        ttk.Label(
+            player_container,
+            text=f"{self._t('Now playing')}: {path.name}",
+            style="Card.TLabel",
+            anchor="w",
+        ).grid(row=0, column=0, sticky="ew", pady=(0, 4))
+        video_surface = tk.Frame(player_container, background="#000000")
+        video_surface.grid(row=1, column=0, sticky="nsew")
+        controls = ttk.Frame(player_container, padding=(0, 5, 0, 0))
+        controls.grid(row=2, column=0, sticky="ew")
         transport_controls = ttk.Frame(controls)
         transport_controls.pack(fill="x", pady=(0, 4))
         playback_button = ttk.Button(
@@ -557,6 +557,12 @@ class MediaMixin:
             command=self._stop_in_app_player,
             takefocus=True,
         ).pack(side="left", padx=(6, 0))
+        ttk.Button(
+            transport_controls,
+            text=self._t("Close player"),
+            command=self._close_in_app_player,
+            takefocus=True,
+        ).pack(side="right")
         fullscreen_button = ttk.Button(
             transport_controls,
             text=self._t("Full screen"),
@@ -612,7 +618,7 @@ class MediaMixin:
         self._in_app_audio_track_combo.bind(
             "<<ComboboxSelected>>", self._select_in_app_audio_track
         )
-        window.update_idletasks()
+        self.root.update_idletasks()
 
         instance = vlc.Instance()
         self._in_app_vlc_instance = instance
@@ -627,16 +633,34 @@ class MediaMixin:
             player.set_xwindow(video_surface.winfo_id())
 
         self._in_app_vlc = vlc
-        self._in_app_playback_button = playback_button
         self._in_app_fullscreen_button = fullscreen_button
         self._in_app_fullscreen = False
-        self._in_app_windowed_geometry = window.geometry()
+        self._in_app_windowed_geometry = self.root.geometry()
         self._in_app_audio_refresh_ticks = 0
         self._in_app_playback_after = None
         playback_button.configure(command=self._toggle_in_app_playback)
-        window.protocol("WM_DELETE_WINDOW", self._close_in_app_player)
-        window.bind("<F11>", self._toggle_in_app_fullscreen)
-        window.bind("<Escape>", self._exit_in_app_fullscreen)
+        self._in_app_playback_button = playback_button
+        self._in_app_player_status = tk.StringVar(value=self._t("Playback started"))
+        ttk.Label(
+            controls,
+            textvariable=self._in_app_player_status,
+            style="SidebarHint.TLabel",
+            anchor="w",
+        ).pack(fill="x", pady=(0, 4))
+        self._in_app_key_bindings = (
+            (
+                "<F11>",
+                self.root.bind_class(
+                    str(self.root), "<F11>", self._toggle_in_app_fullscreen, add="+"
+                ),
+            ),
+            (
+                "<Escape>",
+                self.root.bind_class(
+                    str(self.root), "<Escape>", self._exit_in_app_fullscreen, add="+"
+                ),
+            ),
+        )
         player.audio_set_volume(volume.get())
         if player.play() == -1:
             self._close_in_app_player()
@@ -657,17 +681,19 @@ class MediaMixin:
         if self._in_app_audio_refresh_ticks % 4 == 0:
             self._refresh_in_app_audio_tracks()
         if state == vlc.State.Ended:
-            self._close_in_app_player()
+            self._in_app_playback_button.configure(text=self._t("Play"))
+            self._in_app_player_status.set(self._t("Playback finished"))
             return
         if state == vlc.State.Error:
-            self._close_in_app_player()
+            self._in_app_playback_button.configure(text=self._t("Play"))
+            self._in_app_player_status.set(self._t("Playback failed"))
             messagebox.showerror(
                 self._t("Could not play media"),
                 self._t("VLC could not play this media file."),
                 parent=self.root,
             )
             return
-        self._in_app_playback_after = window.after(250, self._poll_in_app_playback)
+        self._in_app_playback_after = self.root.after(250, self._poll_in_app_playback)
 
     def _toggle_in_app_playback(self) -> None:
         player = getattr(self, "_in_app_player", None)
@@ -778,30 +804,45 @@ class MediaMixin:
         messagebox.showinfo(
             self._t("Media player help"),
             self._t(
-                "Resize the player using its window edges, or choose Full screen "
-                "or press F11. Press Escape to leave full screen. Use the volume "
-                "slider to change sound; the percentage is shown beside it. "
-                "Choose an audio track from the track list when the media provides "
-                "multiple tracks. Video scales to the available player area."
+                "Playback stays inside the Media preview area of Smart Downloader. "
+                "Minimize or restore the main app to hide or show the player. "
+                "Full screen or F11 makes the app full screen; press Escape to "
+                "restore its previous size. Use the volume slider to change sound; "
+                "the percentage is shown beside it. Choose an audio track when "
+                "the media provides multiple tracks. Use Stop to stop playback "
+                "without closing the player, or Close player to return to preview."
             ),
-            parent=self._in_app_player_window,
+            parent=self.root,
         )
 
     def _stop_in_app_player(self) -> None:
         player = getattr(self, "_in_app_player", None)
         if player is not None:
             player.stop()
-        self._close_in_app_player()
+        playback_button = getattr(self, "_in_app_playback_button", None)
+        if playback_button is not None:
+            playback_button.configure(text=self._t("Play"))
+        status = getattr(self, "_in_app_player_status", None)
+        if status is not None:
+            status.set(self._t("Playback stopped"))
 
     def _close_in_app_player(self) -> None:
         window = getattr(self, "_in_app_player_window", None)
         if window is not None:
+            if getattr(self, "_in_app_fullscreen", False):
+                window.attributes("-fullscreen", False)
+                window.geometry(self._in_app_windowed_geometry)
             after_id = getattr(self, "_in_app_playback_after", None)
             if after_id is not None:
                 try:
                     window.after_cancel(after_id)
                 except tk.TclError:
                     pass
+            for sequence, function_id in getattr(
+                self, "_in_app_key_bindings", ()
+            ):
+                if function_id:
+                    window.unbind_class(str(window), sequence, function_id)
         player = getattr(self, "_in_app_player", None)
         if player is not None:
             player.stop()
@@ -819,8 +860,15 @@ class MediaMixin:
         self._in_app_audio_track_combo = None
         self._in_app_audio_track = None
         self._in_app_fullscreen = False
-        if window is not None:
-            window.destroy()
+        self._in_app_key_bindings = ()
+        self._in_app_playback_button = None
+        self._in_app_player_status = None
+        container = getattr(self, "_in_app_player_container", None)
+        self._in_app_player_container = None
+        if container is not None:
+            container.destroy()
+        if window is not None and self.preview_image_label.winfo_exists():
+            self.preview_image_label.grid()
 
     def open_selected_media_in_system_player(self) -> None:
         path = self._selected_media_path()
