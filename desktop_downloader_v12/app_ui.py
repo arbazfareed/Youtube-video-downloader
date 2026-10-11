@@ -7,6 +7,7 @@ from app_support import (
     LANGUAGES,
     translate,
 )
+from statistics_engine import DownloadStatistics, calculate_statistics
 
 class UiMixin:
     def _t(self, text: str) -> str:
@@ -85,6 +86,10 @@ class UiMixin:
             sidebar, text=self._t("Settings"), style="Navigation.TButton",
             command=self.open_download_settings,
         ).grid(row=6, column=0, sticky="ew", pady=2)
+        ttk.Button(
+            sidebar, text=self._t("Statistics"), style="Navigation.TButton",
+            command=self.open_statistics_dashboard,
+        ).grid(row=7, column=0, sticky="ew", pady=2)
         tools_button = ttk.Menubutton(
             sidebar, text=self._t("Tools & utilities"), style="Navigation.TMenubutton",
         )
@@ -135,23 +140,23 @@ class UiMixin:
             label="Convert PDF to DOCX", command=self.convert_pdf_file_to_docx,
         )
         tools_button.configure(menu=self.tools_menu)
-        tools_button.grid(row=7, column=0, sticky="ew", pady=2)
+        tools_button.grid(row=8, column=0, sticky="ew", pady=2)
         ttk.Button(
             sidebar, text=self._t("Convert to MP3"), style="Navigation.TButton",
             command=self.convert_local_file_to_mp3,
-        ).grid(row=8, column=0, sticky="ew", pady=2)
+        ).grid(row=9, column=0, sticky="ew", pady=2)
         ttk.Button(
             sidebar, text=self._t("Image tools"), style="Navigation.TButton",
             command=self.open_selected_image_tools,
-        ).grid(row=9, column=0, sticky="ew", pady=2)
+        ).grid(row=10, column=0, sticky="ew", pady=2)
         ttk.Button(
             sidebar, text=self._t("Image gallery"), style="Navigation.TButton",
             command=self._select_image_gallery_mode,
-        ).grid(row=10, column=0, sticky="ew", pady=2)
+        ).grid(row=11, column=0, sticky="ew", pady=2)
         ttk.Label(
             sidebar, text=self._t("Download and organize\nlocal media"), style="SidebarHint.TLabel",
             justify="left",
-        ).grid(row=11, column=0, sticky="sw", padx=8, pady=(24, 0))
+        ).grid(row=12, column=0, sticky="sw", padx=8, pady=(24, 0))
 
         frame = ttk.Frame(outer, padding=16)
         frame.grid(row=0, column=1, sticky="nsew")
@@ -242,6 +247,132 @@ class UiMixin:
         self.settings_window.deiconify()
         self.settings_window.lift()
         self.settings_window.focus_set()
+
+    def open_statistics_dashboard(self) -> None:
+        existing = getattr(self, "_statistics_window", None)
+        if existing is not None and existing.winfo_exists():
+            existing.destroy()
+
+        statistics = calculate_statistics(
+            self.history.list_records(include_hidden=True)
+        )
+        window = tk.Toplevel(self.root)
+        self._statistics_window = window
+        window.title(self._t("Statistics dashboard"))
+        window.geometry("760x560")
+        window.minsize(620, 460)
+        window.transient(self.root)
+
+        content = ttk.Frame(window, padding=18)
+        content.pack(fill="both", expand=True)
+        ttk.Label(
+            content,
+            text=self._t("Statistics dashboard"),
+            font=("Segoe UI", 18, "bold"),
+        ).pack(anchor="w")
+        ttk.Label(
+            content,
+            text=self._t(
+                "Lifetime statistics from saved download history, including hidden rows."
+            ),
+        ).pack(anchor="w", pady=(4, 16))
+
+        cards = ttk.Frame(content)
+        cards.pack(fill="x", pady=(0, 18))
+        for column in range(4):
+            cards.columnconfigure(column, weight=1)
+        metrics = (
+            (self._t("Total downloads"), statistics.total_downloads),
+            (self._t("Completed files"), statistics.completed),
+            (self._t("Success rate"), f"{statistics.success_rate:.1f}%"),
+            (
+                self._t("Failed or stopped"),
+                statistics.failed + statistics.cancelled + statistics.interrupted,
+            ),
+        )
+        for column, (label, value) in enumerate(metrics):
+            card = ttk.Frame(cards, style="Card.TFrame", padding=12)
+            card.grid(row=0, column=column, sticky="nsew", padx=(0, 8))
+            ttk.Label(card, text=label, style="Card.TLabel").pack(anchor="w")
+            ttk.Label(
+                card,
+                text=str(value),
+                style="Card.TLabel",
+                font=("Segoe UI", 20, "bold"),
+            ).pack(anchor="w", pady=(6, 0))
+
+        ttk.Label(
+            content,
+            text=self._t("Top source domains"),
+            font=("Segoe UI", 12, "bold"),
+        ).pack(anchor="w")
+        chart_background = "#151519" if self.dark_mode.get() else "#f4f6f8"
+        chart_foreground = "#ffffff" if self.dark_mode.get() else "#242424"
+        if self.high_contrast.get():
+            chart_background = "#000000"
+            chart_foreground = "#ffffff"
+        chart = tk.Canvas(
+            content,
+            height=250,
+            background=chart_background,
+            highlightthickness=0,
+        )
+        chart.pack(fill="both", expand=True, pady=(8, 0))
+        chart.bind(
+            "<Configure>",
+            lambda _event: self._draw_domain_statistics_chart(
+                chart, statistics, chart_foreground
+            ),
+        )
+        self._draw_domain_statistics_chart(chart, statistics, chart_foreground)
+
+    def _draw_domain_statistics_chart(
+        self,
+        canvas: tk.Canvas,
+        statistics: DownloadStatistics,
+        foreground: str,
+    ) -> None:
+        canvas.delete("all")
+        width = max(canvas.winfo_width(), 420)
+        if not statistics.top_domains:
+            canvas.create_text(
+                16,
+                24,
+                text=self._t("No source domains recorded yet."),
+                anchor="nw",
+                fill=foreground,
+            )
+            return
+
+        maximum = max(count for _, count in statistics.top_domains)
+        label_width = min(220, max(150, int(width * 0.38)))
+        bar_start = label_width + 16
+        bar_width = max(40, width - bar_start - 48)
+        for index, (domain, count) in enumerate(statistics.top_domains):
+            top = 12 + index * 42
+            canvas.create_text(
+                12,
+                top + 12,
+                text=domain,
+                anchor="w",
+                width=label_width,
+                fill=foreground,
+            )
+            canvas.create_rectangle(
+                bar_start,
+                top + 4,
+                bar_start + bar_width * count / maximum,
+                top + 24,
+                fill="#3b82f6",
+                outline="",
+            )
+            canvas.create_text(
+                bar_start + bar_width + 8,
+                top + 14,
+                text=str(count),
+                anchor="w",
+                fill=foreground,
+            )
 
     def _build_remaining_ui(self, frame: ttk.Frame) -> None:
         options = ttk.Frame(frame, style="Card.TFrame", padding=(12, 10))

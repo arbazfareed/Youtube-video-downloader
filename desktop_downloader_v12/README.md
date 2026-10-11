@@ -94,6 +94,12 @@ event time, component, and error type in a local JSON Lines file; exception
 messages, URLs, file paths, and credentials are not recorded. Nothing is sent
 automatically. Use **Export local diagnostics** to choose a file to share.
 
+Choose **Statistics** in the sidebar to open the lifetime dashboard. It counts
+all saved history rows, including hidden entries, shows completed files,
+success rate (completed downloads divided by terminal attempts), failed or
+stopped downloads, and a chart of the most common source domains. Active and
+queued attempts are excluded from the success-rate denominator.
+
 Downloads, website scans, cloud uploads, and phone/API connections need network
 access by nature. ZIP creation/extraction and other local-file operations work
 offline. FFmpeg, LibreOffice, and aria2 remain optional external tools for

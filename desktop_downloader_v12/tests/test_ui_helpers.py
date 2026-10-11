@@ -108,6 +108,7 @@ class QueueFilterTests(unittest.TestCase):
 class UiStartupWiringTests(unittest.TestCase):
     def test_sidebar_and_queue_callbacks_exist(self):
         required_callbacks = (
+            "open_statistics_dashboard",
             "resume_selected",
             "play_selected_media",
             "open_selected_location",
