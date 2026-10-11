@@ -49,21 +49,23 @@ data, not source files to publish.
 For a new computer, macOS/Linux steps, manual installation, and troubleshooting,
 see [`desktop_downloader/SETUP.md`](./desktop_downloader/SETUP.md). Separate
 versioned apps are maintained in `desktop_downloader_v10/`,
-`desktop_downloader_v11/`, and `desktop_downloader_v12/`.
+`desktop_downloader_v11/`, `desktop_downloader_v12/`, and
+`desktop_downloader_v13/`.
 
-## Portable Windows download
+## Portable downloads
 
 The GitHub Actions workflow builds portable Windows ZIPs for the original
-desktop app and Smart Downloader 11.0 and 12.0. To publish the ZIPs, create and
+desktop app and Smart Downloader 11.0, 12.0, and 13.0. To publish the ZIPs, create and
 push a new version tag from the repository root:
 
 ```powershell
-git tag v12.0.0
-git push origin v12.0.0
+git tag v13.0.0
+git push origin v13.0.0
 ```
 
-After the **Build Windows downloads** workflow succeeds, all three ZIP files
-appear as assets on that GitHub Release. On another Windows PC, download and
+After the **Build desktop downloads** workflow succeeds, the four Windows ZIPs
+and Linux ZIPs for versions 12.0 and 13.0 appear as assets on that GitHub
+Release (six ZIPs total). On another Windows PC, download and
 extract the ZIP, then double-click the `.exe`; Python and the app's Python
 packages do not need to be installed. Some optional integrations still use
 external programs; see the version-specific README for those limitations.
@@ -96,6 +98,17 @@ downloads, media tools, and events. Existing versions remain unchanged.
 
 - [Version 12.0 features and refactored app structure](./desktop_downloader_v12/README.md)
 - [Version 12.0 setup and aria2 installation](./desktop_downloader_v12/SETUP.md)
+
+## Smart Downloader 13.0
+
+Version 13.0 is an independent copy of v12 in
+[`desktop_downloader_v13`](./desktop_downloader_v13/README.md). It keeps
+separate local history and adds a refreshed three-panel interface with a media
+inspector and direct audio/video player launch controls. Earlier versions remain
+unchanged.
+
+- [Version 13.0 features and refreshed interface](./desktop_downloader_v13/README.md)
+- [Version 13.0 setup and aria2 installation](./desktop_downloader_v13/SETUP.md)
 
 ## Smart Downloader 10.0
 

@@ -36,6 +36,18 @@ jobs:
             platform: Linux
             runner: ubuntu-22.04
             data-separator: ':'
+          - app-directory: desktop_downloader_v13
+            executable: SmartDownloader13
+            platform: Windows
+            runner: windows-latest
+            data-separator: ';'
+            media-player-import: --hidden-import vlc
+          - app-directory: desktop_downloader_v13
+            executable: SmartDownloader13
+            platform: Linux
+            runner: ubuntu-22.04
+            data-separator: ':'
+            media-player-import: --hidden-import vlc
     defaults:
       run:
         working-directory: ${{ matrix.app-directory }}
@@ -63,6 +75,7 @@ jobs:
           --name "${{ matrix.executable }}"
           --paths .
           --hidden-import app
+          ${{ matrix.media-player-import }}
           --add-data "mobile.html${{ matrix.data-separator }}."
           --collect-all yt_dlp
           --collect-submodules plugins
@@ -86,7 +99,8 @@ jobs:
           if ($process.ExitCode -ne 0) {
             throw "Packaged app GUI initialization failed with code $($process.ExitCode)."
           }
-          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v12") {
+          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v12" -or
+              "${{ matrix.app-directory }}" -eq "desktop_downloader_v13") {
             & "dist\${{ matrix.executable }}.exe" --cli --help
             if ($LASTEXITCODE -ne 0) {
               throw "Packaged command-line interface failed with code $LASTEXITCODE."
@@ -99,13 +113,13 @@ jobs:
         if: matrix.platform == 'Linux'
         run: dist/${{ matrix.executable }} --cli --help
       - name: Verify packaged Windows REST API
-        if: matrix.platform == 'Windows' && matrix.app-directory == 'desktop_downloader_v12'
+        if: matrix.platform == 'Windows' && (matrix.app-directory == 'desktop_downloader_v12' || matrix.app-directory == 'desktop_downloader_v13')
         shell: pwsh
         run: |
           $previousHost = $env:SMART_DOWNLOADER_API_HOST
           $previousPort = $env:SMART_DOWNLOADER_API_PORT
           $process = $null
-          $apiLog = Join-Path $env:RUNNER_TEMP "v12-api-stderr.log"
+          $apiLog = Join-Path $env:RUNNER_TEMP "${{ matrix.app-directory }}-api-stderr.log"
           try {
             $env:SMART_DOWNLOADER_API_HOST = "127.0.0.1"
             $env:SMART_DOWNLOADER_API_PORT = "18765"
@@ -181,7 +195,8 @@ jobs:
             "Python and the app's Python packages are bundled; no Python installation is required."
             "Optional external tools are listed in README.md."
           )
-          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v12") {
+          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v12" -or
+              "${{ matrix.app-directory }}" -eq "desktop_downloader_v13") {
             Copy-Item browser_extension $packageDirectory -Recurse
             Copy-Item plugins $packageDirectory -Recurse
             $setupLines += @(
@@ -237,8 +252,8 @@ jobs:
         run: |
           $assets = Get-ChildItem -Path release-artifacts -Filter "*.zip" -Recurse |
             ForEach-Object { $_.FullName }
-          if ($assets.Count -ne 4) {
-            throw "Expected four portable ZIP files, found $($assets.Count)."
+          if ($assets.Count -ne 6) {
+            throw "Expected six portable ZIP files, found $($assets.Count)."
           }
           gh release create "$env:GITHUB_REF_NAME" $assets `
             --repo "${{ github.repository }}" --verify-tag --generate-notes

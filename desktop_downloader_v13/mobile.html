@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <title>Smart Downloader - Phone control</title>
+    <style>
+      body { background:#1e1e1e; color:#e0e0e0; font:16px sans-serif; margin:0; padding:24px; }
+      main { margin:auto; max-width:480px; }
+      button { background:#3a6ea5; border:0; border-radius:6px; color:#fff; margin:6px 6px 6px 0; padding:12px 18px; }
+      #status { font-size:1.4rem; }
+      #message { overflow-wrap:anywhere; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Smart Downloader</h1>
+      <p id="status">Connecting…</p>
+      <p id="message"></p>
+      <button data-action="pause">Pause</button>
+      <button data-action="resume">Resume</button>
+      <button data-action="cancel">Cancel</button>
+    </main>
+    <script src="/mobile.js"></script>
+  </body>
+</html>

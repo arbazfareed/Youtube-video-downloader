@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.venv/
+startup-error.log
+build/
+dist/
+SmartDownloader12.spec
