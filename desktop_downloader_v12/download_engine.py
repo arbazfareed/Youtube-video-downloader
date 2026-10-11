@@ -389,7 +389,7 @@ def _progress_details(
     speed: float | None = None,
     eta: float | None = None,
 ) -> str:
-    parts = [Path(filename).name] if filename else []
+    parts = [PurePosixPath(filename.replace("\\", "/")).name] if filename else []
     if downloaded is not None:
         downloaded_mb = downloaded / (1024 * 1024)
         if total:

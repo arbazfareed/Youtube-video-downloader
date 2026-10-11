@@ -107,26 +107,48 @@ jobs:
         if: matrix.platform == 'Windows'
         shell: pwsh
         run: |
+          $supportsSmokeTest = "${{ matrix.app-directory }}" -eq "desktop_downloader_v12" -or
+            "${{ matrix.app-directory }}" -eq "desktop_downloader_v13"
+          $arguments = @()
+          if ($supportsSmokeTest) {
+            $arguments = @("--smoke-test")
+          }
           $process = Start-Process `
             -FilePath "dist\${{ matrix.executable }}.exe" `
-            -ArgumentList "--smoke-test" -PassThru
+            -ArgumentList $arguments -PassThru
           $deadline = (Get-Date).AddSeconds(60)
-          do {
-            Start-Sleep -Seconds 1
-            $process.Refresh()
-          } until ($process.HasExited -or (Get-Date) -ge $deadline)
-          if (-not $process.HasExited) {
+          if ($supportsSmokeTest) {
+            do {
+              Start-Sleep -Seconds 1
+              $process.Refresh()
+            } until ($process.HasExited -or (Get-Date) -ge $deadline)
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id
+              throw "Packaged app GUI initialization timed out."
+            }
+            if ($process.ExitCode -ne 0) {
+              throw "Packaged app GUI initialization failed with code $($process.ExitCode)."
+            }
+          } else {
+            do {
+              Start-Sleep -Seconds 1
+              $process.Refresh()
+            } until ($process.HasExited -or $process.MainWindowHandle -ne 0 -or (Get-Date) -ge $deadline)
+            if ($process.HasExited -or $process.MainWindowHandle -eq 0) {
+              if (-not $process.HasExited) {
+                Stop-Process -Id $process.Id
+              }
+              throw "Packaged app did not open a visible window."
+            }
             Stop-Process -Id $process.Id
-            throw "Packaged app GUI initialization timed out."
-          }
-          if ($process.ExitCode -ne 0) {
-            throw "Packaged app GUI initialization failed with code $($process.ExitCode)."
           }
           if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v12" -or
               "${{ matrix.app-directory }}" -eq "desktop_downloader_v13") {
-            & "dist\${{ matrix.executable }}.exe" --cli --help
-            if ($LASTEXITCODE -ne 0) {
-              throw "Packaged command-line interface failed with code $LASTEXITCODE."
+            $cliProcess = Start-Process `
+              -FilePath "dist\${{ matrix.executable }}.exe" `
+              -ArgumentList "--cli --help" -Wait -PassThru
+            if ($cliProcess.ExitCode -ne 0) {
+              throw "Packaged command-line interface failed with code $($cliProcess.ExitCode)."
             }
           }
       - name: Verify packaged Linux GUI initializes
