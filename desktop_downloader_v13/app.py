@@ -178,10 +178,7 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         self.global_max_speed.trace_add("write", self._update_global_bandwidth)
         self.root.after(100, self._process_events)
         self.root.after(800, self._watch_clipboard)
-        self.root.bind_all("<Control-comma>", self._open_settings_shortcut, add="+")
-        self.root.bind_all("<F1>", self._help_shortcut, add="+")
-        self.root.bind_all("<Control-Return>", self._add_download_shortcut, add="+")
-        self.root.bind_all("<Control-o>", self._open_location_shortcut, add="+")
+        self._bind_keyboard_shortcuts()
         if self.check_updates.get():
             self.root.after(2500, lambda: self._check_for_updates(interactive=False))
         self.root.protocol("WM_DELETE_WINDOW", self._close)

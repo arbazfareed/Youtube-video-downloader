@@ -569,7 +569,7 @@ class DownloadsMixin:
 
     def show_help(self) -> None:
         messagebox.showinfo(
-            "Smart Downloader help",
+            self._t("Smart Downloader help"),
             "Getting started\n"
             "1. Paste the page or file link.\n"
             "2. Choose where to save it (Downloads is the usual choice).\n"
@@ -592,7 +592,8 @@ class DownloadsMixin:
             "selected to bring a row back.\n\n"
             "Torrent links need aria2 to be installed. Only public links and content you "
             "have permission to save are supported. Some sites may block downloads or "
-            "require unavailable sign-in.",
+            "require unavailable sign-in.\n\n"
+            f"{self._keyboard_shortcuts_text()}",
         )
 
     def cancel_selected(self) -> None:

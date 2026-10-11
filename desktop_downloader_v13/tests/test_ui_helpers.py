@@ -131,12 +131,67 @@ class UiStartupWiringTests(unittest.TestCase):
             "_show_image_context_menu",
             "_open_clicked_row_action",
             "_show_selected_thumbnail",
+            "_focus_url_shortcut",
+            "_focus_queue_shortcut",
+            "_focus_progress_shortcut",
+            "_toggle_pause_from_queue",
         )
         missing = [
             name for name in required_callbacks
             if not callable(getattr(DownloaderApp, name, None))
         ]
         self.assertEqual(missing, [])
+
+    def test_accessibility_keyboard_shortcuts_focus_their_targets_and_toggle_pause(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.url_entry = Mock()
+        app.jobs = Mock()
+        app.progress_summary_label = Mock()
+        app.toggle_pause_selected = Mock()
+
+        self.assertEqual(app._focus_url_shortcut(), "break")
+        app.url_entry.focus_set.assert_called_once_with()
+        self.assertEqual(app._focus_queue_shortcut(), "break")
+        app.jobs.focus_set.assert_called_once_with()
+        self.assertEqual(app._focus_progress_shortcut(), "break")
+        app.progress_summary_label.focus_set.assert_called_once_with()
+        self.assertEqual(app._toggle_pause_from_queue(), "break")
+        app.toggle_pause_selected.assert_called_once_with()
+
+    def test_keyboard_shortcuts_are_registered_for_app_navigation(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.root = Mock()
+
+        app._bind_keyboard_shortcuts()
+
+        self.assertEqual(
+            [call.args[0] for call in app.root.bind_all.call_args_list],
+            [
+                "<Control-comma>",
+                "<F1>",
+                "<Control-Return>",
+                "<Control-o>",
+                "<Control-l>",
+                "<Control-j>",
+                "<Alt-s>",
+            ],
+        )
+        self.assertTrue(
+            all(call.kwargs["add"] == "+" for call in app.root.bind_all.call_args_list)
+        )
+
+    def test_shortcut_help_is_localized_for_urdu(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.language = Mock()
+        app.language.get.return_value = "Urdu"
+
+        shortcut_text = app._keyboard_shortcuts_text()
+
+        self.assertIn("کی بورڈ شارٹ کٹس", shortcut_text)
+        self.assertIn("Ctrl+L", shortcut_text)
+        self.assertIn("Ctrl+J", shortcut_text)
+        self.assertIn("Alt+S", shortcut_text)
+        self.assertIn("Shift+Tab", shortcut_text)
 
 
     def test_sidebar_wheel_scrolls_only_when_pointer_is_inside_it(self):

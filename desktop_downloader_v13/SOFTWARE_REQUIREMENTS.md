@@ -66,6 +66,10 @@ version-specific README and SETUP guide for supported prerequisites.
 | FR-DL-03 | Transient network and rate-limit failures shall use bounded retries; terminal HTTP failures shall be shown to the user. | Automated mocked HTTP tests; see TC-4.4, TC-4.5, TC-4.8, and TC-4.19. |
 | FR-DL-04 | Download options such as cookies and custom headers shall be applied only when configured and supported by the transfer route. | Automated option-forwarding tests and manual authenticated-server checks; see TC-4.11 and TC-4.12. |
 | FR-DL-05 | A destination disk-space check shall run when a trustworthy total size is known; an unknown size shall not cause unsafe preallocation. | Automated known-size check and manual low-disk validation; see the Section 3.11 storage check in TESTING.md. |
+| FR-I18N-01 | Urdu selection shall translate the primary navigation, download controls, queue headings, key settings, and keyboard-help labels; missing translations shall fall back to English. | Translation unit tests; manual visual validation with Urdu-capable fonts. |
+| FR-A11Y-01 | Core download actions shall be reachable by keyboard using documented shortcuts and ordinary Tab/Shift+Tab traversal. | Shortcut registration and focus tests; manual interaction test. |
+| FR-A11Y-02 | The download queue shall support keyboard focus and selection; Space shall toggle pause/resume for the selected job while the queue has focus. | Automated shortcut callback tests; manual keyboard/screen-reader check. |
+| FR-A11Y-03 | Progress status and progress controls shall be keyboard-focusable so users can move focus to read current state through assistive technology. | UI construction and manual platform-specific screen-reader validation. |
 
 ## 5. Non-functional requirements
 
@@ -98,7 +102,10 @@ Passing the current unit suite is not equivalent to passing all manual,
 environment-dependent, scale, or release checks. In particular, offline
 packaged launches, 10,000-row startup performance, network changes, suspend and
 resume, real authentication, memory/CPU thresholds, cross-platform execution,
-long-duration stability, and real subprocess cleanup require separate runs.
+long-duration stability, real subprocess cleanup, and screen-reader/Urdu font
+behavior on supported operating systems require separate runs. The app does not
+claim automatic live-region announcements across every Tk and screen-reader
+combination.
 See [TESTING.md](./TESTING.md) for the current list of these limitations.
 
 ## 7. Traceability and test reports

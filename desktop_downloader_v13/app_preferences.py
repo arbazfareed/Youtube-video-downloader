@@ -22,6 +22,7 @@ from app_support import (
     download_verified_update,
     LANGUAGES,
     APP_VERSION,
+    translate,
 )
 
 class PreferencesMixin:
@@ -31,8 +32,8 @@ class PreferencesMixin:
             raise ValueError(f"Unsupported language: {language}")
         self.history.set_setting("language", language)
         messagebox.showinfo(
-            "Language saved",
-            "Restart Smart Downloader to apply the selected language.",
+            translate("Language saved", language),
+            translate("Restart Smart Downloader to apply the selected language.", language),
             parent=self.settings_window,
         )
 

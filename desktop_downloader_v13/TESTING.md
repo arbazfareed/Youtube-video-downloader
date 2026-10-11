@@ -18,8 +18,10 @@ change network adapters, sleep the computer, or access normal user history.
 
 ## Progress from the previous pass
 
-The earlier passes completed Sections 1–14 and passed 181 tests. This pass
-adds 10 Section 15–20 regression tests; the complete suite now passes 191 tests.
+Earlier passes completed Sections 1–14 and passed 181 tests. The Section 15–20
+extension added 10 regression tests, bringing the suite to 191. This
+localization/accessibility pass adds four tests; the complete suite now passes
+195 tests.
 
 | Behavior | Before this extension | After this extension |
 | --- | --- | --- |
@@ -32,6 +34,7 @@ adds 10 Section 15–20 regression tests; the complete suite now passes 191 test
 | UI event load | Rapid same-status progress callbacks could enqueue updates faster than the interface needs to render them. | Same-status progress events are throttled to about 20 updates per second per job; status transitions remain immediate. |
 | Filename and assembly locks | Long names could lose useful extensions, and a transient Windows file lock could fail assembly immediately. | Long names preserve ordinary extensions; atomic replacement retries transient permission locks and reports a persistent lock clearly. |
 | Parallel state recovery | Corrupt range metadata or an externally enlarged segment could interfere with a later retry. | Malformed metadata starts with fresh range state, and segments with a size mismatch are discarded and fetched again. |
+| Urdu and keyboard accessibility | Urdu coverage did not include several primary controls, and link/queue/status focus shortcuts were not available. | Primary navigation and download controls have Urdu labels; shortcuts focus the URL field, queue, and progress status; Space toggles pause/resume while the queue has focus. |
 
 The suite also covers bandwidth-limit edge cases, schedule validation,
 concurrent history writes, SQL-like URL text, chunked checksum reads,
@@ -105,6 +108,12 @@ substitute for device, OS, network, or packaged-app tests.
 - **Cross-platform paths (Section 19):** Unicode filenames and paths containing
   spaces are covered on the current Windows test host. This is not a macOS or
   Linux launch certification.
+- **Localization and keyboard access:** Urdu core navigation, download controls,
+  settings, queue headings, and shortcut-help strings have translation tests.
+  Keyboard shortcut routing/focus targets and Urdu shortcut help are unit
+  tested. The progress summary and bar are keyboard focusable. Actual Tk key
+  events, visual Urdu shaping, and screen-reader output are platform-dependent
+  and must be checked manually.
 - **Shutdown and cleanup (Section 20):** mocked tests verify aria2 termination
   on cancellation and RPC failure. They do not prove that forcibly killing the
   packaged app leaves no real yt-dlp/aria2 process, socket, or worker behind.
@@ -127,14 +136,14 @@ downloads against external sites; or playback against an installed VLC runtime.
 Rapid cancel/re-add timing, zombie socket/thread counts, measured RAM/CPU,
 24-hour stability, 5 GB transfers, real antivirus locks, paths beyond Windows
 `MAX_PATH`, and 10,000-row scrolling performance also need a live GUI/network
-run. Sections 1–20 therefore have documented coverage, not blanket
+run. Sections 1–21 therefore have documented coverage, not blanket
 certification. Run each manual or environment-dependent case against its
 required OS, app build, external tools, real server, or hardware before making
 release claims. Same-length arbitrary edits to partial-file or segment bytes
 are not authenticated by these tests; use a supplied checksum to verify the
 completed output when that threat matters.
 
-## Sections 15–20 tracker
+## Sections 15–21 tracker
 
 `[A]` means covered by automated tests listed above; `[M]` means manual or
 environment-specific verification remains. A test marked `[A]` does not imply
@@ -160,6 +169,16 @@ SECTION 19 — CROSS-PLATFORM
 SECTION 20 — SHUTDOWN / PROCESSES / CLEANUP
 20.1 [M] 20.2 [M] 20.3 [M] 20.4 [M] 20.5 [M] 20.6 [A*]
 
+SECTION 21 — LOCALIZATION / ACCESSIBILITY
+21.1 [A*] Urdu core UI translation and English fallback for untranslated text
+21.2 [A] Keyboard shortcuts register and focus their intended controls
+21.3 [A] Space toggles pause/resume when the queue has focus
+21.4 [A] Urdu keyboard shortcut help text
+21.5 [M] Tab/Shift+Tab traversal with mouse-free workflow
+21.6 [M] Read current progress status using supported screen reader
+21.7 [M] Urdu shaping, font coverage, contrast, and screen-reader output per OS
+21.8 [M] Verify Urdu right-to-left reading and layout suitability with users
+
 FAILURES ENCOUNTERED AND ADDRESSED
 - Progress callbacks could overwhelm UI event processing:
   same-status updates are throttled; status changes are not delayed.
@@ -175,4 +194,6 @@ FAILURES ENCOUNTERED AND ADDRESSED
 
 * Mocked subprocess coverage only; verify real child-process shutdown manually.
 * Mocked retry coverage only; verify recovery from real network loss manually.
+* Tk and screen-reader behavior varies by platform; verify announcements and
+  Urdu glyph shaping on the supported OS/screen-reader combinations.
 ```

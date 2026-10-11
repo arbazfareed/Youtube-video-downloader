@@ -111,8 +111,9 @@ downloads, media tools, and events. Existing versions remain unchanged.
 Version 13.0 is an independent copy of v12 in
 [`desktop_downloader_v13`](./desktop_downloader_v13/README.md). It keeps
 separate local history and adds a refreshed three-panel interface with a media
-inspector and direct audio/video player launch controls. Earlier versions remain
-unchanged.
+inspector, direct audio/video player launch controls, Urdu translations for
+primary controls, and keyboard navigation/accessibility improvements. Earlier
+versions remain unchanged.
 
 - [Version 13.0 features and refreshed interface](./desktop_downloader_v13/README.md)
 - [Version 13.0 setup and aria2 installation](./desktop_downloader_v13/SETUP.md)

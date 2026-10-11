@@ -443,6 +443,111 @@ TRANSLATIONS = {
     },
 }
 
+URDU_CORE_TRANSLATIONS = {
+    "All tasks": "تمام کام",
+    "Downloading": "ڈاؤن لوڈ ہو رہا ہے",
+    "Completed": "مکمل",
+    "Media library": "میڈیا لائبریری",
+    "Tools & utilities": "اوزار اور سہولیات",
+    "Convert to MP3": "MP3 میں تبدیل کریں",
+    "Image tools": "تصویری اوزار",
+    "Image gallery": "تصاویر کی گیلری",
+    "Download and organize\nlocal media": "مقامی میڈیا ڈاؤن لوڈ اور منظم کریں",
+    "Paste a link, choose where to save it, and add it to your queue.": (
+        "لنک چسپاں کریں، محفوظ کرنے کی جگہ منتخب کریں، پھر فہرست میں شامل کریں۔"
+    ),
+    "Use recommended": "تجویز کردہ ترتیبات استعمال کریں",
+    "Auto-fill copied links": "کاپی کیے گئے لنک خودکار طور پر شامل کریں",
+    "Dark mode": "ڈارک موڈ",
+    "Link": "لنک",
+    "Source": "ماخذ",
+    "Media": "میڈیا",
+    "Resolution": "ویڈیو معیار",
+    "Playlist": "پلے لسٹ",
+    "Add download": "ڈاؤن لوڈ شامل کریں",
+    "Batch": "ایک ساتھ کئی",
+    "Sequence": "ترتیب",
+    "Browse": "منتخب کریں",
+    "Statistics dashboard": "اعداد و شمار کا ڈیش بورڈ",
+    "Total downloads": "کل ڈاؤن لوڈز",
+    "Completed files": "مکمل فائلیں",
+    "Success rate": "کامیابی کی شرح",
+    "Failed or stopped": "ناکام یا رکے ہوئے",
+    "Top source domains": "نمایاں ماخذ ڈومین",
+    "No source domains recorded yet.": "ابھی تک کوئی ماخذ ڈومین محفوظ نہیں ہوا۔",
+    "No task selected": "کوئی کام منتخب نہیں",
+    "Select a task before copying its link.": "لنک کاپی کرنے سے پہلے ایک کام منتخب کریں۔",
+    "More settings": "مزید ترتیبات",
+    "Overall progress": "مجموعی پیش رفت",
+    "Right-click an image download for image tools.": (
+        "تصویری اوزار کے لیے ڈاؤن لوڈ کی گئی تصویر پر دایاں کلک کریں۔"
+    ),
+    "Status": "حالت",
+    "Progress": "پیش رفت",
+    "Transfer details": "منتقلی کی تفصیل",
+    "Saving to": "یہاں محفوظ ہو رہا ہے",
+    "Media preview": "میڈیا کا پیش نظارہ",
+    "No item selected": "کوئی آئٹم منتخب نہیں",
+    "Select a file to preview": "پیش نظارہ کے لیے فائل منتخب کریں",
+    "Choose an existing file or select a downloaded task.": (
+        "موجودہ فائل منتخب کریں یا ڈاؤن لوڈ کیا گیا کام چنیں۔"
+    ),
+    "Show file": "فائل دکھائیں",
+    "Pause / resume": "روکیں / جاری رکھیں",
+    "Resume / retry": "جاری رکھیں / دوبارہ کوشش کریں",
+    "Cancel selected": "منتخب کام منسوخ کریں",
+    "History": "تاریخچہ",
+    "Hide selected": "منتخب کام چھپائیں",
+    "Restore selected": "منتخب کام بحال کریں",
+    "Clear finished": "مکمل کام صاف کریں",
+    "Show hidden": "چھپے ہوئے دکھائیں",
+    "Help": "مدد",
+    "General": "عام",
+    "Language": "زبان",
+    "Accessibility": "رسائی کی سہولیات",
+    "Use larger text": "بڑا متن استعمال کریں",
+    "High contrast": "زیادہ تضاد",
+    "Check for updates at startup": "شروع ہوتے وقت اپ ڈیٹس دیکھیں",
+    "Check for updates now": "ابھی اپ ڈیٹس دیکھیں",
+    "Record local diagnostic events": "مقامی تشخیصی واقعات محفوظ کریں",
+    "Export local diagnostics…": "مقامی تشخیصی معلومات برآمد کریں…",
+    "Speed & checks": "رفتار اور تصدیق",
+    "Connection": "کنکشن",
+    "Download speed": "ڈاؤن لوڈ کی رفتار",
+    "Limit for this download": "اس ڈاؤن لوڈ کی حد",
+    "Shared limit for all downloads": "تمام ڈاؤن لوڈز کی مشترکہ حد",
+    "Verify downloaded file": "ڈاؤن لوڈ فائل کی تصدیق کریں",
+    "Proxy (optional)": "پراکسی (اختیاری)",
+    "Browser cookies": "براؤزر کوکیز",
+    "Custom HTTP headers": "حسب ضرورت HTTP ہیڈرز",
+    "Retry attempts": "دوبارہ کوششوں کی تعداد",
+    "Schedule & files": "شیڈول اور فائلیں",
+    "Start at (local time)": "شروع ہونے کا وقت (مقامی)",
+    "Save to cloud": "کلاؤڈ میں محفوظ کریں",
+    "Keyboard shortcuts:": "کی بورڈ شارٹ کٹس:",
+    "Ctrl+L — focus link field": "Ctrl+L — لنک والے خانے پر جائیں",
+    "Ctrl+J — focus download list": "Ctrl+J — ڈاؤن لوڈ فہرست پر جائیں",
+    "Alt+S — focus progress status": "Alt+S — پیش رفت کی حالت پر جائیں",
+    "Space — pause/resume when the download list is focused": (
+        "Space — ڈاؤن لوڈ فہرست منتخب ہونے پر روکیں یا جاری رکھیں"
+    ),
+    "Press F1 for help. Use Tab and Shift+Tab to move between controls.": (
+        "مدد کے لیے F1 دبائیں۔ کنٹرولز کے درمیان جانے کے لیے Tab اور Shift+Tab استعمال کریں۔"
+    ),
+    "Language saved": "زبان محفوظ ہو گئی",
+    "Smart Downloader help": "Smart Downloader کی مدد",
+    "Keyboard: Ctrl+, Settings · F1 Help · Ctrl+Enter Add download · Ctrl+O Open selected location": (
+        "کی بورڈ: Ctrl+, ترتیبات · F1 مدد · Ctrl+Enter ڈاؤن لوڈ شامل کریں · "
+        "Ctrl+O منتخب مقام کھولیں"
+    ),
+    "Restart Smart Downloader to apply the selected language.": (
+        "منتخب زبان لاگو کرنے کے لیے Smart Downloader دوبارہ شروع کریں۔"
+    ),
+}
+
+for _source_text, _urdu_text in URDU_CORE_TRANSLATIONS.items():
+    TRANSLATIONS.setdefault(_source_text, {})["ur"] = _urdu_text
+
 
 def translate(text: str, language: str = "en") -> str:
     language_code = LANGUAGES.get(language, language)

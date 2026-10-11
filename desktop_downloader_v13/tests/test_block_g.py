@@ -43,6 +43,35 @@ class LocalizationTests(unittest.TestCase):
         self.assertEqual(translate("Untranslated status", "Spanish"), "Untranslated status")
         self.assertEqual(translate("Settings", "unsupported"), "Settings")
 
+    def test_urdu_translates_primary_download_and_accessibility_controls(self):
+        core_labels = (
+            "All tasks",
+            "Add download",
+            "Link",
+            "Source",
+            "Media",
+            "Resolution",
+            "Playlist",
+            "Browse",
+            "Overall progress",
+            "Status",
+            "Accessibility",
+            "Use larger text",
+            "High contrast",
+            "Keyboard shortcuts:",
+            "Ctrl+L — focus link field",
+            "Ctrl+J — focus download list",
+            "Alt+S — focus progress status",
+        )
+        for label in core_labels:
+            with self.subTest(label=label):
+                translated = translate(label, "Urdu")
+                self.assertNotEqual(translated, label)
+                self.assertTrue(
+                    any("\u0600" <= character <= "\u06ff" for character in translated),
+                    translated,
+                )
+
 
 class DiagnosticsTests(unittest.TestCase):
     def test_diagnostics_are_disabled_by_default_and_store_only_minimal_local_fields(self):

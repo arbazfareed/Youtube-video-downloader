@@ -30,6 +30,66 @@ class UiMixin:
         self.open_selected_location()
         return "break"
 
+    def _focus_url_shortcut(self, _event=None) -> str:
+        self.url_entry.focus_set()
+        return "break"
+
+    def _focus_queue_shortcut(self, _event=None) -> str:
+        self.jobs.focus_set()
+        return "break"
+
+    def _focus_progress_shortcut(self, _event=None) -> str:
+        self.progress_summary_label.focus_set()
+        return "break"
+
+    def _keyboard_shortcuts_text(self) -> str:
+        return "\n".join(
+            (
+                self._t("Keyboard shortcuts:"),
+                f"Ctrl+, — {self._t('Settings')}",
+                f"F1 — {self._t('Help')}",
+                f"Ctrl+Enter — {self._t('Add download')}",
+                f"Ctrl+O — {self._t('Open selected location')}",
+                self._t("Ctrl+L — focus link field"),
+                self._t("Ctrl+J — focus download list"),
+                self._t("Alt+S — focus progress status"),
+                self._t("Space — pause/resume when the download list is focused"),
+                self._t("Press F1 for help. Use Tab and Shift+Tab to move between controls."),
+            )
+        )
+
+    def _keyboard_shortcuts_summary_text(self) -> str:
+        return "\n".join(
+            (
+                self._t("Keyboard shortcuts:"),
+                f"Ctrl+, {self._t('Settings')} · F1 {self._t('Help')} · "
+                f"Ctrl+Enter {self._t('Add download')}",
+                f"Ctrl+O {self._t('Open selected location')} · "
+                f"{self._t('Ctrl+L — focus link field')} · "
+                f"{self._t('Ctrl+J — focus download list')}",
+                f"{self._t('Alt+S — focus progress status')} · "
+                f"{self._t('Space — pause/resume when the download list is focused')}",
+                self._t("Press F1 for help. Use Tab and Shift+Tab to move between controls."),
+            )
+        )
+
+    def _toggle_pause_from_queue(self, _event=None) -> str:
+        self.toggle_pause_selected()
+        return "break"
+
+    def _bind_keyboard_shortcuts(self) -> None:
+        shortcuts = (
+            ("<Control-comma>", self._open_settings_shortcut),
+            ("<F1>", self._help_shortcut),
+            ("<Control-Return>", self._add_download_shortcut),
+            ("<Control-o>", self._open_location_shortcut),
+            ("<Control-l>", self._focus_url_shortcut),
+            ("<Control-j>", self._focus_queue_shortcut),
+            ("<Alt-s>", self._focus_progress_shortcut),
+        )
+        for sequence, callback in shortcuts:
+            self.root.bind_all(sequence, callback, add="+")
+
     def _build_ui(self) -> None:
         outer = ttk.Frame(self.root)
         outer.pack(fill="both", expand=True)
@@ -406,14 +466,14 @@ class UiMixin:
             options.columnconfigure(column, weight=1)
         options.columnconfigure(2, weight=0)
         quick_options = (
-            ("Source", self.source, ("Auto", "Direct file", "Supported site", "Torrent/magnet")),
-            ("Media", self.mode, ("Video", "Best audio", "MP3 audio", "Image gallery")),
-            ("Resolution", self.quality, (
+            (self._t("Source"), self.source, ("Auto", "Direct file", "Supported site", "Torrent/magnet")),
+            (self._t("Media"), self.mode, ("Video", "Best audio", "MP3 audio", "Image gallery")),
+            (self._t("Resolution"), self.quality, (
                 "Best available", "8K (4320p)", "5K (2880p)", "4K (2160p)",
                 "1440p (2K)", "1080p (Full HD)", "720p (HD)", "480p",
                 "360p", "240p", "144p",
             )),
-            ("Playlist", self.playlist_scope, (
+            (self._t("Playlist"), self.playlist_scope, (
                 "Auto (from link)", "Single video", "Entire playlist",
             )),
         )
@@ -444,11 +504,13 @@ class UiMixin:
             progress_header, text=self._t("Overall progress"), style="Card.TLabel",
         ).pack(side="left")
         self.progress_summary = tk.StringVar(value="No active downloads")
-        ttk.Label(
+        self.progress_summary_label = ttk.Label(
             progress_header, textvariable=self.progress_summary, style="Card.TLabel",
-        ).pack(side="right")
+            takefocus=True,
+        )
+        self.progress_summary_label.pack(side="right")
         self.overall_progress = ttk.Progressbar(
-            progress_card, mode="determinate", maximum=100,
+            progress_card, mode="determinate", maximum=100, takefocus=True,
         )
         self.overall_progress.grid(row=1, column=0, sticky="ew", pady=(8, 5))
         self.speed_graph = tk.Canvas(
@@ -478,6 +540,7 @@ class UiMixin:
         columns = ("status", "progress", "details", "location", "link")
         self.jobs = ttk.Treeview(
             queue_frame, columns=columns, show="headings", selectmode="browse",
+            takefocus=True,
         )
         self.jobs.heading("status", text=self._t("Status"))
         self.jobs.heading("progress", text=self._t("Progress"))
@@ -502,6 +565,7 @@ class UiMixin:
         )
         self.jobs.bind("<Button-3>", self._show_image_context_menu)
         self.jobs.bind("<Double-1>", self._open_clicked_row_action)
+        self.jobs.bind("<space>", self._toggle_pause_from_queue)
         self.jobs.bind("<<TreeviewSelect>>", self._show_selected_thumbnail)
 
         ttk.Label(
@@ -705,7 +769,7 @@ class UiMixin:
         ).grid(row=3, column=1, sticky="w", padx=10, pady=5)
         ttk.Label(
             general,
-            text="Keyboard: Ctrl+, Settings · F1 Help · Ctrl+Enter Add download · Ctrl+O Open selected location",
+            text=self._keyboard_shortcuts_summary_text(),
             wraplength=580,
         ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(4, 14))
         ttk.Separator(general).grid(

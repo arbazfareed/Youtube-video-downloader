@@ -77,15 +77,23 @@ token before exposing it to a trusted network.
 The **Settings** window groups speed/checksum, connection, schedule/files, and
 general application preferences. The General tab provides language selection
 (English, Urdu, Arabic, Spanish, Hindi, and Bangla), larger text, high contrast,
-update checks, and local diagnostics. Core navigation and settings labels have
-translations; untranslated interface and error text falls back to English.
-Restart the app after changing languages.
+update checks, and local diagnostics. Urdu translations cover the primary
+navigation, download controls, queue headings, settings, and keyboard help;
+other translated strings are available where listed in the translation catalog.
+Untranslated interface, dialog, and error text falls back to English. Restart
+the app after changing languages. Urdu labels are translated, but the complete
+window layout is not automatically mirrored for right-to-left reading.
 
 Keyboard shortcuts include **Ctrl+,** for Settings, **F1** for Help,
 **Ctrl+Enter** to add a download, and **Ctrl+O** to open the selected location.
-Larger text, a high-contrast color palette, normal keyboard focus traversal, and
-these shortcuts improve accessibility. Screen-reader support can vary by
-operating system and Tk version.
+**Ctrl+L** focuses the link field, **Ctrl+J** focuses the download list,
+**Alt+S** focuses the progress status, and **Space** pauses/resumes the
+selected task while the download list has focus. Tab and Shift+Tab navigate
+controls; the queue supports standard arrow-key selection. The progress status
+and progress bar can receive keyboard focus for assistive-technology reading.
+Larger text and a high-contrast palette are also available. Screen-reader
+announcements and Urdu text shaping depend on the operating system, screen
+reader, fonts, and Tk version; verify those combinations manually.
 
 For completed local downloads, v13 saves a SHA-256 baseline in download history.
 Before opening, playing, editing, or extracting a selected download, the app

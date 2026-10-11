@@ -32,6 +32,8 @@ only material you are allowed to save and follow the source service's terms.
 | US-06 | Resume a transfer when the server supports it. | I can continue without corruptly appending data if the server's response changed. | TC-4.2–TC-4.3, TC-4.13–TC-4.14 |
 | US-07 | Queue multiple files without the app starting too many at once. | My computer and network remain manageable. | TC-4.15 |
 | US-08 | Understand when an external server, network, or device still needs a real-world check. | Test results are honest and I know what has not been certified. | TEST_CASES.md and TESTING.md |
+| US-09 | Choose Urdu and navigate common download actions with the keyboard. | I can use the main interface and important actions in my language without relying only on a mouse. | SOFTWARE_REQUIREMENTS.md FR-I18N-01 and FR-A11Y-01 |
+| US-10 | Focus the download list or progress status with a shortcut and have the screen reader read the focused control. | I can inspect download state with assistive technology where my OS and Tk build expose it. | SOFTWARE_REQUIREMENTS.md FR-A11Y-02 and FR-A11Y-03 |
 
 ## How to read the test results
 
@@ -45,7 +47,17 @@ only material you are allowed to save and follow the source service's terms.
 - **Not separately evidenced** means there is no dedicated recorded test for
   that exact scenario yet.
 
-The automated v13 suite previously passed 191 tests. That count does **not**
+The Urdu translation covers the primary navigation, download actions, queue
+headings, key settings, and keyboard help. Some secondary dialogs, technical
+option values, and dynamic errors may remain English. Restart the app after
+changing the language setting. Shortcut help is available from Settings and
+F1. The progress summary and progress bar can receive keyboard focus.
+Screen-reader announcements and Urdu text rendering depend on your operating
+system, fonts, screen reader, and Tk version; test these directly rather than
+assuming every combination behaves the same. The whole window layout is not
+automatically mirrored for right-to-left reading.
+
+The current automated v13 suite passes 195 tests. That count does **not**
 mean every real-device or environment-specific check passed. In particular,
 offline packaged launches, 10,000-row startup time, actual network changes,
 sleep/wake behavior, real authentication, long-duration stability, measured
