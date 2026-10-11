@@ -231,8 +231,10 @@ jobs:
           $packageZip = Join-Path $env:RUNNER_TEMP "$packageName.zip"
           Compress-Archive -Path "$packageDirectory\*" -DestinationPath $packageZip
           if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v13") {
-            & (Join-Path $packageDirectory "${{ matrix.executable }}.exe") --vlc-smoke-test
-            if ($LASTEXITCODE -ne 0) {
+            $vlcSmokeTest = Start-Process `
+              -FilePath (Join-Path $packageDirectory "${{ matrix.executable }}.exe") `
+              -ArgumentList "--vlc-smoke-test" -Wait -PassThru
+            if ($vlcSmokeTest.ExitCode -ne 0) {
               throw "The portable VLC runtime failed its packaged smoke test."
             }
           }
