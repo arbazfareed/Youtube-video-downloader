@@ -66,6 +66,21 @@ from update_engine import (
 )
 
 
+def app_resource_path(name: str) -> Path:
+    bundle_directory = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return bundle_directory / name
+
+
+def set_app_window_icon(window: tk.Misc) -> None:
+    if sys.platform == "win32":
+        window.iconbitmap(str(app_resource_path("smart_downloader.ico")))
+        return
+
+    image = tk.PhotoImage(file=str(app_resource_path("smart_downloader.png")))
+    window.iconphoto(True, image)
+    window._smart_downloader_icon = image
+
+
 MAX_SPEEDS = {
     "Unlimited": None,
     "256 KB/s": 256 * 1024,

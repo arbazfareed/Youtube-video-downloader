@@ -35,6 +35,7 @@ from app_support import (
     SUPPORTED_BROWSERS,
     convert_docx_to_pdf,
     convert_pdf_to_docx,
+    set_app_window_icon,
     DownloadCancelled,
     _clean_terminal_text,
     _ffmpeg_directory,
@@ -69,6 +70,7 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Smart Downloader")
+        set_app_window_icon(self.root)
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         window_width = min(1440, max(560, screen_width - 40))
