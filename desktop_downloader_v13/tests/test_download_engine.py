@@ -258,6 +258,19 @@ class _RecordingSession(_FakeSession):
 
 
 class DownloadEngineTests(unittest.TestCase):
+    def test_youtube_bot_check_error_explains_browser_cookie_retry(self):
+        detail = (
+            "ERROR: [youtube] Sign in to confirm you're not a bot. "
+            "Use --cookies-from-browser or --cookies for authentication."
+        )
+
+        message = DownloaderApp._friendly_download_error(detail)
+
+        self.assertIn("More settings > Connection", message)
+        self.assertIn("Browser cookies", message)
+        self.assertIn("retry the download", message)
+        self.assertIn(detail, message)
+
     def test_multilingual_video_selection_keeps_one_best_track_per_language(self):
         from yt_dlp import YoutubeDL
 
@@ -681,6 +694,45 @@ class DownloadEngineTests(unittest.TestCase):
 
         notify_download.assert_called_once_with("Download complete", "video.mp4")
 
+    def test_skipped_playlist_items_are_reported_without_a_failure_dialog(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.events = queue.Queue()
+        app.events.put(
+            (
+                "progress",
+                "1",
+                "Downloading",
+                None,
+                "Skipping unavailable playlist entry: YouTube sign-in required",
+            )
+        )
+        app.events.put(("finished", "1", "Complete", "C:\\Downloads\\playlist"))
+        app.jobs = _FakeJobs({"1": "Downloading"})
+        app._download_paths = {"1": Path("C:\\Downloads\\playlist")}
+        app._playlist_warnings = {}
+        app.verified_checksums = {}
+        app.overall_progress = Mock()
+        app.progress_summary = _FakeStringVar()
+        app.root = Mock()
+        app._persist_job = Mock()
+        app._refresh_job_style = Mock()
+        app._apply_queue_filter = Mock()
+        app._record_speed_sample = Mock()
+        app.cancel_events = {"1": threading.Event()}
+        app.resume_events = {}
+        app.schedule_timers = {}
+        app.download_options = {"1": {}}
+
+        with (
+            patch("app_events.notify"),
+            patch("app_events.messagebox.showerror") as show_error,
+        ):
+            app._process_events()
+
+        self.assertIn("1 playlist error(s) skipped", app.progress_summary.get())
+        self.assertIn("remaining entries continued", app.progress_summary.get())
+        show_error.assert_not_called()
+
     def test_global_bandwidth_limiter_is_cancellable(self):
         cancel_event = threading.Event()
         limiter = GlobalBandwidthLimiter(1024)
@@ -925,6 +977,7 @@ class DownloadEngineTests(unittest.TestCase):
 
             options = youtube_dl.call_args.args[0]
             self.assertTrue(options["noplaylist"])
+            self.assertNotIn("ignoreerrors", options)
             self.assertIn("height<=1080", options["format"])
             self.assertEqual(options["concurrent_fragment_downloads"], 8)
 
@@ -953,6 +1006,7 @@ class DownloadEngineTests(unittest.TestCase):
         with TemporaryDirectory() as folder, patch("download_engine.yt_dlp.YoutubeDL") as youtube_dl:
             downloader = youtube_dl.return_value.__enter__.return_value
             downloader.extract_info.return_value = {"_filename": "playlist.mp4"}
+            progress_events = []
 
             _download_with_ytdlp(
                 "https://example.org/playlist",
@@ -961,11 +1015,25 @@ class DownloadEngineTests(unittest.TestCase):
                 "best",
                 "entire playlist",
                 threading.Event(),
-                lambda _status, _percent, _details: None,
+                lambda status, percent, details: progress_events.append(
+                    (status, percent, details)
+                ),
             )
 
             options = youtube_dl.call_args.args[0]
             self.assertFalse(options["noplaylist"])
+            self.assertEqual(options["ignoreerrors"], "only_download")
+            self.assertEqual(options["skip_playlist_after_errors"], 0)
+            self.assertTrue(options["lazy_playlist"])
+            options["logger"].error("ERROR: Sign in to confirm you are not a bot")
+            self.assertIn(
+                (
+                    "Downloading",
+                    None,
+                    "Skipping unavailable playlist entry: ERROR: Sign in to confirm you are not a bot",
+                ),
+                progress_events,
+            )
             self.assertIn("playlist_title", options["outtmpl"]["default"])
             self.assertIn("playlist_index", options["outtmpl"]["default"])
 

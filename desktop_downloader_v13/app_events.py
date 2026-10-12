@@ -75,6 +75,20 @@ class EventsMixin:
         else:
             self.events.put(("finished", job_id, "Complete", result))
 
+    @staticmethod
+    def _friendly_download_error(detail: str) -> str:
+        folded = detail.casefold()
+        if "sign in to confirm" in folded and "not a bot" in folded:
+            return (
+                "YouTube requires a signed-in browser session for this video. Open "
+                "More settings > Connection, choose the browser where you are signed "
+                "in under Browser cookies, then retry the download. Cookie access is "
+                "only used for the browser you select. If the browser's cookie database "
+                "is locked, close that browser and retry. Only download content you are "
+                f"authorized to access. Details: {detail}"
+            )
+        return detail
+
     def _process_events(self) -> None:
         while True:
             try:
@@ -120,6 +134,12 @@ class EventsMixin:
                     )
             elif event[0] == "progress":
                 _, job_id, status, percent, details = event
+                if status == "Downloading" and details.startswith(
+                    "Skipping unavailable playlist entry:"
+                ):
+                    warnings = getattr(self, "_playlist_warnings", {})
+                    warnings.setdefault(job_id, []).append(details)
+                    self._playlist_warnings = warnings
                 self._record_speed_sample(job_id, details)
                 if self.jobs.exists(job_id):
                     if percent is None:
@@ -156,6 +176,9 @@ class EventsMixin:
                 if self.jobs.exists(job_id):
                     self.jobs.set(job_id, "status", status)
                     if status == "Complete":
+                        skipped_playlist_items = getattr(
+                            self, "_playlist_warnings", {},
+                        ).pop(job_id, [])
                         options = self.download_options.get(job_id, {})
                         integrity_path = options.get("integrity_path")
                         integrity_sha256 = options.get("integrity_sha256")
@@ -179,13 +202,26 @@ class EventsMixin:
                             self.jobs.set(job_id, "location", str(result_folder))
                         self.overall_progress.stop()
                         self.overall_progress.configure(mode="determinate", value=100)
-                        self.progress_summary.set(f"Complete - {display_detail}")
+                        summary = f"Complete - {display_detail}"
+                        if skipped_playlist_items:
+                            skipped_count = len(set(skipped_playlist_items))
+                            summary += (
+                                f" | {skipped_count} playlist error(s) skipped; "
+                                "remaining entries continued. Retry unavailable "
+                                "entries "
+                                "with Browser cookies if sign-in is required."
+                            )
+                        self.progress_summary.set(summary)
                     elif status in {"Failed", "Cancelled"}:
+                        getattr(self, "_playlist_warnings", {}).pop(job_id, None)
                         if status == "Failed" and detail.startswith("Cloud upload failed;"):
                             staging = self._download_paths.get(job_id)
                             if staging is not None:
                                 self._job_destinations[job_id] = str(staging)
                                 self.jobs.set(job_id, "location", str(staging))
+                        if status == "Failed":
+                            detail = self._friendly_download_error(detail)
+                            display_detail = detail
                         self.overall_progress.stop()
                         self.overall_progress.configure(mode="determinate", value=0)
                         self.progress_summary.set(

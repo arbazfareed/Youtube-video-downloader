@@ -492,6 +492,15 @@ class MediaMixin:
         path = self._selected_media_path()
         if path is None:
             return
+        current_path = getattr(self, "_in_app_media_path", None)
+        player = getattr(self, "_in_app_player", None)
+        if (
+            player is not None
+            and current_path is not None
+            and Path(current_path) == path.resolve()
+        ):
+            self._toggle_in_app_playback()
+            return
         try:
             self._play_media_in_app(path)
         except (AttributeError, ImportError, OSError, RuntimeError) as error:
@@ -502,6 +511,59 @@ class MediaMixin:
                 parent=self.root,
             ):
                 self.open_media_in_system_player(path)
+
+    def play_selected_media_in_preview(self) -> None:
+        selected = self.jobs.selection()
+        path = getattr(self, "_local_media_path", None)
+        if path is None and selected:
+            if not self._integrity_guard(selected[0]):
+                return
+            path = self._selected_output_path()
+        if path is None or not path.is_file():
+            path = self._choose_local_video()
+            if path is None:
+                return
+            self._local_media_path = path
+        if path.suffix.lower() not in VIDEO_MEDIA_EXTENSIONS:
+            messagebox.showinfo(
+                self._t("Video preview only"),
+                self._t("Choose a supported video file to play it in the preview."),
+                parent=self.root,
+            )
+            return
+        self._show_video_preview(path)
+        try:
+            size_mb = path.stat().st_size / (1024 * 1024)
+        except OSError as error:
+            self._clear_thumbnail(f"Preview unavailable:\n{error}")
+            return
+        self.preview_details.configure(
+            text=f"{path.name}\n{self._t('Video preview')}\n{size_mb:.1f} MB"
+        )
+
+    def _choose_local_video(self) -> Path | None:
+        video_types = " ".join(
+            f"*{suffix}" for suffix in sorted(VIDEO_MEDIA_EXTENSIONS)
+        )
+        selected = filedialog.askopenfilename(
+            parent=self.root,
+            title=self._t("Choose a video to preview"),
+            filetypes=(
+                (self._t("Video files"), video_types),
+                (self._t("All files"), "*.*"),
+            ),
+        )
+        if not selected:
+            return None
+        path = Path(selected).expanduser()
+        if not path.is_file() or path.suffix.lower() not in VIDEO_MEDIA_EXTENSIONS:
+            messagebox.showerror(
+                self._t("Unsupported media"),
+                self._t("Choose an existing supported video file."),
+                parent=self.root,
+            )
+            return None
+        return path
 
     def _show_video_preview(self, path: Path) -> None:
         self._clear_video_preview()
@@ -536,14 +598,10 @@ class MediaMixin:
         if player is not None:
             if player.is_playing():
                 player.pause()
-                self.preview_player_play_button.configure(
-                    text=self._t("Play preview"),
-                )
+                self.preview_player_play_button.configure(text="▶")
             else:
                 player.play()
-                self.preview_player_play_button.configure(
-                    text=self._t("Pause preview"),
-                )
+                self.preview_player_play_button.configure(text="Ⅱ")
                 self._schedule_video_preview_poll()
             return
 
@@ -555,6 +613,7 @@ class MediaMixin:
 
             self._prepare_bundled_vlc_runtime()
             vlc = importlib.import_module("vlc")
+            self._preview_vlc = vlc
             instance = vlc.Instance()
             if instance is None:
                 raise RuntimeError(self._t("VLC could not initialize."))
@@ -571,7 +630,12 @@ class MediaMixin:
                 player.set_nsobject(handle)
             else:
                 player.set_xwindow(handle)
-            self.preview_video_placeholder.place_forget()
+            self.preview_video_placeholder.configure(
+                text=f"{path.name}\n{self._t('Loading preview')}",
+            )
+            self.preview_video_placeholder.place(
+                relx=0.5, rely=0.5, anchor="center",
+            )
             player.audio_set_mute(False)
             player.audio_set_volume(self.preview_player_volume.get())
             if player.play() == -1:
@@ -584,9 +648,7 @@ class MediaMixin:
                     self._t("VLC could not change the playback speed."),
                     parent=self.root,
                 )
-            self.preview_player_play_button.configure(
-                text=self._t("Pause preview"),
-            )
+            self.preview_player_play_button.configure(text="Ⅱ")
             self._preview_duration_ms = 0
             self._preview_seeking = False
             self._schedule_video_preview_poll()
@@ -612,6 +674,22 @@ class MediaMixin:
         player = getattr(self, "_preview_vlc_player", None)
         if player is None:
             return
+        vlc = getattr(self, "_preview_vlc", None)
+        state = player.get_state()
+        if vlc is not None and state == vlc.State.Error:
+            self._stop_video_preview()
+            placeholder = getattr(self, "preview_video_placeholder", None)
+            if placeholder is not None:
+                placeholder.configure(
+                    text=self._t(
+                        "VLC could not play this video. Try another file or use "
+                        "Open in system player."
+                    ),
+                )
+                placeholder.place(relx=0.5, rely=0.5, anchor="center")
+            return
+        if vlc is not None and state == vlc.State.Playing:
+            self.preview_video_placeholder.place_forget()
         duration = max(0, player.get_length())
         current_time = max(0, player.get_time())
         self._preview_duration_ms = duration
@@ -725,14 +803,117 @@ class MediaMixin:
         self._preview_seeking = False
         self._draw_video_preview_timeline()
 
+    def _nudge_video_preview_seek(self, seconds: int) -> None:
+        player = getattr(self, "_preview_vlc_player", None)
+        if player is None or not player.is_seekable():
+            return
+        current_time = max(0, player.get_time())
+        duration = max(0, player.get_length())
+        target_time = max(0, current_time + seconds * 1000)
+        if duration > 0:
+            target_time = min(target_time, duration)
+        player.set_time(target_time)
+
+    def _adjust_video_preview_volume(self, delta: int) -> None:
+        volume = max(
+            0,
+            min(100, round(float(self.preview_player_volume.get())) + delta),
+        )
+        self.preview_player_volume.set(volume)
+        self._set_video_preview_volume(str(volume))
+
+    @staticmethod
+    def _widget_is_within(widget, ancestor) -> bool:
+        if ancestor is None:
+            return False
+        while widget is not None:
+            if widget is ancestor:
+                return True
+            widget = getattr(widget, "master", None)
+        return False
+
+    def _handle_playback_arrow_key(self, event=None) -> str | None:
+        if event is None:
+            return None
+        key = getattr(event, "keysym", "")
+        widget = getattr(event, "widget", None)
+        try:
+            top_level = widget.winfo_toplevel() if widget is not None else None
+        except tk.TclError:
+            return None
+
+        player_window = getattr(self, "_in_app_player_window", None)
+        overlay_windows = {
+            getattr(self, "_in_app_controls_overlay_window", None),
+            getattr(self, "_in_app_top_controls_overlay_window", None),
+        }
+        if top_level is player_window or top_level in overlay_windows:
+            player = getattr(self, "_in_app_player", None)
+            if player is None:
+                return None
+            if key == "Left":
+                self._nudge_in_app_player_seek(-5)
+            elif key == "Right":
+                self._nudge_in_app_player_seek(5)
+            elif key == "Up":
+                self._adjust_in_app_volume(5)
+            elif key == "Down":
+                self._adjust_in_app_volume(-5)
+            else:
+                return None
+            self._show_in_app_controls()
+            return "break"
+
+        preview = getattr(self, "preview_container", None)
+        if (
+            top_level is getattr(self, "root", None)
+            and self._widget_is_within(widget, preview)
+            and getattr(self, "_preview_vlc_player", None) is not None
+        ):
+            if key == "Left":
+                self._nudge_video_preview_seek(-5)
+            elif key == "Right":
+                self._nudge_video_preview_seek(5)
+            elif key == "Up":
+                self._adjust_video_preview_volume(5)
+            elif key == "Down":
+                self._adjust_video_preview_volume(-5)
+            else:
+                return None
+            return "break"
+        return None
+
+    def _nudge_in_app_player_seek(self, seconds: int) -> None:
+        player = getattr(self, "_in_app_player", None)
+        if player is None or not player.is_seekable():
+            return
+        current_time = max(0, player.get_time())
+        duration = max(0, player.get_length())
+        target_time = max(0, current_time + seconds * 1000)
+        if duration > 0:
+            target_time = min(target_time, duration)
+        player.set_time(target_time)
+
+    def _adjust_in_app_volume(self, delta: int) -> None:
+        player = getattr(self, "_in_app_player", None)
+        if player is None:
+            return
+        volume = getattr(self, "_in_app_volume_var", None)
+        current = volume.get() if volume is not None else player.audio_get_volume()
+        self._set_in_app_volume(str(max(0, min(100, round(float(current)) + delta))))
+
     def _set_video_preview_timeline_hover(self, active: bool) -> None:
         self._preview_timeline_hover = active
         self._draw_video_preview_timeline()
 
     def _set_video_preview_volume(self, value: str) -> None:
+        volume = max(0, min(100, round(float(value))))
+        label = getattr(self, "preview_player_volume_label", None)
+        if label is not None:
+            label.configure(text=f"{volume}%")
         player = getattr(self, "_preview_vlc_player", None)
         if player is not None:
-            player.audio_set_volume(max(0, min(100, round(float(value)))))
+            player.audio_set_volume(volume)
 
     def _refresh_video_preview_audio_tracks(self) -> None:
         player = getattr(self, "_preview_vlc_player", None)
@@ -764,8 +945,7 @@ class MediaMixin:
     def _refresh_video_preview_subtitle_tracks(self) -> None:
         player = getattr(self, "_preview_vlc_player", None)
         variable = getattr(self, "_preview_subtitle_track", None)
-        button = getattr(self, "preview_player_cc_button", None)
-        if player is None or variable is None or button is None:
+        if player is None or variable is None:
             return
         tracks = {}
         for track_id, description in player.video_get_spu_description() or []:
@@ -785,10 +965,7 @@ class MediaMixin:
         self._preview_subtitle_tracks = tracks
         if not tracks:
             variable.set(self._t("Off"))
-            button.configure(state="disabled")
             return
-        button.grid()
-        button.configure(state="normal")
         active = player.video_get_spu()
         variable.set(
             next(
@@ -979,9 +1156,17 @@ class MediaMixin:
             instance.release()
         self._preview_vlc_player = None
         self._preview_vlc_instance = None
+        self._preview_vlc = None
         button = getattr(self, "preview_player_play_button", None)
         if button is not None:
-            button.configure(text=self._t("Play preview"))
+            button.configure(text="▶")
+        volume_label = getattr(self, "preview_player_volume_label", None)
+        if volume_label is not None:
+            volume = max(
+                0,
+                min(100, round(float(self.preview_player_volume.get()))),
+            )
+            volume_label.configure(text=f"{volume}%")
         placeholder = getattr(self, "preview_video_placeholder", None)
         if placeholder is not None:
             placeholder.place(relx=0.5, rely=0.5, anchor="center")
@@ -1009,9 +1194,7 @@ class MediaMixin:
         preview_player = getattr(self, "_preview_vlc_player", None)
         if preview_player is not None and preview_player.is_playing():
             preview_player.pause()
-            self.preview_player_play_button.configure(
-                text=self._t("Play preview"),
-            )
+            self.preview_player_play_button.configure(text="▶")
         selected = getattr(self, "jobs", None)
         selection = selected.selection() if selected is not None else ()
         if selection and self._selected_output_path() == path:
@@ -1075,12 +1258,14 @@ class MediaMixin:
         window.protocol("WM_DELETE_WINDOW", self._close_in_app_player)
         window.bind("<F11>", self._toggle_in_app_fullscreen, add="+")
         window.bind("<Escape>", self._exit_in_app_fullscreen, add="+")
+        window.bind("<space>", self._toggle_in_app_playback_from_key, add="+")
         window.bind("<KeyPress>", self._show_in_app_controls, add="+")
         window.bind("<Motion>", self._show_in_app_controls, add="+")
         window.bind("<ButtonPress-1>", self._begin_in_app_control_interaction, add="+")
         window.bind("<ButtonRelease-1>", self._end_in_app_control_interaction, add="+")
         self._in_app_player_window = window
         self._in_app_media_title = path.name
+        self._in_app_media_path = path.resolve()
 
         self._in_app_player_status = tk.StringVar(value=self._t("Playback started"))
         self._in_app_controls_visible = False
@@ -1110,6 +1295,7 @@ class MediaMixin:
         controls_window.attributes("-alpha", 0.0)
         controls_window.bind("<F11>", self._toggle_in_app_fullscreen, add="+")
         controls_window.bind("<Escape>", self._exit_in_app_fullscreen, add="+")
+        controls_window.bind("<space>", self._toggle_in_app_playback_from_key, add="+")
         controls_window.bind("<KeyPress>", self._show_in_app_controls, add="+")
         self._in_app_controls_overlay_window = controls_window
         top_controls_window = tk.Toplevel(window)
@@ -1119,6 +1305,7 @@ class MediaMixin:
         top_controls_window.attributes("-alpha", 0.0)
         top_controls_window.bind("<F11>", self._toggle_in_app_fullscreen, add="+")
         top_controls_window.bind("<Escape>", self._exit_in_app_fullscreen, add="+")
+        top_controls_window.bind("<space>", self._toggle_in_app_playback_from_key, add="+")
         top_controls_window.bind("<KeyPress>", self._show_in_app_controls, add="+")
         self._in_app_top_controls_overlay_window = top_controls_window
         top_controls = tk.Frame(
@@ -1387,10 +1574,12 @@ class MediaMixin:
             player.set_media(instance.media_new(str(path)))
             self._set_in_app_video_target(video_surface)
             window.lift()
+            window.focus_set()
             player.audio_set_mute(False)
             player.audio_set_volume(volume.get())
             if player.play() == -1:
                 raise RuntimeError(self._t("VLC could not start playback."))
+            self._set_in_app_launcher_buttons(True)
         except Exception:
             self._close_in_app_player()
             raise
@@ -1414,12 +1603,29 @@ class MediaMixin:
             if getattr(sys, "frozen", False)
             else Path(__file__).resolve().parent
         )
-        vlc_directory = app_directory / "VLC"
-        plugin_directory = vlc_directory / "plugins"
-        libvlc_path = vlc_directory / "libvlc.dll"
-        if not libvlc_path.is_file() or not plugin_directory.is_dir():
+        candidates = [app_directory / "VLC"]
+        for program_files in (
+            os.environ.get("ProgramFiles", "C:/Program Files"),
+            os.environ.get("ProgramFiles(x86)", "C:/Program Files (x86)"),
+        ):
+            candidates.append(Path(program_files) / "VideoLAN" / "VLC")
+        vlc_executable = shutil.which("vlc")
+        if vlc_executable:
+            candidates.append(Path(vlc_executable).resolve().parent)
+
+        vlc_directory = next(
+            (
+                candidate for candidate in candidates
+                if (candidate / "libvlc.dll").is_file()
+                and (candidate / "plugins").is_dir()
+            ),
+            None,
+        )
+        if vlc_directory is None:
             return
 
+        plugin_directory = vlc_directory / "plugins"
+        libvlc_path = vlc_directory / "libvlc.dll"
         os.environ["PYTHON_VLC_LIB_PATH"] = str(libvlc_path)
         os.environ["PYTHON_VLC_MODULE_PATH"] = str(plugin_directory)
         os.environ["VLC_PLUGIN_PATH"] = str(plugin_directory)
@@ -1463,11 +1669,13 @@ class MediaMixin:
             self._refresh_in_app_subtitle_tracks()
         if state == vlc.State.Ended:
             self._in_app_playback_button.configure(text="▶")
+            self._set_in_app_launcher_buttons(False)
             self._set_in_app_player_status(self._t("Playback finished"))
             self._show_in_app_controls()
             return
         if state == vlc.State.Error:
             self._in_app_playback_button.configure(text="▶")
+            self._set_in_app_launcher_buttons(False)
             self._set_in_app_player_status(self._t("Playback failed"))
             self._show_in_app_controls()
             messagebox.showerror(
@@ -1784,15 +1992,41 @@ class MediaMixin:
             player.pause()
             label = self._t("Play")
             status = self._t("Playback paused")
+            self._set_in_app_launcher_buttons(False)
         else:
             player.play()
             label = self._t("Pause")
             status = self._t("Playback started")
+            self._set_in_app_launcher_buttons(True)
         button = getattr(self, "_in_app_playback_button", None)
         if button is not None:
             button.configure(text="▶" if label == self._t("Play") else "Ⅱ")
         self._set_in_app_player_status(status)
         self._show_in_app_controls()
+
+    def _set_in_app_launcher_buttons(self, playing: bool) -> None:
+        label = self._t("Pause in app") if playing else self._t("Play in app")
+        for name in ("_play_in_app_button", "_open_smart_vlc_button"):
+            button = getattr(self, name, None)
+            if button is not None:
+                button.configure(text=label)
+
+    def _toggle_in_app_playback_from_key(self, event=None) -> str:
+        widget = getattr(event, "widget", None)
+        if widget is not None:
+            try:
+                widget_class = widget.winfo_class()
+            except tk.TclError:
+                widget_class = ""
+            if widget_class in {
+                "Button", "TButton", "Scale", "TScale", "Entry", "TEntry",
+                "TCombobox", "Spinbox", "TSpinbox", "Text",
+            }:
+                return None
+        if getattr(self, "_in_app_player", None) is not None:
+            self._toggle_in_app_playback()
+            return "break"
+        return None
 
     def _set_in_app_playback_rate(self, _event=None) -> None:
         player = getattr(self, "_in_app_player", None)
@@ -2227,6 +2461,7 @@ class MediaMixin:
         player = getattr(self, "_in_app_player", None)
         if player is not None:
             player.stop()
+        self._set_in_app_launcher_buttons(False)
         playback_button = getattr(self, "_in_app_playback_button", None)
         if playback_button is not None:
             playback_button.configure(text="▶")
@@ -2263,6 +2498,8 @@ class MediaMixin:
         self._in_app_player = None
         self._in_app_vlc_instance = None
         self._in_app_player_window = None
+        self._in_app_media_path = None
+        self._set_in_app_launcher_buttons(False)
         controls_window = getattr(self, "_in_app_controls_overlay_window", None)
         if controls_window is not None:
             try:
@@ -2433,7 +2670,9 @@ class MediaMixin:
         self._clear_video_preview()
         if not selected:
             self.inspector_status.set(self._t("No item selected"))
-            self._clear_thumbnail("Select a task to inspect")
+            self._clear_thumbnail(
+                "Select a video task or choose Browse local media to preview a video."
+            )
             return
         job_id = selected[0]
         path = self._selected_output_path()

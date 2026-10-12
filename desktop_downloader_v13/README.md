@@ -90,8 +90,9 @@ window layout is not automatically mirrored for right-to-left reading.
 Keyboard shortcuts include **Ctrl+,** for Settings, **F1** for Help,
 **Ctrl+Enter** to add a download, and **Ctrl+O** to open the selected location.
 **Ctrl+L** focuses the link field, **Ctrl+J** focuses the download list,
-**Alt+S** focuses the progress status, and **Space** pauses/resumes the
-selected task while the download list has focus. Tab and Shift+Tab navigate
+**Alt+S** focuses the progress status. **Space** toggles Smart VLC playback
+while its player is open; otherwise, it pauses/resumes the selected task while
+the download list has focus. Tab and Shift+Tab navigate
 controls; the queue supports standard arrow-key selection. The progress status
 and progress bar can receive keyboard focus for assistive-technology reading.
 Larger text and a high-contrast palette are also available. Screen-reader
@@ -99,13 +100,15 @@ announcements and Urdu text shaping depend on the operating system, screen
 reader, fonts, and Tk version; verify those combinations manually.
 
 The **Play in app** action opens a separate, resizable **Smart VLC** window and
-leaves the downloader's **Media preview** available. The dashboard video preview
-starts playback when a video is selected and has its own play/pause, volume,
-elapsed and total time, red/gray seek timeline, CC toggle, Settings for
-speed/audio/subtitles, and a **Full screen** action. When subtitle tracks are
-available, CC enables the first track and Settings lets you choose a track or
-turn subtitles off. If no tracks are found, CC stays visible but disabled and
-Settings explains that subtitles are unavailable. The **Full screen** action
+leaves the downloader's **Media preview** available. Click **Play in app** again
+for the same selected video to pause/resume it. **Browse local media** opens a
+video picker and plays the selected video in the dashboard preview immediately.
+The preview controls use one compact horizontal bar for play/pause, volume,
+elapsed time, seeking, duration, settings, and fullscreen. The slider adjusts
+volume; Left/Right seek by 5 seconds and Up/Down change volume by 5%. Settings
+contains playback speed, audio tracks, and subtitles. When subtitle tracks are
+available, Settings lets you choose a track or turn subtitles off; if no tracks
+are found, it explains that subtitles are unavailable. The **Full screen** action
 opens the previewed media in the separate Smart VLC window directly in
 fullscreen, rather than fullscreening the small dashboard preview.
 Smart VLC's compact bottom controls show play/pause, volume, elapsed and total time, the red/gray seek timeline,
@@ -321,7 +324,10 @@ would need a separate application and platform-specific packaging.
   list when the URL identifies a playlist. Single video asks yt-dlp to ignore a
   playlist when possible. Entire playlist downloads a list when the URL points
   to one; a regular video URL still only contains one video. Playlist downloads
-  are organized in a playlist-named subfolder.
+  are organized in a playlist-named subfolder. If an individual playlist entry
+  is unavailable, the downloader skips it and continues with later entries;
+  completion reports skipped errors without interrupting the rest of the list.
+  YouTube sign-in challenges still require selecting browser cookies for access.
 - **Queue:** Up to three downloads run at once. Select a row to cancel it.
 - **Sidebar navigation:** Filter the queue to **All tasks**, **Downloading**,
   **Completed**, or **Media library**. The main screen keeps the link, save
@@ -390,7 +396,10 @@ would need a separate application and platform-specific packaging.
   alongside the download list. Some image formats may need Pillow codec support.
 - **Proxy and cookies:** In **More settings** > **Connection**, set a
   per-download proxy or opt in to cookies from
-  Chrome, Firefox, Edge, or Brave. These options are not available for torrents.
+  Chrome, Firefox, Edge, or Brave. If YouTube asks you to sign in to confirm
+  you are not a bot, select the browser where you are signed in, then retry.
+  Close that browser first if its cookie database is locked. These options are
+  not available for torrents.
 - **Custom HTTP headers:** In **More settings** > **Connection**, add one
   `Name: value` header per line. The same headers are used for direct-file
   requests, supported-site downloads, and image-gallery scans. Header values

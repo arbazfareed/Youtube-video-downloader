@@ -98,6 +98,42 @@ TRANSLATIONS = {
         "ar": "تشغيل داخل التطبيق", "hi": "ऐप में चलाएँ",
         "bn": "অ্যাপে চালান",
     },
+    "Pause in app": {
+        "es": "Pausar en la aplicación", "ur": "ایپ میں روکیں",
+        "ar": "إيقاف مؤقت داخل التطبيق", "hi": "ऐप में रोकें",
+        "bn": "অ্যাপে বিরতি দিন",
+    },
+    "Play in preview": {
+        "es": "Reproducir en vista previa", "ur": "پیش نظارہ میں چلائیں",
+        "ar": "تشغيل في المعاينة", "hi": "पूर्वावलोकन में चलाएँ",
+        "bn": "প্রিভিউতে চালান",
+    },
+    "Choose a video to preview": {
+        "es": "Elige un vídeo para previsualizarlo",
+        "ur": "پیش نظارہ کے لیے ویڈیو منتخب کریں",
+        "ar": "اختر فيديو لمعاينته",
+        "hi": "पूर्वावलोकन के लिए वीडियो चुनें",
+        "bn": "প্রিভিউ করার জন্য একটি ভিডিও বেছে নিন",
+    },
+    "Video files": {
+        "es": "Archivos de vídeo", "ur": "ویڈیو فائلیں",
+        "ar": "ملفات الفيديو", "hi": "वीडियो फ़ाइलें",
+        "bn": "ভিডিও ফাইল",
+    },
+    "Choose an existing supported video file.": {
+        "es": "Elige un archivo de vídeo compatible existente.",
+        "ur": "موجودہ معاون ویڈیو فائل منتخب کریں۔",
+        "ar": "اختر ملف فيديو مدعومًا موجودًا.",
+        "hi": "मौजूदा समर्थित वीडियो फ़ाइल चुनें।",
+        "bn": "একটি বিদ্যমান সমর্থিত ভিডিও ফাইল বেছে নিন।",
+    },
+    "VLC could not play this video. Try another file or use Open in system player.": {
+        "es": "VLC no pudo reproducir este vídeo. Prueba otro archivo o usa Abrir en el reproductor del sistema.",
+        "ur": "VLC یہ ویڈیو نہیں چلا سکا۔ دوسری فائل آزمائیں یا سسٹم پلیئر میں کھولیں۔",
+        "ar": "تعذر على VLC تشغيل هذا الفيديو. جرّب ملفًا آخر أو افتحه في مشغل النظام.",
+        "hi": "VLC यह वीडियो नहीं चला सका। दूसरी फ़ाइल आज़माएँ या सिस्टम प्लेयर में खोलें।",
+        "bn": "VLC এই ভিডিও চালাতে পারেনি। অন্য ফাইল চেষ্টা করুন অথবা সিস্টেম প্লেয়ারে খুলুন।",
+    },
     "Open Smart VLC": {
         "es": "Abrir Smart VLC", "ur": "Smart VLC کھولیں",
         "ar": "فتح Smart VLC", "hi": "Smart VLC खोलें",
@@ -690,8 +726,13 @@ URDU_CORE_TRANSLATIONS = {
     "Ctrl+L — focus link field": "Ctrl+L — لنک والے خانے پر جائیں",
     "Ctrl+J — focus download list": "Ctrl+J — ڈاؤن لوڈ فہرست پر جائیں",
     "Alt+S — focus progress status": "Alt+S — پیش رفت کی حالت پر جائیں",
-    "Space — pause/resume when the download list is focused": (
-        "Space — ڈاؤن لوڈ فہرست منتخب ہونے پر روکیں یا جاری رکھیں"
+    "Space — toggle Smart VLC playback when open; otherwise pause/resume the focused download": (
+        "Space — Smart VLC کھلا ہو تو پلے بیک روکیں یا جاری کریں؛ ورنہ منتخب "
+        "ڈاؤن لوڈ روکیں یا جاری کریں"
+    ),
+    "Smart VLC and preview: Left/Right seek 5 seconds; Up/Down change volume 5%": (
+        "Smart VLC اور پیش نظارہ: Left/Right سے 5 سیکنڈ آگے یا پیچھے جائیں؛ "
+        "Up/Down سے آواز 5% بڑھائیں یا گھٹائیں"
     ),
     "Press F1 for help. Use Tab and Shift+Tab to move between controls.": (
         "مدد کے لیے F1 دبائیں۔ کنٹرولز کے درمیان جانے کے لیے Tab اور Shift+Tab استعمال کریں۔"

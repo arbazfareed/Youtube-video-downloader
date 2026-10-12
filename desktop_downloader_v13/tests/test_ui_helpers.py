@@ -109,6 +109,34 @@ class QueueFilterTests(unittest.TestCase):
 
 
 class UiStartupWiringTests(unittest.TestCase):
+    def test_preview_splitter_reserves_space_for_compact_timeline(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app._main_splitter_stacked = False
+        app._main_splitter = Mock()
+        app._main_splitter.winfo_width.return_value = 1004
+        app.root = Mock()
+
+        app._set_initial_preview_splitter_position()
+
+        app._main_splitter.sashpos.assert_called_once_with(0, 608)
+        self.assertTrue(app._main_splitter_initial_sash_set)
+
+    def test_preview_splitter_retries_before_it_is_mapped(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app._main_splitter_stacked = False
+        app._main_splitter = Mock()
+        app._main_splitter.winfo_width.return_value = 1
+        app.root = Mock()
+
+        app._set_initial_preview_splitter_position()
+
+        app.root.after.assert_called_once_with(
+            50,
+            app._set_initial_preview_splitter_position,
+        )
+        self.assertTrue(app._main_splitter_initial_sash_pending)
+        app._main_splitter.sashpos.assert_not_called()
+
     def test_responsive_layout_reflows_preview_without_clipping_narrow_screens(self):
         app = DownloaderApp.__new__(DownloaderApp)
         app.root = Mock()
@@ -187,6 +215,7 @@ class UiStartupWiringTests(unittest.TestCase):
             "_focus_queue_shortcut",
             "_focus_progress_shortcut",
             "_toggle_pause_from_queue",
+            "play_selected_media_in_preview",
         )
         missing = [
             name for name in required_callbacks
@@ -210,6 +239,42 @@ class UiStartupWiringTests(unittest.TestCase):
         self.assertEqual(app._toggle_pause_from_queue(), "break")
         app.toggle_pause_selected.assert_called_once_with()
 
+    def test_space_shortcut_toggles_smart_vlc_without_stealing_text_input(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app._in_app_player = Mock()
+        app._toggle_in_app_playback = Mock()
+        frame_event = SimpleNamespace(widget=SimpleNamespace(
+            winfo_class=Mock(return_value="Frame"),
+        ))
+        button_event = SimpleNamespace(widget=SimpleNamespace(
+            winfo_class=Mock(return_value="TButton"),
+        ))
+
+        self.assertEqual(app._toggle_in_app_playback_from_key(frame_event), "break")
+        app._toggle_in_app_playback.assert_called_once_with()
+        self.assertIsNone(app._toggle_in_app_playback_from_key(button_event))
+        app._toggle_in_app_playback.assert_called_once_with()
+
+    def test_space_on_queue_pauses_download_when_smart_vlc_is_closed(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app._in_app_player = None
+        app.toggle_pause_selected = Mock()
+
+        self.assertEqual(app._toggle_pause_from_queue(), "break")
+
+        app.toggle_pause_selected.assert_called_once_with()
+
+    def test_space_on_queue_toggles_smart_vlc_when_player_is_open(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app._in_app_player = Mock()
+        app._toggle_in_app_playback = Mock()
+        app.toggle_pause_selected = Mock()
+
+        self.assertEqual(app._toggle_pause_from_queue(), "break")
+
+        app._toggle_in_app_playback.assert_called_once_with()
+        app.toggle_pause_selected.assert_not_called()
+
     def test_keyboard_shortcuts_are_registered_for_app_navigation(self):
         app = DownloaderApp.__new__(DownloaderApp)
         app.root = Mock()
@@ -226,11 +291,122 @@ class UiStartupWiringTests(unittest.TestCase):
                 "<Control-l>",
                 "<Control-j>",
                 "<Alt-s>",
+                "<space>",
+                "<Left>",
+                "<Right>",
+                "<Up>",
+                "<Down>",
             ],
         )
         self.assertTrue(
             all(call.kwargs["add"] == "+" for call in app.root.bind_all.call_args_list)
         )
+
+    def test_playback_arrow_keys_control_smart_vlc_and_dashboard_preview(self):
+        app = MediaMixin()
+        app.root = Mock()
+        player_window = Mock()
+        app._in_app_player_window = player_window
+        app._in_app_controls_overlay_window = None
+        app._in_app_top_controls_overlay_window = None
+        app._in_app_player = Mock()
+        app._nudge_in_app_player_seek = Mock()
+        app._adjust_in_app_volume = Mock()
+        app._show_in_app_controls = Mock()
+        player_widget = Mock()
+        player_widget.master = None
+        player_widget.winfo_toplevel.return_value = player_window
+
+        for key, method, argument in (
+            ("Left", app._nudge_in_app_player_seek, -5),
+            ("Right", app._nudge_in_app_player_seek, 5),
+            ("Up", app._adjust_in_app_volume, 5),
+            ("Down", app._adjust_in_app_volume, -5),
+        ):
+            self.assertEqual(
+                app._handle_playback_arrow_key(
+                    SimpleNamespace(keysym=key, widget=player_widget)
+                ),
+                "break",
+            )
+            method.assert_called_with(argument)
+
+        app._in_app_player_window = None
+        app._in_app_player = None
+        app.preview_container = Mock()
+        app._preview_vlc_player = Mock()
+        app._nudge_video_preview_seek = Mock()
+        app._adjust_video_preview_volume = Mock()
+        preview_widget = SimpleNamespace(
+            master=app.preview_container,
+            winfo_toplevel=Mock(return_value=app.root),
+        )
+        self.assertEqual(
+            app._handle_playback_arrow_key(
+                SimpleNamespace(keysym="Left", widget=preview_widget)
+            ),
+            "break",
+        )
+        app._nudge_video_preview_seek.assert_called_once_with(-5)
+        self.assertEqual(
+            app._handle_playback_arrow_key(
+                SimpleNamespace(keysym="Up", widget=preview_widget)
+            ),
+            "break",
+        )
+        app._adjust_video_preview_volume.assert_called_once_with(5)
+
+    def test_play_in_app_button_toggles_same_open_media_instead_of_reopening(self):
+        app = MediaMixin()
+        path = Path("existing-video.mp4").resolve()
+        app._selected_media_path = Mock(return_value=path)
+        app._in_app_media_path = path
+        app._in_app_player = Mock()
+        app._toggle_in_app_playback = Mock()
+
+        MediaMixin.play_selected_media(app)
+
+        app._toggle_in_app_playback.assert_called_once_with()
+
+    def test_play_in_preview_prompts_for_a_video_when_queue_is_empty(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "local-video.mp4"
+            path.write_bytes(b"video")
+            app = MediaMixin()
+            app.root = Mock()
+            app.jobs = SimpleNamespace(selection=Mock(return_value=()))
+            app._local_media_path = None
+            app._choose_local_video = Mock(return_value=path)
+            app._show_video_preview = Mock()
+            app.preview_details = Mock()
+            app._t = lambda text: text
+
+            MediaMixin.play_selected_media_in_preview(app)
+
+        self.assertEqual(app._local_media_path, path)
+        app._show_video_preview.assert_called_once_with(path)
+        app._choose_local_video.assert_called_once_with()
+        app.preview_details.configure.assert_called_once_with(
+            text="local-video.mp4\nVideo preview\n0.0 MB"
+        )
+
+    def test_video_preview_picker_accepts_supported_local_video(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "chosen-video.mkv"
+            path.write_bytes(b"video")
+            app = MediaMixin()
+            app.root = Mock()
+            app._t = lambda text: text
+
+            with patch(
+                "app_media.filedialog.askopenfilename",
+                return_value=str(path),
+            ) as choose_file:
+                selected = MediaMixin._choose_local_video(app)
+
+        self.assertEqual(selected, path)
+        self.assertIn("Choose a video to preview", choose_file.call_args.kwargs["title"])
+        self.assertIn("*.mkv", choose_file.call_args.kwargs["filetypes"][0][1])
 
     def test_shortcut_help_is_localized_for_urdu(self):
         app = DownloaderApp.__new__(DownloaderApp)
@@ -322,6 +498,34 @@ class UiStartupWiringTests(unittest.TestCase):
 
 
 class MediaPlaybackTests(unittest.TestCase):
+    def test_preview_shows_error_in_video_surface_if_vlc_fails_to_decode(self):
+        app = MediaMixin()
+        app.root = Mock()
+        app._preview_vlc = SimpleNamespace(
+            State=SimpleNamespace(Error="error", Playing="playing"),
+        )
+        app._preview_vlc_player = Mock()
+        app._preview_vlc_player.get_state.return_value = "error"
+        app._preview_vlc_instance = Mock()
+        app._preview_playback_after = None
+        app.preview_video_placeholder = Mock()
+        app.preview_player_play_button = Mock()
+        app._t = lambda text: text
+
+        MediaMixin._poll_video_preview(app)
+
+        app.preview_video_placeholder.configure.assert_called_with(
+            text=(
+                "VLC could not play this video. Try another file or use "
+                "Open in system player."
+            )
+        )
+        app.preview_video_placeholder.place.assert_called_with(
+            relx=0.5,
+            rely=0.5,
+            anchor="center",
+        )
+
     def test_bundled_vlc_runtime_is_selected_before_import(self):
         with tempfile.TemporaryDirectory() as directory:
             app_directory = Path(directory)
@@ -366,6 +570,72 @@ class MediaPlaybackTests(unittest.TestCase):
                 app_media.os.add_dll_directory.assert_called_once_with(
                     str(vlc_directory.resolve())
                 )
+
+    def test_system_vlc_runtime_is_selected_when_not_bundled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app_directory = root / "app"
+            app_directory.mkdir()
+            vlc_directory = root / "Program Files" / "VideoLAN" / "VLC"
+            (vlc_directory / "plugins").mkdir(parents=True)
+            (vlc_directory / "libvlc.dll").write_bytes(b"test")
+            executable = app_directory / "SmartDownloader13.exe"
+
+            with (
+                patch("app_media.sys.platform", "win32"),
+                patch("app_media.sys.frozen", True, create=True),
+                patch("app_media.sys.executable", str(executable)),
+                patch.dict(
+                    os.environ,
+                    {
+                        "ProgramFiles": str(root / "Program Files"),
+                        "ProgramFiles(x86)": str(root / "Program Files (x86)"),
+                    },
+                    clear=True,
+                ),
+                patch("app_media.shutil.which", return_value=None),
+                patch(
+                    "app_media.os.add_dll_directory",
+                    return_value=Mock(),
+                    create=True,
+                ) as add_dll_directory,
+                patch("app_media._VLC_DLL_DIRECTORY", None),
+            ):
+                MediaMixin._prepare_bundled_vlc_runtime(MediaMixin())
+                self.assertEqual(
+                    os.environ["PYTHON_VLC_LIB_PATH"],
+                    str(vlc_directory / "libvlc.dll"),
+                )
+                self.assertEqual(
+                    os.environ["PYTHON_VLC_MODULE_PATH"],
+                    str(vlc_directory / "plugins"),
+                )
+                add_dll_directory.assert_called_once_with(str(vlc_directory))
+
+    def test_preview_volume_and_seek_step_buttons_apply_bounded_steps(self):
+        app = MediaMixin()
+        app._preview_vlc_player = Mock()
+        app._preview_vlc_player.is_seekable.return_value = True
+        app._preview_vlc_player.get_length.return_value = 60_000
+        app._preview_vlc_player.get_time.return_value = 2_000
+        app.preview_player_volume = Mock()
+        app.preview_player_volume.get.return_value = 80
+
+        MediaMixin._nudge_video_preview_seek(app, -5)
+        app._preview_vlc_player.set_time.assert_called_once_with(0)
+
+        app._preview_vlc_player.get_time.return_value = 58_000
+        MediaMixin._nudge_video_preview_seek(app, 5)
+        app._preview_vlc_player.set_time.assert_called_with(60_000)
+
+        MediaMixin._adjust_video_preview_volume(app, 5)
+        app.preview_player_volume.set.assert_called_with(85)
+        app._preview_vlc_player.audio_set_volume.assert_called_with(85)
+
+        app.preview_player_volume.get.return_value = 0
+        MediaMixin._adjust_video_preview_volume(app, -5)
+        app.preview_player_volume.set.assert_called_with(0)
+        app._preview_vlc_player.audio_set_volume.assert_called_with(0)
 
     def test_play_action_uses_separate_player_for_existing_local_media(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -689,7 +959,7 @@ class MediaPlaybackTests(unittest.TestCase):
         vlc_player.audio_set_volume.assert_called_once_with(80)
         vlc_player.play.assert_called_once_with()
         app.preview_player_play_button.configure.assert_called_once_with(
-            text="Pause preview",
+            text="Ⅱ",
         )
 
     def test_dashboard_preview_settings_include_speed_audio_and_subtitles(self):
@@ -712,7 +982,6 @@ class MediaPlaybackTests(unittest.TestCase):
         app._preview_subtitle_track = Mock()
         app._preview_audio_tracks = {}
         app._preview_subtitle_tracks = {}
-        app.preview_player_cc_button = Mock()
         app.preview_player_settings_button = Mock()
         app.preview_player_settings_button.winfo_rootx.return_value = 300
         app.preview_player_settings_button.winfo_rooty.return_value = 120
@@ -742,11 +1011,11 @@ class MediaPlaybackTests(unittest.TestCase):
             [call.kwargs["label"] for call in menus[0].add_cascade.call_args_list],
             ["Playback speed", "Audio track", "Subtitles"],
         )
-        app.preview_player_cc_button.grid.assert_called_once_with()
+        self.assertEqual(app._preview_subtitle_tracks, {"English": 3})
         menus[0].tk_popup.assert_called_once_with(300, 40)
         menus[0].destroy.assert_called_once_with()
 
-    def test_dashboard_preview_keeps_cc_visible_but_disables_it_without_subtitles(self):
+    def test_dashboard_preview_refreshes_subtitles_without_a_separate_cc_button(self):
         app = MediaMixin()
         app._t = lambda text: text
         app._preview_vlc_player = Mock()
@@ -754,14 +1023,10 @@ class MediaPlaybackTests(unittest.TestCase):
             (-1, "Disable"),
         ]
         app._preview_subtitle_track = Mock()
-        app.preview_player_cc_button = Mock()
 
         MediaMixin._refresh_video_preview_subtitle_tracks(app)
 
-        app.preview_player_cc_button.grid_remove.assert_not_called()
-        app.preview_player_cc_button.configure.assert_called_once_with(
-            state="disabled",
-        )
+        self.assertEqual(app._preview_subtitle_tracks, {})
         app._preview_subtitle_track.set.assert_called_once_with("Off")
 
     def test_dashboard_preview_cc_enables_first_available_subtitle_track(self):
@@ -794,7 +1059,6 @@ class MediaPlaybackTests(unittest.TestCase):
         app._preview_playback_rate = Mock()
         app._preview_audio_tracks = {}
         app._preview_subtitle_tracks = {}
-        app.preview_player_cc_button = Mock()
         app.preview_player_settings_button = Mock()
         app.preview_player_settings_button.winfo_rootx.return_value = 300
         app.preview_player_settings_button.winfo_rooty.return_value = 120
@@ -921,7 +1185,7 @@ class MediaPlaybackTests(unittest.TestCase):
 
         app._preview_vlc_player.pause.assert_called_once_with()
         app.preview_player_play_button.configure.assert_called_once_with(
-            text="Play preview",
+            text="▶",
         )
         app._stop_video_preview.assert_not_called()
         app._play_media_in_app.assert_called_once_with(Path("preview.mp4"))

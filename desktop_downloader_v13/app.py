@@ -91,6 +91,7 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         self.resume_events: dict[str, threading.Event] = {}
         self.schedule_timers: dict[str, threading.Timer] = {}
         self._download_futures: dict[str, Future[str]] = {}
+        self._playlist_warnings: dict[str, list[str]] = {}
         self.download_options: dict[str, dict] = {}
         self.bandwidth_limiter = GlobalBandwidthLimiter()
         self.verified_checksums: dict[str, tuple[str, str]] = {}

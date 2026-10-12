@@ -1178,6 +1178,7 @@ def _download_with_ytdlp(
 
     last_downloaded = [0]
     live_started_at: float | None = None
+    downloaded_playlist_items: set[str] = set()
 
     def progress_hook(data: dict) -> None:
         nonlocal live_started_at
@@ -1223,6 +1224,13 @@ def _download_with_ytdlp(
                 ),
             )
         elif data.get("status") == "finished":
+            info_dict = data.get("info_dict") or {}
+            playlist_index = info_dict.get("playlist_index")
+            item_id = info_dict.get("id")
+            if playlist_index is not None or item_id:
+                downloaded_playlist_items.add(
+                    str(playlist_index if playlist_index is not None else item_id)
+                )
             progress(
                 "Processing media",
                 None,
@@ -1248,6 +1256,28 @@ def _download_with_ytdlp(
         "quiet": True,
         "no_warnings": False,
     }
+    playlist_errors: list[str] = []
+    if playlist_scope != "single video":
+        options["ignoreerrors"] = "only_download"
+        options["skip_playlist_after_errors"] = 0
+        options["lazy_playlist"] = True
+
+        class PlaylistLogger:
+            def debug(self, _message: str) -> None:
+                pass
+
+            def warning(self, message: str) -> None:
+                pass
+
+            def error(self, message: str) -> None:
+                playlist_errors.append(message)
+                progress(
+                    "Downloading",
+                    None,
+                    f"Skipping unavailable playlist entry: {message}",
+                )
+
+        options["logger"] = PlaylistLogger()
     if custom_headers:
         options["http_headers"] = dict(custom_headers)
     if proxy:
@@ -1281,6 +1311,12 @@ def _download_with_ytdlp(
                     downloader, quality
                 )
                 downloader.add_post_processor(_AudioLanguageMetadataPP(downloader))
+            if playlist_scope != "single video":
+                progress(
+                    "Reading playlist",
+                    None,
+                    "Getting playlist entries; failed entries will be skipped.",
+                )
             info = downloader.extract_info(url, download=True)
     except Exception as error:
         if cancel_event.is_set():
@@ -1289,7 +1325,23 @@ def _download_with_ytdlp(
     _check_cancelled(cancel_event)
 
     if not info:
+        if playlist_errors:
+            raise RuntimeError(
+                "The playlist could not be read. If YouTube requires sign-in, "
+                "select your signed-in browser under More settings > Connection "
+                "> Browser cookies, then retry."
+            )
         return str(directory)
+    if (
+        playlist_errors
+        and not downloaded_playlist_items
+        and playlist_scope != "single video"
+    ):
+        raise RuntimeError(
+            "No playlist videos could be downloaded. Some entries may require "
+            "sign-in or may be unavailable. Select your signed-in browser under "
+            "More settings > Connection > Browser cookies, then retry."
+        )
     requested_downloads = info.get("requested_downloads") or []
     filepath = next(
         (item.get("filepath") for item in requested_downloads if item.get("filepath")),
