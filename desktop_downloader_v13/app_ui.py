@@ -757,6 +757,37 @@ class UiMixin:
             command=self._open_preview_fullscreen,
             width=1,
         ).grid(row=0, column=8, padx=(2, 0))
+        ttk.Label(
+            preview,
+            text=self._t("Available videos"),
+            style="Card.TLabel",
+        ).grid(row=2, column=0, sticky="w", pady=(5, 2))
+        self.preview_video_choice = tk.StringVar(value="")
+        self.preview_video_selector = ttk.Combobox(
+            preview,
+            textvariable=self.preview_video_choice,
+            state="disabled",
+            takefocus=True,
+        )
+        self.preview_video_selector.grid(
+            row=3, column=0, sticky="ew",
+        )
+        self.preview_video_selector.bind(
+            "<<ComboboxSelected>>",
+            self._select_preview_video,
+            add="+",
+        )
+        self.preview_video_status = tk.StringVar(
+            value=self._t("Select a download to list its videos.")
+        )
+        ttk.Label(
+            preview,
+            textvariable=self.preview_video_status,
+            style="SidebarHint.TLabel",
+            wraplength=240,
+        ).grid(row=4, column=0, sticky="w", pady=(2, 0))
+        self._preview_video_choices = {}
+        self._preview_video_refresh_after = None
         self._preview_playback_rate = tk.StringVar(value="1.0x")
         self._preview_audio_track = tk.StringVar(value="")
         self._preview_audio_tracks = {}
@@ -813,28 +844,36 @@ class UiMixin:
             style="Accent.TButton",
         )
         self._open_smart_vlc_button.grid(
-            row=0, column=0, sticky="ew", padx=(0, 3), pady=(0, 6),
+            row=0, column=0, columnspan=2, sticky="ew", pady=(0, 6),
+        )
+        self._play_in_preview_button = ttk.Button(
+            inspector_actions,
+            text=self._t("Play in preview"),
+            command=self.play_selected_media_in_preview,
+        )
+        self._play_in_preview_button.grid(
+            row=1, column=0, columnspan=2, sticky="ew", pady=(0, 6),
         )
         ttk.Button(
             inspector_actions,
             text=self._t("Open in system player"),
             command=self.open_selected_media_in_system_player,
-        ).grid(row=0, column=1, sticky="ew", padx=(3, 0), pady=(0, 6))
+        ).grid(row=2, column=0, sticky="ew", padx=(0, 3))
         ttk.Button(
             inspector_actions,
             text=self._t("Show file"),
             command=self.open_selected_location,
-        ).grid(row=1, column=0, sticky="ew", padx=(0, 3))
+        ).grid(row=3, column=0, sticky="ew", padx=(0, 3), pady=(6, 0))
         ttk.Button(
             inspector_actions,
             text=self._t("Browse local media"),
             command=self.browse_local_media,
-        ).grid(row=1, column=1, sticky="ew", padx=3)
+        ).grid(row=2, column=1, sticky="ew", padx=(3, 0))
         ttk.Button(
             inspector_actions,
             text=self._t("Copy link"),
             command=self.copy_selected_link,
-        ).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        ).grid(row=3, column=1, sticky="ew", padx=(3, 0), pady=(6, 0))
         self.current_thumbnail = None
         ttk.Label(
             inspector,

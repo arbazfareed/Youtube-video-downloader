@@ -40,6 +40,7 @@ import requests
 
 class _FakeJobs:
     def __init__(self, statuses):
+        self.selected = ()
         self.rows = {
             job_id: {"status": status, "location": "original", "link": ""}
             for job_id, status in statuses.items()
@@ -58,6 +59,9 @@ class _FakeJobs:
 
     def exists(self, job_id):
         return job_id in self.rows
+
+    def selection(self):
+        return self.selected
 
 
 class _FakeRoot:
@@ -693,6 +697,40 @@ class DownloadEngineTests(unittest.TestCase):
             app._process_events()
 
         notify_download.assert_called_once_with("Download complete", "video.mp4")
+
+    def test_active_media_progress_schedules_preview_video_list_refresh(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.events = queue.Queue()
+        app.events.put(
+            ("progress", "1", "Downloading media", 42.0, "video.mp4 | 2.0 MB")
+        )
+        app.jobs = _FakeJobs({"1": "Downloading"})
+        app.jobs.selected = ("1",)
+        app._download_paths = {"1": Path("C:\\Downloads")}
+        app._job_destinations = {"1": "C:\\Downloads"}
+        app._preview_video_refresh_after = None
+        app.overall_progress = Mock()
+        app.progress_summary = _FakeStringVar()
+        app.root = Mock()
+        app._persist_job = Mock()
+        app._refresh_job_style = Mock()
+        app._apply_queue_filter = Mock()
+        app._record_speed_sample = Mock()
+        app.cancel_events = {}
+        app.resume_events = {}
+        app.schedule_timers = {}
+
+        app._process_events()
+
+        app.root.after.assert_has_calls(
+            [
+                call(
+                    1500,
+                    app._refresh_scheduled_preview_video_choices,
+                ),
+                call(100, app._process_events),
+            ]
+        )
 
     def test_skipped_playlist_items_are_reported_without_a_failure_dialog(self):
         app = DownloaderApp.__new__(DownloaderApp)

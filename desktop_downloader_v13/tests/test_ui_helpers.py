@@ -390,6 +390,126 @@ class UiStartupWiringTests(unittest.TestCase):
             text="local-video.mp4\nVideo preview\n0.0 MB"
         )
 
+    def test_preview_video_list_finds_playlist_outputs_and_active_partial_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            playlist = root / "playlist"
+            playlist.mkdir()
+            completed = playlist / "01 - completed.mp4"
+            partial = playlist / "02 - downloading.webm.part"
+            audio = playlist / "audio.m4a"
+            completed.write_bytes(b"video")
+            partial.write_bytes(b"partial")
+            audio.write_bytes(b"audio")
+
+            app = MediaMixin()
+            app.jobs = Mock()
+            app.jobs.selection.return_value = ("job",)
+            app._selected_output_path = Mock(return_value=root)
+            app._download_paths = {"job": root}
+            app.download_options = {}
+            app._local_media_path = None
+            app._preview_media_path = None
+            app._t = lambda text: text
+            app.preview_video_selector = Mock()
+            app.preview_video_choice = Mock()
+            app.preview_video_choice.get.return_value = ""
+            app.preview_video_status = Mock()
+
+            paths = MediaMixin._refresh_preview_video_choices(app)
+
+        self.assertEqual(paths, [completed.resolve(), partial.resolve()])
+        self.assertEqual(
+            list(app._preview_video_choices.values()),
+            [completed.resolve(), partial.resolve()],
+        )
+        app.preview_video_selector.configure.assert_called_once_with(
+            values=(
+                "playlist/01 - completed.mp4",
+                "playlist/02 - downloading.webm.part (Downloading)",
+            ),
+            state="readonly",
+        )
+        app.preview_video_choice.set.assert_called_once_with(
+            "playlist/01 - completed.mp4"
+        )
+
+    def test_selecting_active_partial_video_loads_it_into_preview(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "video.mp4.part"
+            path.write_bytes(b"partial video")
+            app = MediaMixin()
+            app._t = lambda text: text
+            app.root = Mock()
+            app.preview_video_choice = Mock()
+            app.preview_video_choice.get.return_value = "video.mp4.part (Downloading)"
+            app._preview_video_choices = {
+                "video.mp4.part (Downloading)": path,
+            }
+            app.current_thumbnail = None
+            app.inspector_status = Mock()
+            app.preview_video_status = Mock()
+            app._show_video_preview = Mock()
+            app.preview_details = Mock()
+
+            MediaMixin._select_preview_video(app)
+
+        app._show_video_preview.assert_called_once_with(path)
+        app.inspector_status.set.assert_called_once_with("Downloading")
+        app.preview_video_status.set.assert_called_once()
+        self.assertEqual(app._local_media_path, path)
+        self.assertIn(str(path), app.preview_details.configure.call_args.kwargs["text"])
+
+    def test_active_playlist_preview_uses_finished_entry_and_lists_partial_entry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            finished = root / "playlist" / "01-finished.mp4"
+            partial = root / "playlist" / "02-downloading.mp4.part"
+            finished.parent.mkdir()
+            finished.write_bytes(b"video")
+            partial.write_bytes(b"partial")
+            app = MediaMixin()
+            app.jobs = Mock()
+            app.jobs.selection.return_value = ("active-job",)
+            app.jobs.item.return_value = ("Downloading media", "42%")
+            app._selected_output_path = Mock(return_value=root)
+            app._download_paths = {"active-job": root}
+            app.download_options = {}
+            app._local_media_path = None
+            app._clear_video_preview = Mock()
+            app._show_video_preview = Mock()
+            app.inspector_status = Mock()
+            app.preview_details = Mock()
+            app.preview_image_label = Mock()
+            app.preview_video_selector = Mock()
+            app.preview_video_choice = Mock()
+            app.preview_video_choice.get.return_value = ""
+            app.preview_video_status = Mock()
+            app._t = lambda text: text
+
+            MediaMixin._show_selected_thumbnail(app)
+
+        app._show_video_preview.assert_called_once_with(finished.resolve())
+        self.assertEqual(
+            list(app._preview_video_choices.values()),
+            [finished.resolve(), partial.resolve()],
+        )
+
+    def test_active_preview_video_list_refresh_is_scheduled_once(self):
+        app = MediaMixin()
+        app.jobs = Mock()
+        app.jobs.selection.return_value = ("active-job",)
+        app._preview_video_refresh_after = None
+        app.root = Mock()
+
+        MediaMixin._schedule_preview_video_refresh(app, "active-job")
+        MediaMixin._schedule_preview_video_refresh(app, "active-job")
+
+        app.root.after.assert_called_once_with(
+            1500,
+            app._refresh_scheduled_preview_video_choices,
+        )
+
     def test_video_preview_picker_accepts_supported_local_video(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "chosen-video.mkv"

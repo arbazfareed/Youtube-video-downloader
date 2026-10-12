@@ -170,6 +170,12 @@ class EventsMixin:
                         + (f" - {details}" if details else "")
                         + f" | Saving to {self._download_paths[job_id]}"
                     )
+                    if status in {
+                        "Downloading media",
+                        "Processing media",
+                        "Recording live stream",
+                    }:
+                        self._schedule_preview_video_refresh(job_id)
             else:
                 _, job_id, status, detail = event
                 display_detail = detail
@@ -239,6 +245,11 @@ class EventsMixin:
                     )
                     self._refresh_job_style(job_id)
                     self._apply_queue_filter()
+                    if (
+                        self.jobs.selection()
+                        and self.jobs.selection()[0] == job_id
+                    ):
+                        self._refresh_preview_video_choices()
                     if status == "Complete":
                         try:
                             notify(

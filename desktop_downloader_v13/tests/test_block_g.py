@@ -72,6 +72,25 @@ class LocalizationTests(unittest.TestCase):
                     translated,
                 )
 
+    def test_urdu_translates_preview_and_smart_vlc_actions(self):
+        for label in (
+            "Play in preview",
+            "Open Smart VLC",
+            "Pause in app",
+            "Available videos",
+            "Select a download to list its videos.",
+            "No videos found in this download.",
+            "Video is still downloading",
+            "This video is still downloading. Preview may not work until the download has finished.",
+        ):
+            with self.subTest(label=label):
+                translated = translate(label, "Urdu")
+                self.assertNotEqual(translated, label)
+                self.assertTrue(
+                    any("\u0600" <= character <= "\u06ff" for character in translated),
+                    translated,
+                )
+
 
 class DiagnosticsTests(unittest.TestCase):
     def test_diagnostics_are_disabled_by_default_and_store_only_minimal_local_fields(self):

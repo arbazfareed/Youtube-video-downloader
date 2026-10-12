@@ -514,7 +514,11 @@ class MediaMixin:
 
     def play_selected_media_in_preview(self) -> None:
         selected = self.jobs.selection()
-        path = getattr(self, "_local_media_path", None)
+        choices = getattr(self, "_preview_video_choices", {})
+        choice = getattr(self, "preview_video_choice", None)
+        path = choices.get(choice.get()) if choice is not None else None
+        if path is None:
+            path = getattr(self, "_local_media_path", None)
         if path is None and selected:
             if not self._integrity_guard(selected[0]):
                 return
@@ -531,7 +535,9 @@ class MediaMixin:
                 parent=self.root,
             )
             return
+        self._local_media_path = path
         self._show_video_preview(path)
+        self._refresh_preview_video_choices()
         try:
             size_mb = path.stat().st_size / (1024 * 1024)
         except OSError as error:
@@ -540,6 +546,165 @@ class MediaMixin:
         self.preview_details.configure(
             text=f"{path.name}\n{self._t('Video preview')}\n{size_mb:.1f} MB"
         )
+
+    @staticmethod
+    def _is_preview_video_path(path: Path) -> bool:
+        name = path.name.casefold()
+        return path.suffix.casefold() in VIDEO_MEDIA_EXTENSIONS or any(
+            name.endswith(f"{extension}.part")
+            for extension in VIDEO_MEDIA_EXTENSIONS
+        )
+
+    def _refresh_preview_video_choices(self) -> list[Path]:
+        selected = self.jobs.selection()
+        roots: set[Path] = set()
+        paths: set[Path] = set()
+        local_path = getattr(self, "_local_media_path", None)
+        if local_path is not None and local_path.is_file():
+            if local_path.suffix.lower() in VIDEO_MEDIA_EXTENSIONS:
+                paths.add(local_path.resolve())
+        if selected:
+            job_id = selected[0]
+            output_path = self._selected_output_path()
+            job_paths = [
+                output_path,
+                getattr(self, "_download_paths", {}).get(job_id),
+            ]
+            options = getattr(self, "download_options", {}).get(job_id, {})
+            job_paths.append(options.get("destination"))
+            for candidate in job_paths:
+                if not candidate:
+                    continue
+                candidate = Path(candidate).expanduser()
+                if candidate.is_file() and self._is_preview_video_path(candidate):
+                    paths.add(candidate.resolve())
+                elif candidate.is_dir():
+                    roots.add(candidate.resolve())
+        for root in roots:
+            for candidate in root.rglob("*"):
+                if candidate.is_file() and self._is_preview_video_path(candidate):
+                    paths.add(candidate.resolve())
+
+        ordered_paths = sorted(
+            paths,
+            key=lambda path: (
+                path.name.casefold().endswith(".part"),
+                path.as_posix().casefold(),
+            ),
+        )
+        labels: dict[str, Path] = {}
+        for path in ordered_paths:
+            try:
+                display_path = next(
+                    path.relative_to(root).as_posix()
+                    for root in roots
+                    if path.is_relative_to(root)
+                )
+            except StopIteration:
+                display_path = str(path)
+            label = display_path
+            if path.name.casefold().endswith(".part"):
+                label += f" ({self._t('Downloading')})"
+            if label in labels:
+                label = f"{display_path} — {path.parent.name}"
+            labels[label] = path
+
+        selector = getattr(self, "preview_video_selector", None)
+        variable = getattr(self, "preview_video_choice", None)
+        self._preview_video_choices = labels
+        if selector is not None and variable is not None:
+            values = tuple(labels)
+            current_path = getattr(self, "_preview_media_path", None)
+            current_label = next(
+                (label for label, path in labels.items() if path == current_path),
+                None,
+            )
+            previous_label = variable.get()
+            if previous_label not in labels:
+                previous_label = None
+            selected_label = current_label or previous_label
+            if selected_label is None and values:
+                selected_label = values[0]
+            selector.configure(
+                values=values,
+                state="readonly" if values else "disabled",
+            )
+            variable.set(selected_label or "")
+
+        status = getattr(self, "preview_video_status", None)
+        if status is not None:
+            selected_path = (
+                labels.get(variable.get())
+                if variable is not None
+                else None
+            )
+            if (
+                selected_path is not None
+                and selected_path.name.casefold().endswith(".part")
+            ):
+                status.set(
+                    self._t(
+                        "This video is still downloading. Preview may not work "
+                        "until the download has finished."
+                    )
+                )
+            elif labels:
+                status.set("")
+            elif selected:
+                status.set(self._t("No videos found in this download."))
+            elif local_path is not None:
+                status.set(self._t("No videos found for this selection."))
+            else:
+                status.set(self._t("Select a download to list its videos."))
+        return ordered_paths
+
+    def _select_preview_video(self, _event=None) -> None:
+        choice = getattr(self, "preview_video_choice", None)
+        path = getattr(self, "_preview_video_choices", {}).get(
+            choice.get() if choice is not None else ""
+        )
+        if path is None or not path.is_file():
+            self._refresh_preview_video_choices()
+            return
+        if path.suffix.lower() not in VIDEO_MEDIA_EXTENSIONS:
+            status = getattr(self, "preview_video_status", None)
+            if status is not None:
+                status.set(
+                    self._t(
+                        "This video is still downloading. Preview may not work "
+                        "until the download has finished."
+                    )
+                )
+        self._local_media_path = path
+        self.current_thumbnail = None
+        self.inspector_status.set(
+            self._t("Downloading")
+            if path.name.casefold().endswith(".part")
+            else self._t("Local file")
+        )
+        self._show_video_preview(path)
+        try:
+            size_mb = path.stat().st_size / (1024 * 1024)
+        except OSError as error:
+            self._clear_thumbnail(f"Preview unavailable:\n{error}")
+            return
+        self.preview_details.configure(
+            text=f"{path}\n{self._t('Video preview')}\n{size_mb:.1f} MB"
+        )
+
+    def _schedule_preview_video_refresh(self, job_id: str) -> None:
+        if not self.jobs.selection() or self.jobs.selection()[0] != job_id:
+            return
+        if getattr(self, "_preview_video_refresh_after", None) is not None:
+            return
+        self._preview_video_refresh_after = self.root.after(
+            1500,
+            self._refresh_scheduled_preview_video_choices,
+        )
+
+    def _refresh_scheduled_preview_video_choices(self) -> None:
+        self._preview_video_refresh_after = None
+        self._refresh_preview_video_choices()
 
     def _choose_local_video(self) -> Path | None:
         video_types = " ".join(
@@ -2610,6 +2775,7 @@ class MediaMixin:
 
     def _show_local_media_details(self, path: Path) -> None:
         self.inspector_status.set(self._t("Local file"))
+        self._refresh_preview_video_choices()
         media_kind = (
             "VIDEO"
             if path.suffix.lower() in VIDEO_MEDIA_EXTENSIONS
@@ -2669,6 +2835,7 @@ class MediaMixin:
         self._local_media_path = None
         self._clear_video_preview()
         if not selected:
+            self._refresh_preview_video_choices()
             self.inspector_status.set(self._t("No item selected"))
             self._clear_thumbnail(
                 "Select a video task or choose Browse local media to preview a video."
@@ -2682,6 +2849,36 @@ class MediaMixin:
         status = values[0] if values else "Unknown"
         progress = values[1] if len(values) > 1 else "—"
         self.inspector_status.set(status)
+        video_paths = self._refresh_preview_video_choices()
+        if path is None or not path.is_file():
+            completed_videos = [
+                candidate
+                for candidate in video_paths
+                if candidate.suffix.lower() in VIDEO_MEDIA_EXTENSIONS
+            ]
+            if completed_videos:
+                path = completed_videos[0]
+            elif video_paths:
+                candidate = video_paths[0]
+                label = next(
+                    (
+                        label for label, choice_path
+                        in self._preview_video_choices.items()
+                        if choice_path == candidate
+                    ),
+                    "",
+                )
+                self.preview_video_choice.set(label)
+                self.preview_image_label.configure(
+                    image="",
+                    text=(
+                        f"{status}\n"
+                        f"{candidate.name}\n"
+                        f"{self._t('Video is still downloading')}"
+                    ),
+                )
+                self.preview_details.configure(text=str(candidate))
+                return
         if path is None or not path.is_file():
             self._clear_thumbnail(f"{status}\n{progress}\nFile is not available locally.")
             return

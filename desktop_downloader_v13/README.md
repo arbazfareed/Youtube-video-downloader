@@ -23,8 +23,11 @@ in the center, and a media preview and file-attributes panel on the right.
 The interface keeps its light/dark palettes and high-contrast mode, with a
 compact header, grouped download controls, and clear queue actions. Select a
 downloaded audio/video task and choose **Play in app**, or choose
-**Browse local media** to play an existing audio/video file without downloading
-it into the queue first. The portable Windows ZIP includes VLC's native
+**Play in preview** to play the selected video inline in the right-hand preview;
+if no video is selected, this action opens a video picker. **Browse local media**
+remains available for choosing local audio or video files without adding them
+to the download queue. The **Open Smart VLC** action is shown full-width in the
+media panel for visibility in translated layouts. The portable Windows ZIP includes VLC's native
 playback runtime; source installs and the portable Linux release need the VLC
 desktop application installed separately. If in-app playback cannot start,
 the app offers to open the file in the system player instead.
@@ -106,8 +109,12 @@ video picker and plays the selected video in the dashboard preview immediately.
 The preview controls use one compact horizontal bar for play/pause, volume,
 elapsed time, seeking, duration, settings, and fullscreen. The slider adjusts
 volume; Left/Right seek by 5 seconds and Up/Down change volume by 5%. Settings
-contains playback speed, audio tracks, and subtitles. When subtitle tracks are
-available, Settings lets you choose a track or turn subtitles off; if no tracks
+contains playback speed, audio tracks, and subtitles. **Available videos** lists
+finished videos and active `.part` files found in the selected download folder,
+including playlist entries; choosing an item loads it into the preview. An
+active partial file may not play until enough media data has been downloaded.
+The list refreshes while the selected task is downloading. When subtitle tracks
+are available, Settings lets you choose a track or turn subtitles off; if no tracks
 are found, it explains that subtitles are unavailable. The **Full screen** action
 opens the previewed media in the separate Smart VLC window directly in
 fullscreen, rather than fullscreening the small dashboard preview.
