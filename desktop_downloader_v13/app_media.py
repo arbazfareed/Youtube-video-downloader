@@ -29,7 +29,6 @@ from app_support import (
     create_zip_archive,
     parse_custom_headers,
     calculate_checksum,
-    set_app_window_icon,
 )
 
 _VLC_DLL_DIRECTORY = None
@@ -1416,7 +1415,6 @@ class MediaMixin:
 
         window = tk.Toplevel(self.root)
         window.title(f"Smart VLC — {path.name}")
-        set_app_window_icon(window)
         window.geometry("1120x700")
         window.minsize(800, 500)
         window.configure(background="#101318")

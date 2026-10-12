@@ -42,20 +42,12 @@ jobs:
             runner: windows-latest
             data-separator: ';'
             media-player-import: --hidden-import vlc
-            icon-arguments: >-
-              --icon smart_downloader.ico
-              --add-data "smart_downloader.ico;."
-              --add-data "smart_downloader.png;."
           - app-directory: desktop_downloader_v13
             executable: SmartDownloader13
             platform: Linux
             runner: ubuntu-22.04
             data-separator: ':'
             media-player-import: --hidden-import vlc
-            icon-arguments: >-
-              --icon smart_downloader.png
-              --add-data "smart_downloader.ico:."
-              --add-data "smart_downloader.png:."
     defaults:
       run:
         working-directory: ${{ matrix.app-directory }}
@@ -107,7 +99,6 @@ jobs:
           --paths .
           --hidden-import app
           ${{ matrix.media-player-import }}
-          ${{ matrix.icon-arguments }}
           --add-data "mobile.html${{ matrix.data-separator }}."
           --collect-all yt_dlp
           --collect-submodules plugins

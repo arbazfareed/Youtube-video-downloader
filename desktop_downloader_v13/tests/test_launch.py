@@ -7,38 +7,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import launch
-import app_support
 from launch import (
     _ensure_dependencies,
     _smoke_test_app,
     _smoke_test_vlc_runtime,
 )
-
-
-class AppIconTests(unittest.TestCase):
-    def test_windows_uses_bundled_ico_for_each_window(self):
-        window = unittest.mock.Mock()
-        icon_path = Path("smart_downloader.ico")
-        with (
-            patch.object(app_support.sys, "platform", "win32"),
-            patch.object(app_support, "app_resource_path", return_value=icon_path),
-        ):
-            app_support.set_app_window_icon(window)
-        window.iconbitmap.assert_called_once_with(str(icon_path))
-        window.iconphoto.assert_not_called()
-
-    def test_other_platforms_retain_png_icon_for_the_window_lifetime(self):
-        window = unittest.mock.Mock()
-        image = unittest.mock.sentinel.icon
-        with (
-            patch.object(app_support.sys, "platform", "linux"),
-            patch.object(app_support, "app_resource_path", return_value=Path("smart_downloader.png")),
-            patch.object(app_support.tk, "PhotoImage", return_value=image) as photo_image,
-        ):
-            app_support.set_app_window_icon(window)
-        photo_image.assert_called_once_with(file=str(Path("smart_downloader.png")))
-        window.iconphoto.assert_called_once_with(True, image)
-        self.assertIs(window._smart_downloader_icon, image)
 
 
 class FrozenLauncherTests(unittest.TestCase):

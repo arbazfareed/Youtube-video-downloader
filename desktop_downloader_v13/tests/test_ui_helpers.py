@@ -948,7 +948,6 @@ class MediaPlaybackTests(unittest.TestCase):
                     )
                     player_window.geometry.assert_called_once_with("1120x700")
                     player_window.minsize.assert_called_once_with(800, 500)
-                    player_window.iconbitmap.assert_called_once()
                     player_window.bind.assert_any_call(
                         "<F11>", app._toggle_in_app_fullscreen, add="+"
                     )

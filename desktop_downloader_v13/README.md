@@ -21,9 +21,8 @@ keep responsibilities smaller while preserving existing behavior. The refreshed
 three-column workspace puts navigation and tools on the left, the download queue
 in the center, and a media preview and file-attributes panel on the right.
 The interface keeps its light/dark palettes and high-contrast mode, with a
-compact header, grouped download controls, and clear queue actions. The desktop
-window and Smart VLC player share the branded shield icon. Select a downloaded
-audio/video task and choose **Play in app**, or choose
+compact header, grouped download controls, and clear queue actions. Select a
+downloaded audio/video task and choose **Play in app**, or choose
 **Play in preview** to play the selected video inline in the right-hand preview;
 if no video is selected, this action opens a video picker. **Browse local media**
 remains available for choosing local audio or video files without adding them
