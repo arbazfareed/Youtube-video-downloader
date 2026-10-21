@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.metadata
+import os
 import re
 import subprocess
 import sys
@@ -66,12 +67,60 @@ def _ensure_dependencies() -> None:
     stamp_path.write_text(digest, encoding="ascii")
 
 
-def main() -> None:
+def _smoke_test_app(app_class) -> None:
+    root = tk.Tk()
+    try:
+        app_class(root)
+        root.update()
+        if root.title() != "Smart Downloader" or not root.winfo_viewable():
+            raise RuntimeError("The Smart Downloader window did not become visible.")
+    finally:
+        root.destroy()
+
+
+def _attach_console() -> None:
+    if os.name != "nt" or (sys.stdout is not None and sys.stderr is not None):
+        return
+
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.AttachConsole.argtypes = [ctypes.c_ulong]
+    kernel32.AttachConsole.restype = ctypes.c_int
+    kernel32.AllocConsole.restype = ctypes.c_int
+    if not kernel32.AttachConsole(0xFFFFFFFF) and not kernel32.AllocConsole():
+        raise OSError(ctypes.get_last_error(), "Could not open a command console.")
+    sys.stdin = open("CONIN$", "r", encoding="utf-8", errors="replace")
+    sys.stdout = open("CONOUT$", "w", encoding="utf-8", errors="replace")
+    sys.stderr = open("CONOUT$", "w", encoding="utf-8", errors="replace")
+
+
+def main() -> int:
+    arguments = sys.argv[1:]
+    if arguments and arguments[0] == "--cli":
+        _attach_console()
+        _ensure_dependencies()
+        from cli import main as run_cli
+
+        return run_cli(arguments[1:])
+    if arguments and arguments[0] == "--api":
+        _attach_console()
+        _ensure_dependencies()
+        from api import main as run_api
+
+        run_api()
+        return 0
+
+    smoke_test = "--smoke-test" in arguments
     try:
         _ensure_dependencies()
-        from app import main as run_app
+        from app import DownloaderApp, main as run_app
 
-        run_app()
+        if smoke_test:
+            _smoke_test_app(DownloaderApp)
+        else:
+            run_app()
+        return 0
     except Exception as error:
         app_dir = Path(sys.executable).resolve().parent if getattr(
             sys, "frozen", False,
@@ -83,6 +132,9 @@ def main() -> None:
         except OSError:
             details = str(error)
 
+        if smoke_test:
+            raise
+
         root = tk.Tk()
         root.withdraw()
         messagebox.showerror(
@@ -91,7 +143,8 @@ def main() -> None:
             parent=root,
         )
         root.destroy()
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

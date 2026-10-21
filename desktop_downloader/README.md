@@ -211,9 +211,16 @@ would need a separate application and platform-specific packaging.
   images are not processed.
 - **Thumbnail preview:** Select a completed image row to show a small preview
   alongside the download list. Some image formats may need Pillow codec support.
+- **Video preview:** Select a completed video to play it in the preview panel.
+  Use the volume buttons or slider and the 5-second skip buttons. In-app preview
+  requires VLC Media Player; **Play selected audio/video** continues to open media
+  in the system player.
 - **Proxy and cookies:** In **More settings** > **Connection**, set a
   per-download proxy or opt in to cookies from
-  Chrome, Firefox, Edge, or Brave. These options are not available for torrents.
+  Chrome, Firefox, Edge, or Brave. If YouTube asks you to sign in to confirm
+  you are not a bot, select a browser where you are signed in and retry. Close
+  the browser first if its cookie database is locked. These options are not
+  available for torrents.
 - **Archive extraction:** Enable **Auto-extract archives** in **More settings**
   > **Schedule & files** to unpack supported
   archives after download. Extraction uses a separate folder, refuses to

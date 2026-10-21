@@ -1,0 +1,797 @@
+from __future__ import annotations
+
+
+LANGUAGES = {
+    "English": "en",
+    "Urdu": "ur",
+    "Arabic": "ar",
+    "Spanish": "es",
+    "Hindi": "hi",
+    "Bangla": "bn",
+}
+
+
+TRANSLATIONS = {
+    "Settings": {
+        "es": "Configuración", "ur": "ترتیبات", "ar": "الإعدادات",
+        "hi": "सेटिंग्स", "bn": "সেটিংস",
+    },
+    "Statistics": {
+        "es": "Estadísticas", "ur": "اعداد و شمار", "ar": "الإحصاءات",
+        "hi": "आँकड़े", "bn": "পরিসংখ্যান",
+    },
+    "Media inspector": {
+        "es": "Inspector multimedia", "ur": "میڈیا انسپکٹر",
+        "ar": "عارض الوسائط", "hi": "मीडिया निरीक्षक", "bn": "মিডিয়া পরিদর্শক",
+    },
+    "Media preview": {
+        "es": "Vista previa", "ur": "میڈیا پیش نظارہ",
+        "ar": "معاينة الوسائط", "hi": "मीडिया पूर्वावलोकन",
+        "bn": "মিডিয়া প্রিভিউ",
+    },
+    "Available videos": {
+        "es": "Vídeos disponibles", "ur": "دستیاب ویڈیوز",
+        "ar": "الفيديوهات المتاحة", "hi": "उपलब्ध वीडियो",
+        "bn": "উপলভ্য ভিডিও",
+    },
+    "Select a download to list its videos.": {
+        "es": "Selecciona una descarga para ver sus vídeos.",
+        "ur": "ویڈیوز کی فہرست کے لیے ڈاؤن لوڈ منتخب کریں۔",
+        "ar": "اختر تنزيلًا لعرض مقاطع الفيديو الخاصة به.",
+        "hi": "वीडियो की सूची देखने के लिए डाउनलोड चुनें।",
+        "bn": "ভিডিওর তালিকা দেখতে একটি ডাউনলোড নির্বাচন করুন।",
+    },
+    "No videos found in this download.": {
+        "es": "No se encontraron vídeos en esta descarga.",
+        "ur": "اس ڈاؤن لوڈ میں کوئی ویڈیو نہیں ملی۔",
+        "ar": "لم يتم العثور على فيديوهات في هذا التنزيل.",
+        "hi": "इस डाउनलोड में कोई वीडियो नहीं मिला।",
+        "bn": "এই ডাউনলোডে কোনো ভিডিও পাওয়া যায়নি।",
+    },
+    "No videos found for this selection.": {
+        "es": "No se encontraron vídeos para esta selección.",
+        "ur": "اس انتخاب کے لیے کوئی ویڈیو نہیں ملی۔",
+        "ar": "لم يتم العثور على فيديوهات لهذا الاختيار.",
+        "hi": "इस चयन के लिए कोई वीडियो नहीं मिला।",
+        "bn": "এই নির্বাচনে কোনো ভিডিও পাওয়া যায়নি।",
+    },
+    "Video is still downloading": {
+        "es": "El vídeo todavía se está descargando",
+        "ur": "ویڈیو ابھی ڈاؤن لوڈ ہو رہی ہے",
+        "ar": "ما زال الفيديو قيد التنزيل",
+        "hi": "वीडियो अभी डाउनलोड हो रहा है",
+        "bn": "ভিডিওটি এখনও ডাউনলোড হচ্ছে",
+    },
+    "This video is still downloading. Preview may not work until the download has finished.": {
+        "es": "Este vídeo aún se está descargando. Es posible que la vista previa no funcione hasta que termine la descarga.",
+        "ur": "یہ ویڈیو ابھی ڈاؤن لوڈ ہو رہی ہے۔ ڈاؤن لوڈ مکمل ہونے تک پیش نظارہ کام نہ کرے۔",
+        "ar": "ما زال هذا الفيديو قيد التنزيل. قد لا تعمل المعاينة حتى اكتمال التنزيل.",
+        "hi": "यह वीडियो अभी डाउनलोड हो रहा है। डाउनलोड पूरा होने तक पूर्वावलोकन काम नहीं कर सकता।",
+        "bn": "ভিডিওটি এখনও ডাউনলোড হচ্ছে। ডাউনলোড শেষ না হওয়া পর্যন্ত প্রিভিউ নাও চলতে পারে।",
+    },
+    "File attributes": {
+        "es": "Atributos del archivo", "ur": "فائل کی خصوصیات",
+        "ar": "خصائص الملف", "hi": "फ़ाइल विशेषताएँ", "bn": "ফাইল বৈশিষ্ট্য",
+    },
+    "Browse local media": {
+        "es": "Buscar medios locales", "ur": "مقامی میڈیا منتخب کریں",
+        "ar": "استعراض الوسائط المحلية", "hi": "स्थानीय मीडिया चुनें",
+        "bn": "স্থানীয় মিডিয়া ব্রাউज़ করুন",
+    },
+    "Choose an existing audio or video file": {
+        "es": "Elige un archivo de audio o vídeo existente",
+        "ur": "موجودہ آڈیو یا ویڈیو فائل منتخب کریں",
+        "ar": "اختر ملف صوت أو فيديو موجودًا",
+        "hi": "मौजूदा ऑडियो या वीडियो फ़ाइल चुनें",
+        "bn": "বিদ্যমান অডিও বা ভিডিও ফাইল নির্বাচন করুন",
+    },
+    "Audio and video files": {
+        "es": "Archivos de audio y vídeo", "ur": "آڈیو اور ویڈیو فائلیں",
+        "ar": "ملفات الصوت والفيديو", "hi": "ऑडियो और वीडियो फ़ाइलें",
+        "bn": "অডিও ও ভিডিও ফাইল",
+    },
+    "All files": {
+        "es": "Todos los archivos", "ur": "تمام فائلیں", "ar": "كل الملفات",
+        "hi": "सभी फ़ाइलें", "bn": "সব ফাইল",
+    },
+    "Choose an existing supported audio or video file.": {
+        "es": "Elige un archivo de audio o vídeo compatible existente.",
+        "ur": "موجودہ معاون آڈیو یا ویڈیو فائل منتخب کریں۔",
+        "ar": "اختر ملف صوت أو فيديو مدعومًا وموجودًا.",
+        "hi": "मौजूदा समर्थित ऑडियो या वीडियो फ़ाइल चुनें।",
+        "bn": "একটি বিদ্যমান সমর্থিত অডিও বা ভিডিও ফাইল নির্বাচন করুন।",
+    },
+    "Existing local file": {
+        "es": "Archivo local existente", "ur": "موجودہ مقامی فائل",
+        "ar": "ملف محلي موجود", "hi": "मौजूदा स्थानीय फ़ाइल",
+        "bn": "বিদ্যমান স্থানীয় ফাইল",
+    },
+    "Local file": {
+        "es": "Archivo local", "ur": "مقامی فائل",
+        "ar": "ملف محلي", "hi": "स्थानीय फ़ाइल", "bn": "স্থানীয় ফাইল",
+    },
+    "No item selected": {
+        "es": "Ningún elemento seleccionado", "ur": "کوئی آئٹم منتخب نہیں",
+        "ar": "لم يتم تحديد عنصر", "hi": "कोई आइटम चयनित नहीं",
+        "bn": "কোনো আইটেম নির্বাচন করা হয়নি",
+    },
+    "Select a file to preview": {
+        "es": "Selecciona un archivo para obtener una vista previa",
+        "ur": "پیش نظارہ کے لیے فائل منتخب کریں",
+        "ar": "حدد ملفًا لمعاينته", "hi": "पूर्वावलोकन के लिए फ़ाइल चुनें",
+        "bn": "প্রিভিউ দেখতে একটি ফাইল নির্বাচন করুন",
+    },
+    "Choose an existing file or select a downloaded task.": {
+        "es": "Elige un archivo existente o selecciona una tarea descargada.",
+        "ur": "موجودہ فائل منتخب کریں یا ڈاؤن لوڈ کردہ کام چنیں۔",
+        "ar": "اختر ملفًا موجودًا أو مهمة تم تنزيلها.",
+        "hi": "मौजूदा फ़ाइल चुनें या डाउनलोड किया गया कार्य चुनें।",
+        "bn": "বিদ্যমান ফাইল বা ডাউনলোড করা কাজ নির্বাচন করুন।",
+    },
+    "Play audio/video": {
+        "es": "Reproducir audio/vídeo", "ur": "آڈیو/ویڈیو چلائیں",
+        "ar": "تشغيل الصوت/الفيديو", "hi": "ऑडियो/वीडियो चलाएँ",
+        "bn": "অডিও/ভিডিও চালান",
+    },
+    "Play in app": {
+        "es": "Reproducir en la aplicación", "ur": "ایپ میں چلائیں",
+        "ar": "تشغيل داخل التطبيق", "hi": "ऐप में चलाएँ",
+        "bn": "অ্যাপে চালান",
+    },
+    "Pause in app": {
+        "es": "Pausar en la aplicación", "ur": "ایپ میں روکیں",
+        "ar": "إيقاف مؤقت داخل التطبيق", "hi": "ऐप में रोकें",
+        "bn": "অ্যাপে বিরতি দিন",
+    },
+    "Play in preview": {
+        "es": "Reproducir en vista previa", "ur": "پیش نظارہ میں چلائیں",
+        "ar": "تشغيل في المعاينة", "hi": "पूर्वावलोकन में चलाएँ",
+        "bn": "প্রিভিউতে চালান",
+    },
+    "Choose a video to preview": {
+        "es": "Elige un vídeo para previsualizarlo",
+        "ur": "پیش نظارہ کے لیے ویڈیو منتخب کریں",
+        "ar": "اختر فيديو لمعاينته",
+        "hi": "पूर्वावलोकन के लिए वीडियो चुनें",
+        "bn": "প্রিভিউ করার জন্য একটি ভিডিও বেছে নিন",
+    },
+    "Video files": {
+        "es": "Archivos de vídeo", "ur": "ویڈیو فائلیں",
+        "ar": "ملفات الفيديو", "hi": "वीडियो फ़ाइलें",
+        "bn": "ভিডিও ফাইল",
+    },
+    "Choose an existing supported video file.": {
+        "es": "Elige un archivo de vídeo compatible existente.",
+        "ur": "موجودہ معاون ویڈیو فائل منتخب کریں۔",
+        "ar": "اختر ملف فيديو مدعومًا موجودًا.",
+        "hi": "मौजूदा समर्थित वीडियो फ़ाइल चुनें।",
+        "bn": "একটি বিদ্যমান সমর্থিত ভিডিও ফাইল বেছে নিন।",
+    },
+    "VLC could not play this video. Try another file or use Open in system player.": {
+        "es": "VLC no pudo reproducir este vídeo. Prueba otro archivo o usa Abrir en el reproductor del sistema.",
+        "ur": "VLC یہ ویڈیو نہیں چلا سکا۔ دوسری فائل آزمائیں یا سسٹم پلیئر میں کھولیں۔",
+        "ar": "تعذر على VLC تشغيل هذا الفيديو. جرّب ملفًا آخر أو افتحه في مشغل النظام.",
+        "hi": "VLC यह वीडियो नहीं चला सका। दूसरी फ़ाइल आज़माएँ या सिस्टम प्लेयर में खोलें।",
+        "bn": "VLC এই ভিডিও চালাতে পারেনি। অন্য ফাইল চেষ্টা করুন অথবা সিস্টেম প্লেয়ারে খুলুন।",
+    },
+    "Open Smart VLC": {
+        "es": "Abrir Smart VLC", "ur": "Smart VLC کھولیں",
+        "ar": "فتح Smart VLC", "hi": "Smart VLC खोलें",
+        "bn": "Smart VLC খুলুন",
+    },
+    "Open in system player": {
+        "es": "Abrir en el reproductor del sistema",
+        "ur": "سسٹم پلیئر میں کھولیں",
+        "ar": "فتح في مشغل النظام", "hi": "सिस्टम प्लेयर में खोलें",
+        "bn": "সিস্টেম প্লেয়ারে খুলুন",
+    },
+    "Media player": {
+        "es": "Reproductor multimedia", "ur": "میڈیا پلیئر",
+        "ar": "مشغل الوسائط", "hi": "मीडिया प्लेयर", "bn": "মিডিয়া প্লেয়ার",
+    },
+    "Full screen": {
+        "es": "Pantalla completa", "ur": "مکمل اسکرین",
+        "ar": "ملء الشاشة", "hi": "पूर्ण स्क्रीन", "bn": "পূর্ণ পর্দা",
+    },
+    "Exit full screen": {
+        "es": "Salir de pantalla completa", "ur": "مکمل اسکرین سے باہر",
+        "ar": "الخروج من ملء الشاشة", "hi": "पूर्ण स्क्रीन से बाहर निकलें",
+        "bn": "পূর্ণ পর্দা থেকে বের হন",
+    },
+    "Audio track": {
+        "es": "Pista de audio", "ur": "آڈیو ٹریک",
+        "ar": "المسار الصوتي", "hi": "ऑडियो ट्रैक", "bn": "অডিও ট্র্যাক",
+    },
+    "Subtitles": {
+        "es": "Subtítulos", "ur": "سب ٹائٹلز", "ar": "الترجمة",
+        "hi": "उपशीर्षक", "bn": "সাবটাইটেল",
+    },
+    "Off": {
+        "es": "Desactivados", "ur": "بند", "ar": "إيقاف",
+        "hi": "बंद", "bn": "বন্ধ",
+    },
+    "No subtitles available": {
+        "es": "No hay subtítulos disponibles",
+        "ur": "کوئی سب ٹائٹلز دستیاب نہیں",
+        "ar": "لا توجد ترجمات متاحة",
+        "hi": "कोई उपशीर्षक उपलब्ध नहीं",
+        "bn": "কোনো সাবটাইটেল উপলভ্য নেই",
+    },
+    "Loading preview": {
+        "es": "Cargando vista previa",
+        "ur": "پیش نظارہ لوڈ ہو رہا ہے",
+        "ar": "جارٍ تحميل المعاينة",
+        "hi": "पूर्वावलोकन लोड हो रहा है",
+        "bn": "প্রিভিউ লোড হচ্ছে",
+    },
+    "Playback speed": {
+        "es": "Velocidad", "ur": "پلے بیک کی رفتار",
+        "ar": "سرعة التشغيل", "hi": "प्लेबैक गति", "bn": "প্লেব্যাক গতি",
+    },
+    "Invalid playback speed": {
+        "es": "Velocidad de reproducción no válida",
+        "ur": "پلے بیک کی رفتار درست نہیں",
+        "ar": "سرعة تشغيل غير صالحة",
+        "hi": "अमान्य प्लेबैक गति",
+        "bn": "অবৈধ প্লেব্যাক গতি",
+    },
+    "Choose one of the available playback speeds.": {
+        "es": "Elige una de las velocidades de reproducción disponibles.",
+        "ur": "دستیاب پلے بیک رفتار میں سے ایک منتخب کریں۔",
+        "ar": "اختر إحدى سرعات التشغيل المتاحة.",
+        "hi": "उपलब्ध प्लेबैक गतियों में से एक चुनें।",
+        "bn": "উপলভ্য প্লেব্যাক গতিগুলোর একটি বেছে নিন।",
+    },
+    "Playback speed unavailable": {
+        "es": "Velocidad de reproducción no disponible",
+        "ur": "پلے بیک کی رفتار دستیاب نہیں",
+        "ar": "سرعة التشغيل غير متاحة",
+        "hi": "प्लेबैक गति उपलब्ध नहीं",
+        "bn": "প্লেব্যাক গতি উপলভ্য নয়",
+    },
+    "VLC could not change the playback speed.": {
+        "es": "VLC no pudo cambiar la velocidad de reproducción.",
+        "ur": "VLC پلے بیک کی رفتار تبدیل نہیں کر سکا۔",
+        "ar": "تعذر على VLC تغيير سرعة التشغيل.",
+        "hi": "VLC प्लेबैक गति नहीं बदल सका।",
+        "bn": "VLC প্লেব্যাক গতি পরিবর্তন করতে পারেনি।",
+    },
+    "No audio tracks available": {
+        "es": "No hay pistas de audio disponibles",
+        "ur": "کوئی آڈیو ٹریک دستیاب نہیں",
+        "ar": "لا توجد مسارات صوتية متاحة",
+        "hi": "कोई ऑडियो ट्रैक उपलब्ध नहीं",
+        "bn": "কোনো অডিও ট্র্যাক উপলভ্য নেই",
+    },
+    "Audio track unavailable": {
+        "es": "Pista de audio no disponible", "ur": "آڈیو ٹریک دستیاب نہیں",
+        "ar": "المسار الصوتي غير متاح", "hi": "ऑडियो ट्रैक उपलब्ध नहीं",
+        "bn": "অডিও ট্র্যাক উপলভ্য নয়",
+    },
+    "VLC could not select this audio track.": {
+        "es": "VLC no pudo seleccionar esta pista de audio.",
+        "ur": "VLC یہ آڈیو ٹریک منتخب نہیں کر سکا۔",
+        "ar": "تعذر على VLC تحديد هذا المسار الصوتي.",
+        "hi": "VLC इस ऑडियो ट्रैक को चुन नहीं सका।",
+        "bn": "VLC এই অডিও ট্র্যাক নির্বাচন করতে পারেনি।",
+    },
+    "Subtitle track unavailable": {
+        "es": "Pista de subtítulos no disponible",
+        "ur": "سب ٹائٹل ٹریک دستیاب نہیں",
+        "ar": "مسار الترجمة غير متاح",
+        "hi": "उपशीर्षक ट्रैक उपलब्ध नहीं",
+        "bn": "সাবটাইটেল ট্র্যাক উপলভ্য নয়",
+    },
+    "VLC could not select this subtitle track.": {
+        "es": "VLC no pudo seleccionar esta pista de subtítulos.",
+        "ur": "VLC یہ سب ٹائٹل ٹریک منتخب نہیں کر سکا۔",
+        "ar": "تعذر على VLC تحديد مسار الترجمة هذا.",
+        "hi": "VLC इस उपशीर्षक ट्रैक को नहीं चुन सका।",
+        "bn": "VLC এই সাবটাইটেল ট্র্যাক নির্বাচন করতে পারেনি।",
+    },
+    "VLC could not change subtitle visibility.": {
+        "es": "VLC no pudo cambiar la visibilidad de los subtítulos.",
+        "ur": "VLC سب ٹائٹلز کی نمائش تبدیل نہیں کر سکا۔",
+        "ar": "تعذر على VLC تغيير ظهور الترجمة.",
+        "hi": "VLC उपशीर्षकों की दृश्यता नहीं बदल सका।",
+        "bn": "VLC সাবটাইটেলের দৃশ্যমানতা পরিবর্তন করতে পারেনি।",
+    },
+    "Media player help": {
+        "es": "Ayuda del reproductor multimedia", "ur": "میڈیا پلیئر کی مدد",
+        "ar": "مساعدة مشغل الوسائط", "hi": "मीडिया प्लेयर सहायता",
+        "bn": "মিডিয়া প্লেয়ার সহায়তা",
+    },
+    "Playback opens in a separate Smart VLC window, so the downloader preview remains available. Use Full screen or F11 to expand the player without changing the main app window. Press Escape or F11 to return to windowed playback. Use the timeline to seek, and the controls to pause, stop, or change volume. Select playback speed, audio tracks, and subtitles from Settings. Close player to stop playback and close the player window.": {
+        "ur": (
+            "پلے بیک الگ Smart VLC ونڈو میں کھلتا ہے، اس لیے ڈاؤن لوڈر کا پیش "
+            "نظارہ دستیاب رہتا ہے۔ Full screen یا F11 سے پلیئر بڑی اسکرین پر "
+            "کھلتا ہے جبکہ مرکزی ایپ ونڈو تبدیل نہیں ہوتی۔ ونڈو والے پلے بیک پر "
+            "واپس آنے کے لیے Escape یا F11 دبائیں۔ ٹائم لائن سے آگے پیچھے جائیں، "
+            "کنٹرولز سے پاز، اسٹاپ یا والیوم تبدیل کریں، اور Settings سے رفتار، "
+            "آڈیو ٹریک یا سب ٹائٹلز منتخب کریں۔ Close player پلے بیک روک کر "
+            "پلیئر ونڈو بند کرتا ہے۔"
+        ),
+    },
+    "Full screen playback": {
+        "es": "Reproducción a pantalla completa", "ur": "مکمل اسکرین پلے بیک",
+        "ar": "تشغيل بملء الشاشة", "hi": "पूर्ण स्क्रीन प्लेबैक",
+        "bn": "পূর্ণ পর্দায় প্লেব্যাক",
+    },
+    "Now playing": {
+        "es": "Reproduciendo", "ur": "اب چل رہا ہے",
+        "ar": "يعمل الآن", "hi": "अभी चल रहा है", "bn": "এখন চলছে",
+    },
+    "Close player": {
+        "es": "Cerrar reproductor", "ur": "پلیئر بند کریں",
+        "ar": "إغلاق المشغل", "hi": "प्लेयर बंद करें", "bn": "প্লেয়ার বন্ধ করুন",
+    },
+    "Playback started": {
+        "es": "Reproducción iniciada", "ur": "پلے بیک شروع ہو گیا",
+        "ar": "بدأ التشغيل", "hi": "प्लेबैक शुरू हुआ", "bn": "প্লেব্যাক শুরু হয়েছে",
+    },
+    "Playback paused": {
+        "es": "Reproducción en pausa", "ur": "پلے بیک روک دیا گیا",
+        "ar": "تم إيقاف التشغيل مؤقتًا", "hi": "प्लेबैक रोका गया",
+        "bn": "প্লেব্যাক বিরতি দেওয়া হয়েছে",
+    },
+    "Playback stopped": {
+        "es": "Reproducción detenida", "ur": "پلے بیک روک دیا گیا",
+        "ar": "تم إيقاف التشغيل", "hi": "प्लेबैक रोका गया", "bn": "প্লেব্যাক থামানো হয়েছে",
+    },
+    "Playback finished": {
+        "es": "Reproducción finalizada", "ur": "پلے بیک مکمل ہو گیا",
+        "ar": "انتهى التشغيل", "hi": "प्लेबैक समाप्त हुआ", "bn": "প্লেব্যাক শেষ হয়েছে",
+    },
+    "Playback failed": {
+        "es": "Error de reproducción", "ur": "پلے بیک ناکام ہو گیا",
+        "ar": "فشل التشغيل", "hi": "प्लेबैक विफल हुआ", "bn": "প্লেব্যাক ব্যর্থ হয়েছে",
+    },
+    "Pause": {
+        "es": "Pausar", "ur": "روکیں", "ar": "إيقاف مؤقت",
+        "hi": "रोकें", "bn": "বিরতি",
+    },
+    "Play": {
+        "es": "Reproducir", "ur": "چلائیں", "ar": "تشغيل",
+        "hi": "चलाएँ", "bn": "চালান",
+    },
+    "Stop": {
+        "es": "Detener", "ur": "بند کریں", "ar": "إيقاف",
+        "hi": "रोकें", "bn": "থামান",
+    },
+    "Volume": {
+        "es": "Volumen", "ur": "آواز", "ar": "مستوى الصوت",
+        "hi": "आवाज़", "bn": "ভলিউম",
+    },
+    "In-app playback unavailable": {
+        "es": "Reproducción en la aplicación no disponible",
+        "ur": "ایپ میں پلے بیک دستیاب نہیں",
+        "ar": "التشغيل داخل التطبيق غير متاح",
+        "hi": "ऐप में प्लेबैक उपलब्ध नहीं", "bn": "অ্যাপে প্লেব্যাক উপলভ্য নয়",
+    },
+    "VLC is required for in-app playback. Open this file in your system player instead?": {
+        "es": "Se necesita VLC para reproducir en la aplicación. ¿Abrir este archivo en el reproductor del sistema?",
+        "ur": "ایپ میں چلانے کے لیے VLC درکار ہے۔ کیا اس فائل کو سسٹم پلیئر میں کھولیں؟",
+        "ar": "يلزم VLC للتشغيل داخل التطبيق. هل تريد فتح الملف في مشغل النظام؟",
+        "hi": "ऐप में चलाने के लिए VLC आवश्यक है। क्या इस फ़ाइल को सिस्टम प्लेयर में खोलें?",
+        "bn": "অ্যাপে চালাতে VLC প্রয়োজন। ফাইলটি কি সিস্টেম প্লেয়ারে খুলবেন?",
+    },
+    "VLC could not start playback.": {
+        "es": "VLC no pudo iniciar la reproducción.",
+        "ur": "VLC پلے بیک شروع نہیں کر سکا۔",
+        "ar": "تعذر على VLC بدء التشغيل.",
+        "hi": "VLC प्लेबैक शुरू नहीं कर सका।",
+        "bn": "VLC প্লেব্যাক শুরু করতে পারেনি।",
+    },
+    "VLC could not play this media file.": {
+        "es": "VLC no pudo reproducir este archivo multimedia.",
+        "ur": "VLC یہ میڈیا فائل نہیں چلا سکا۔",
+        "ar": "تعذر على VLC تشغيل ملف الوسائط هذا.",
+        "hi": "VLC इस मीडिया फ़ाइल को नहीं चला सका।",
+        "bn": "VLC এই মিডিয়া ফাইলটি চালাতে পারেনি।",
+    },
+    "Show file": {
+        "es": "Mostrar archivo", "ur": "فائل دکھائیں", "ar": "إظهار الملف",
+        "hi": "फ़ाइल दिखाएँ", "bn": "ফাইল দেখান",
+    },
+    "Copy link": {
+        "es": "Copiar enlace", "ur": "لنک کاپی کریں", "ar": "نسخ الرابط",
+        "hi": "लिंक कॉपी करें", "bn": "লিংক কপি করুন",
+    },
+    "Select a task to inspect": {
+        "es": "Selecciona una tarea para inspeccionar",
+        "ur": "جائزے کے لیے ایک کام منتخب کریں",
+        "ar": "حدد مهمة لفحصها", "hi": "जाँचने के लिए कार्य चुनें",
+        "bn": "পরীক্ষার জন্য একটি কাজ নির্বাচন করুন",
+    },
+    "Playback opens your system media player.": {
+        "es": "La reproducción abre el reproductor multimedia del sistema.",
+        "ur": "پلے بیک آپ کے سسٹم میڈیا پلیئر میں کھلے گا۔",
+        "ar": "يفتح التشغيل مشغل الوسائط في النظام.",
+        "hi": "प्लेबैक आपके सिस्टम मीडिया प्लेयर में खुलेगा।",
+        "bn": "প্লেব্যাক আপনার সিস্টেম মিডিয়া প্লেয়ার খুলবে।",
+    },
+    "No task selected": {
+        "es": "No hay ninguna tarea seleccionada", "ur": "کوئی کام منتخب نہیں",
+        "ar": "لم يتم تحديد مهمة", "hi": "कोई कार्य चयनित नहीं",
+        "bn": "কোনো কাজ নির্বাচিত হয়নি",
+    },
+    "Select a task before copying its link.": {
+        "es": "Selecciona una tarea antes de copiar el enlace.",
+        "ur": "لنک کاپی کرنے سے پہلے کام منتخب کریں۔",
+        "ar": "حدد مهمة قبل نسخ رابطها.",
+        "hi": "लिंक कॉपी करने से पहले कोई कार्य चुनें।",
+        "bn": "লিংক কপি করার আগে একটি কাজ নির্বাচন করুন।",
+    },
+    "Link copied to clipboard.": {
+        "es": "Enlace copiado al portapapeles.",
+        "ur": "لنک کلپ بورڈ پر کاپی ہوگیا۔",
+        "ar": "تم نسخ الرابط إلى الحافظة.",
+        "hi": "लिंक क्लिपबोर्ड पर कॉपी किया गया।",
+        "bn": "লিংক ক্লিপবোর্ডে কপি হয়েছে।",
+    },
+    "General": {
+        "es": "General", "ur": "عام", "ar": "عام", "hi": "सामान्य", "bn": "সাধারণ",
+    },
+    "Speed & checks": {
+        "es": "Velocidad y verificación", "ur": "رفتار اور جانچ",
+        "ar": "السرعة والتحقق", "hi": "गति और जाँच", "bn": "গতি ও যাচাই",
+    },
+    "Connection": {
+        "es": "Conexión", "ur": "کنکشن", "ar": "الاتصال",
+        "hi": "कनेक्शन", "bn": "সংযোগ",
+    },
+    "Schedule & files": {
+        "es": "Programación y archivos", "ur": "شیڈول اور فائلیں",
+        "ar": "الجدولة والملفات", "hi": "शेड्यूल और फ़ाइलें", "bn": "সময়সূচি ও ফাইল",
+    },
+    "All tasks": {
+        "es": "Todas las tareas", "ur": "تمام کام", "ar": "كل المهام",
+        "hi": "सभी कार्य", "bn": "সব কাজ",
+    },
+    "Downloading": {
+        "es": "Descargando", "ur": "ڈاؤن لوڈ ہو رہا ہے", "ar": "جارٍ التنزيل",
+        "hi": "डाउनलोड हो रहा है", "bn": "ডাউনলোড হচ্ছে",
+    },
+    "Completed": {
+        "es": "Completado", "ur": "مکمل", "ar": "مكتمل",
+        "hi": "पूर्ण", "bn": "সম্পন্ন",
+    },
+    "Media library": {
+        "es": "Biblioteca multimedia", "ur": "میڈیا لائبریری",
+        "ar": "مكتبة الوسائط", "hi": "मीडिया लाइब्रेरी", "bn": "মিডিয়া লাইব্রেরি",
+    },
+    "Tools & utilities": {
+        "es": "Herramientas y utilidades", "ur": "ٹولز اور سہولیات",
+        "ar": "الأدوات والمرافق", "hi": "टूल और सुविधाएँ", "bn": "টুল ও উপযোগিতা",
+    },
+    "Image tools": {
+        "es": "Herramientas de imagen", "ur": "تصویری ٹولز",
+        "ar": "أدوات الصور", "hi": "छवि टूल", "bn": "ছবির টুল",
+    },
+    "Image gallery": {
+        "es": "Galería de imágenes", "ur": "تصویری گیلری",
+        "ar": "معرض الصور", "hi": "छवि गैलरी", "bn": "ছবির গ্যালারি",
+    },
+    "Dark mode": {
+        "es": "Modo oscuro", "ur": "ڈارک موڈ", "ar": "الوضع الداكن",
+        "hi": "डार्क मोड", "bn": "ডার্ক মোড",
+    },
+    "Language": {
+        "es": "Idioma", "ur": "زبان", "ar": "اللغة",
+        "hi": "भाषा", "bn": "ভাষা",
+    },
+    "Accessibility": {
+        "es": "Accesibilidad", "ur": "رسائی", "ar": "إمكانية الوصول",
+        "hi": "सुलभता", "bn": "অ্যাক্সেসিবিলিটি",
+    },
+    "Use larger text": {
+        "es": "Usar texto más grande", "ur": "بڑا متن استعمال کریں",
+        "ar": "استخدام نص أكبر", "hi": "बड़ा टेक्स्ट उपयोग करें",
+        "bn": "বড় লেখা ব্যবহার করুন",
+    },
+    "High contrast": {
+        "es": "Alto contraste", "ur": "زیادہ کنٹراسٹ", "ar": "تباين عالٍ",
+        "hi": "उच्च कंट्रास्ट", "bn": "উচ্চ কনট্রাস্ট",
+    },
+    "Check for updates at startup": {
+        "es": "Buscar actualizaciones al iniciar",
+        "ur": "شروع پر اپ ڈیٹس دیکھیں",
+        "ar": "التحقق من التحديثات عند بدء التشغيل",
+        "hi": "शुरुआत में अपडेट जाँचें", "bn": "শুরুতে আপডেট দেখুন",
+    },
+    "Share diagnostic events": {
+        "es": "Compartir eventos de diagnóstico",
+        "ur": "تشخیصی واقعات شیئر کریں",
+        "ar": "مشاركة أحداث التشخيص",
+        "hi": "निदान इवेंट साझा करें", "bn": "ডায়াগনস্টিক ইভেন্ট শেয়ার করুন",
+    },
+    "Record local diagnostic events": {
+        "es": "Registrar eventos de diagnóstico localmente",
+        "ur": "تشخیصی واقعات مقامی طور پر ریکارڈ کریں",
+        "ar": "تسجيل أحداث التشخيص محليًا",
+        "hi": "निदान इवेंट स्थानीय रूप से रिकॉर्ड करें",
+        "bn": "ডায়াগনস্টিক ইভেন্ট স্থানীয়ভাবে রেকর্ড করুন",
+    },
+    "Export local diagnostics…": {
+        "es": "Exportar diagnósticos locales…",
+        "ur": "مقامی تشخیص برآمد کریں…",
+        "ar": "تصدير التشخيصات المحلية…",
+        "hi": "स्थानीय निदान निर्यात करें…", "bn": "স্থানীয় ডায়াগনস্টিক রপ্তানি…",
+    },
+    "Check for updates now": {
+        "es": "Buscar actualizaciones ahora",
+        "ur": "ابھی اپ ڈیٹس دیکھیں",
+        "ar": "التحقق من التحديثات الآن",
+        "hi": "अभी अपडेट जाँचें", "bn": "এখনই আপডেট দেখুন",
+    },
+    "Save": {
+        "es": "Guardar", "ur": "محفوظ کریں", "ar": "حفظ",
+        "hi": "सहेजें", "bn": "সংরক্ষণ",
+    },
+    "Close": {
+        "es": "Cerrar", "ur": "بند کریں", "ar": "إغلاق",
+        "hi": "बंद करें", "bn": "বন্ধ করুন",
+    },
+    "Add download": {
+        "es": "Añadir descarga", "ur": "ڈاؤن لوڈ شامل کریں",
+        "ar": "إضافة تنزيل", "hi": "डाउनलोड जोड़ें", "bn": "ডাউনলোড যোগ করুন",
+    },
+    "Browse": {
+        "es": "Examinar", "ur": "منتخب کریں", "ar": "استعراض",
+        "hi": "ब्राउज़ करें", "bn": "ব্রাউজ",
+    },
+    "Paste a link, choose where to save it, and add it to your queue.": {
+        "es": "Pega un enlace, elige dónde guardarlo y añádelo a la cola.",
+        "ur": "لنک پیسٹ کریں، محفوظ کرنے کی جگہ چنیں اور قطار میں شامل کریں۔",
+        "ar": "الصق رابطًا، واختر مكان الحفظ، ثم أضفه إلى قائمة التنزيل.",
+        "hi": "लिंक पेस्ट करें, सेव स्थान चुनें और कतार में जोड़ें।",
+        "bn": "লিংক পেস্ট করুন, সংরক্ষণের স্থান বেছে নিয়ে কিউতে যোগ করুন।",
+    },
+    "Use recommended": {
+        "es": "Usar recomendado", "ur": "تجویز کردہ استعمال کریں",
+        "ar": "استخدام الموصى به", "hi": "अनुशंसित उपयोग करें",
+        "bn": "প্রস্তাবিত ব্যবহার করুন",
+    },
+    "Auto-fill copied links": {
+        "es": "Rellenar enlaces copiados",
+        "ur": "کاپی کیے گئے لنکس خود بھریں",
+        "ar": "ملء الروابط المنسوخة تلقائيًا",
+        "hi": "कॉपी किए लिंक अपने-आप भरें",
+        "bn": "কপি করা লিংক স্বয়ংক্রিয়ভাবে পূরণ",
+    },
+    "Link": {
+        "es": "Enlace", "ur": "لنک", "ar": "الرابط", "hi": "लिंक", "bn": "লিংক",
+    },
+    "Convert to MP3": {
+        "es": "Convertir a MP3", "ur": "MP3 میں تبدیل کریں",
+        "ar": "تحويل إلى MP3", "hi": "MP3 में बदलें", "bn": "MP3-তে রূপান্তর",
+    },
+    "Batch": {
+        "es": "Lote", "ur": "بیچ", "ar": "دفعة", "hi": "बैच", "bn": "ব্যাচ",
+    },
+    "Sequence": {
+        "es": "Secuencia", "ur": "سلسلہ", "ar": "تسلسل",
+        "hi": "अनुक्रम", "bn": "ক্রম",
+    },
+    "More settings": {
+        "es": "Más ajustes", "ur": "مزید ترتیبات", "ar": "مزيد من الإعدادات",
+        "hi": "और सेटिंग्स", "bn": "আরও সেটিংস",
+    },
+    "Overall progress": {
+        "es": "Progreso general", "ur": "مجموعی پیش رفت", "ar": "التقدم الإجمالي",
+        "hi": "कुल प्रगति", "bn": "সামগ্রিক অগ্রগতি",
+    },
+    "Status": {
+        "es": "Estado", "ur": "حیثیت", "ar": "الحالة", "hi": "स्थिति", "bn": "অবস্থা",
+    },
+    "Progress": {
+        "es": "Progreso", "ur": "پیش رفت", "ar": "التقدم", "hi": "प्रगति", "bn": "অগ্রগতি",
+    },
+    "Transfer details": {
+        "es": "Detalles de transferencia", "ur": "منتقلی کی تفصیل",
+        "ar": "تفاصيل النقل", "hi": "स्थानांतरण विवरण", "bn": "স্থানান্তরের বিবরণ",
+    },
+    "Saving to": {
+        "es": "Guardando en", "ur": "محفوظ ہو رہا ہے", "ar": "الحفظ في",
+        "hi": "यहाँ सहेजा जा रहा है", "bn": "সংরক্ষণের স্থান",
+    },
+    "Image preview": {
+        "es": "Vista previa de imagen", "ur": "تصویر کا پیش منظر",
+        "ar": "معاينة الصورة", "hi": "छवि पूर्वावलोकन", "bn": "ছবির পূর্বরূপ",
+    },
+    "History": {
+        "es": "Historial", "ur": "سرگزشت", "ar": "السجل", "hi": "इतिहास", "bn": "ইতিহাস",
+    },
+    "Pause / resume": {
+        "es": "Pausar / reanudar", "ur": "روکیں / دوبارہ شروع کریں",
+        "ar": "إيقاف مؤقت / استئناف", "hi": "रोकें / फिर शुरू करें",
+        "bn": "বিরতি / পুনরায় শুরু",
+    },
+    "Resume / retry": {
+        "es": "Reanudar / reintentar", "ur": "جاری رکھیں / دوبارہ کوشش",
+        "ar": "استئناف / إعادة المحاولة", "hi": "जारी / पुनः प्रयास",
+        "bn": "চালিয়ে যান / আবার চেষ্টা",
+    },
+    "Cancel selected": {
+        "es": "Cancelar seleccionado", "ur": "منتخب منسوخ کریں",
+        "ar": "إلغاء المحدد", "hi": "चुना हुआ रद्द करें", "bn": "নির্বাচিত বাতিল",
+    },
+    "Open downloads folder": {
+        "es": "Abrir carpeta de descargas", "ur": "ڈاؤن لوڈ فولڈر کھولیں",
+        "ar": "فتح مجلد التنزيلات", "hi": "डाउनलोड फ़ोल्डर खोलें",
+        "bn": "ডাউনলোড ফোল্ডার খুলুন",
+    },
+    "Download speed": {
+        "es": "Velocidad de descarga", "ur": "ڈاؤن لوڈ کی رفتار",
+        "ar": "سرعة التنزيل", "hi": "डाउनलोड गति", "bn": "ডাউনলোডের গতি",
+    },
+    "Limit for this download": {
+        "es": "Límite de esta descarga", "ur": "اس ڈاؤن لوڈ کی حد",
+        "ar": "حد هذا التنزيل", "hi": "इस डाउनलोड की सीमा", "bn": "এই ডাউনলোডের সীমা",
+    },
+    "Shared limit for all downloads": {
+        "es": "Límite compartido de todas las descargas",
+        "ur": "تمام ڈاؤن لوڈز کی مشترکہ حد",
+        "ar": "الحد المشترك لكل التنزيلات",
+        "hi": "सभी डाउनलोड की साझा सीमा",
+        "bn": "সব ডাউনলোডের সম্মিলিত সীমা",
+    },
+    "Verify downloaded file": {
+        "es": "Verificar archivo descargado", "ur": "ڈاؤن لوڈ فائل کی تصدیق",
+        "ar": "التحقق من الملف الذي تم تنزيله",
+        "hi": "डाउनलोड की गई फ़ाइल सत्यापित करें",
+        "bn": "ডাউনলোড করা ফাইল যাচাই",
+    },
+    "Proxy (optional)": {
+        "es": "Proxy (opcional)", "ur": "پراکسی (اختیاری)",
+        "ar": "وكيل (اختياري)", "hi": "प्रॉक्सी (वैकल्पिक)",
+        "bn": "প্রক্সি (ঐচ্ছিক)",
+    },
+    "Browser cookies": {
+        "es": "Cookies del navegador", "ur": "براؤزر کوکیز",
+        "ar": "ملفات تعريف ارتباط المتصفح",
+        "hi": "ब्राउज़र कुकीज़", "bn": "ব্রাউজার কুকি",
+    },
+    "Custom HTTP headers": {
+        "es": "Encabezados HTTP personalizados",
+        "ur": "حسب ضرورت HTTP ہیڈرز",
+        "ar": "ترويسات HTTP مخصصة",
+        "hi": "कस्टम HTTP हेडर", "bn": "কাস্টম HTTP হেডার",
+    },
+    "Retry attempts": {
+        "es": "Intentos de reintento", "ur": "دوبارہ کوششیں",
+        "ar": "محاولات إعادة التنزيل", "hi": "पुनः प्रयास", "bn": "পুনরায় চেষ্টার সংখ্যা",
+    },
+    "Start at (local time)": {
+        "es": "Iniciar a (hora local)", "ur": "شروع کریں (مقامی وقت)",
+        "ar": "البدء في (التوقيت المحلي)", "hi": "शुरू करें (स्थानीय समय)",
+        "bn": "শুরু (স্থানীয় সময়)",
+    },
+    "Save to cloud": {
+        "es": "Guardar en la nube", "ur": "کلاؤڈ میں محفوظ کریں",
+        "ar": "الحفظ إلى السحابة", "hi": "क्लाउड में सहेजें",
+        "bn": "ক্লাউডে সংরক্ষণ",
+    },
+    "Open selected location": {
+        "es": "Abrir ubicación seleccionada",
+        "ur": "منتخب کردہ مقام کھولیں",
+        "ar": "فتح الموقع المحدد",
+        "hi": "चुना गया स्थान खोलें",
+        "bn": "নির্বাচিত অবস্থান খুলুন",
+    },
+}
+
+URDU_CORE_TRANSLATIONS = {
+    "All tasks": "تمام کام",
+    "Downloading": "ڈاؤن لوڈ ہو رہا ہے",
+    "Completed": "مکمل",
+    "Media library": "میڈیا لائبریری",
+    "Tools & utilities": "اوزار اور سہولیات",
+    "Convert to MP3": "MP3 میں تبدیل کریں",
+    "Image tools": "تصویری اوزار",
+    "Image gallery": "تصاویر کی گیلری",
+    "Download and organize\nlocal media": "مقامی میڈیا ڈاؤن لوڈ اور منظم کریں",
+    "Paste a link, choose where to save it, and add it to your queue.": (
+        "لنک چسپاں کریں، محفوظ کرنے کی جگہ منتخب کریں، پھر فہرست میں شامل کریں۔"
+    ),
+    "Use recommended": "تجویز کردہ ترتیبات استعمال کریں",
+    "Auto-fill copied links": "کاپی کیے گئے لنک خودکار طور پر شامل کریں",
+    "Dark mode": "ڈارک موڈ",
+    "Link": "لنک",
+    "Source": "ماخذ",
+    "Media": "میڈیا",
+    "Resolution": "ویڈیو معیار",
+    "Playlist": "پلے لسٹ",
+    "Add download": "ڈاؤن لوڈ شامل کریں",
+    "Batch": "ایک ساتھ کئی",
+    "Sequence": "ترتیب",
+    "Browse": "منتخب کریں",
+    "Statistics dashboard": "اعداد و شمار کا ڈیش بورڈ",
+    "Total downloads": "کل ڈاؤن لوڈز",
+    "Completed files": "مکمل فائلیں",
+    "Success rate": "کامیابی کی شرح",
+    "Failed or stopped": "ناکام یا رکے ہوئے",
+    "Top source domains": "نمایاں ماخذ ڈومین",
+    "No source domains recorded yet.": "ابھی تک کوئی ماخذ ڈومین محفوظ نہیں ہوا۔",
+    "No task selected": "کوئی کام منتخب نہیں",
+    "Select a task before copying its link.": "لنک کاپی کرنے سے پہلے ایک کام منتخب کریں۔",
+    "More settings": "مزید ترتیبات",
+    "Overall progress": "مجموعی پیش رفت",
+    "Right-click an image download for image tools.": (
+        "تصویری اوزار کے لیے ڈاؤن لوڈ کی گئی تصویر پر دایاں کلک کریں۔"
+    ),
+    "Status": "حالت",
+    "Progress": "پیش رفت",
+    "Transfer details": "منتقلی کی تفصیل",
+    "Saving to": "یہاں محفوظ ہو رہا ہے",
+    "Media preview": "میڈیا کا پیش نظارہ",
+    "No item selected": "کوئی آئٹم منتخب نہیں",
+    "Select a file to preview": "پیش نظارہ کے لیے فائل منتخب کریں",
+    "Choose an existing file or select a downloaded task.": (
+        "موجودہ فائل منتخب کریں یا ڈاؤن لوڈ کیا گیا کام چنیں۔"
+    ),
+    "Show file": "فائل دکھائیں",
+    "Pause / resume": "روکیں / جاری رکھیں",
+    "Resume / retry": "جاری رکھیں / دوبارہ کوشش کریں",
+    "Cancel selected": "منتخب کام منسوخ کریں",
+    "History": "تاریخچہ",
+    "Hide selected": "منتخب کام چھپائیں",
+    "Restore selected": "منتخب کام بحال کریں",
+    "Clear finished": "مکمل کام صاف کریں",
+    "Show hidden": "چھپے ہوئے دکھائیں",
+    "Help": "مدد",
+    "General": "عام",
+    "Language": "زبان",
+    "Accessibility": "رسائی کی سہولیات",
+    "Use larger text": "بڑا متن استعمال کریں",
+    "High contrast": "زیادہ تضاد",
+    "Check for updates at startup": "شروع ہوتے وقت اپ ڈیٹس دیکھیں",
+    "Check for updates now": "ابھی اپ ڈیٹس دیکھیں",
+    "Record local diagnostic events": "مقامی تشخیصی واقعات محفوظ کریں",
+    "Export local diagnostics…": "مقامی تشخیصی معلومات برآمد کریں…",
+    "Speed & checks": "رفتار اور تصدیق",
+    "Connection": "کنکشن",
+    "Download speed": "ڈاؤن لوڈ کی رفتار",
+    "Limit for this download": "اس ڈاؤن لوڈ کی حد",
+    "Shared limit for all downloads": "تمام ڈاؤن لوڈز کی مشترکہ حد",
+    "Verify downloaded file": "ڈاؤن لوڈ فائل کی تصدیق کریں",
+    "Proxy (optional)": "پراکسی (اختیاری)",
+    "Browser cookies": "براؤزر کوکیز",
+    "Custom HTTP headers": "حسب ضرورت HTTP ہیڈرز",
+    "Retry attempts": "دوبارہ کوششوں کی تعداد",
+    "Schedule & files": "شیڈول اور فائلیں",
+    "Start at (local time)": "شروع ہونے کا وقت (مقامی)",
+    "Save to cloud": "کلاؤڈ میں محفوظ کریں",
+    "Keyboard shortcuts:": "کی بورڈ شارٹ کٹس:",
+    "Ctrl+L — focus link field": "Ctrl+L — لنک والے خانے پر جائیں",
+    "Ctrl+J — focus download list": "Ctrl+J — ڈاؤن لوڈ فہرست پر جائیں",
+    "Alt+S — focus progress status": "Alt+S — پیش رفت کی حالت پر جائیں",
+    "Space — toggle Smart VLC playback when open; otherwise pause/resume the focused download": (
+        "Space — Smart VLC کھلا ہو تو پلے بیک روکیں یا جاری کریں؛ ورنہ منتخب "
+        "ڈاؤن لوڈ روکیں یا جاری کریں"
+    ),
+    "Smart VLC and preview: Left/Right seek 5 seconds; Up/Down change volume 5%": (
+        "Smart VLC اور پیش نظارہ: Left/Right سے 5 سیکنڈ آگے یا پیچھے جائیں؛ "
+        "Up/Down سے آواز 5% بڑھائیں یا گھٹائیں"
+    ),
+    "Press F1 for help. Use Tab and Shift+Tab to move between controls.": (
+        "مدد کے لیے F1 دبائیں۔ کنٹرولز کے درمیان جانے کے لیے Tab اور Shift+Tab استعمال کریں۔"
+    ),
+    "Language saved": "زبان محفوظ ہو گئی",
+    "Smart Downloader help": "Smart Downloader کی مدد",
+    "Keyboard: Ctrl+, Settings · F1 Help · Ctrl+Enter Add download · Ctrl+O Open selected location": (
+        "کی بورڈ: Ctrl+, ترتیبات · F1 مدد · Ctrl+Enter ڈاؤن لوڈ شامل کریں · "
+        "Ctrl+O منتخب مقام کھولیں"
+    ),
+    "Restart Smart Downloader to apply the selected language.": (
+        "منتخب زبان لاگو کرنے کے لیے Smart Downloader دوبارہ شروع کریں۔"
+    ),
+}
+
+for _source_text, _urdu_text in URDU_CORE_TRANSLATIONS.items():
+    TRANSLATIONS.setdefault(_source_text, {})["ur"] = _urdu_text
+
+
+def translate(text: str, language: str = "en") -> str:
+    language_code = LANGUAGES.get(language, language)
+    return TRANSLATIONS.get(text, {}).get(language_code, text)

@@ -71,6 +71,9 @@ PLAYABLE_MEDIA_EXTENSIONS = {
     ".aac", ".avi", ".flac", ".m4a", ".mkv", ".mov", ".mp3", ".mp4",
     ".mpeg", ".mpg", ".ogg", ".wav", ".webm", ".wmv",
 }
+VIDEO_PREVIEW_EXTENSIONS = {
+    ".avi", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
+}
 
 
 def _convert_media_to_mp3(source: Path, destination: Path, ffmpeg_directory: Path) -> None:
@@ -135,9 +138,9 @@ class DownloaderApp:
         )
         self.source = tk.StringVar(value="Auto")
         self.mode = tk.StringVar(value="Video")
-        self.quality = tk.StringVar(value="1080p (Full HD)")
+        self.quality = tk.StringVar(value="Best available")
         self.playlist_scope = tk.StringVar(value="Auto (from link)")
-        self.speed_mode = tk.StringVar(value="Fast")
+        self.speed_mode = tk.StringVar(value="Balanced")
         self.max_speed = tk.StringVar(value="Unlimited")
         self.global_max_speed = tk.StringVar(value="Unlimited")
         self.expected_checksum = tk.StringVar(value="")
@@ -273,7 +276,7 @@ class DownloaderApp:
             font=("Segoe UI", 16, "bold"),
         ).grid(row=0, column=0, sticky="w")
         ttk.Label(
-            header, text="Paste a link, choose where to save it, and add it to your queue.",
+            header, text="Paste a link to start. Downloads are saved to your selected folder.",
             style="Card.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(2, 0))
         ttk.Button(
@@ -297,6 +300,7 @@ class DownloaderApp:
         self.url_entry = ttk.Entry(add_card)
         self.url_entry.grid(row=0, column=1, sticky="ew", pady=(0, 8))
         self.url_entry.bind("<Return>", lambda _event: self.add_download())
+        self.url_entry.bind("<<Paste>>", self._on_url_paste, add="+")
         add_buttons = ttk.Frame(add_card, style="Card.TFrame")
         add_buttons.grid(row=0, column=2, sticky="e", padx=(10, 0), pady=(0, 8))
         ttk.Button(
@@ -635,6 +639,18 @@ class DownloaderApp:
                     self._last_autofilled_clipboard = clipboard
         self.root.after(800, self._watch_clipboard)
 
+    def _on_url_paste(self, _event: tk.Event | None = None) -> None:
+        self.root.after_idle(self._download_pasted_url)
+
+    def _download_pasted_url(self) -> None:
+        url = self.url_entry.get().strip()
+        try:
+            parsed = urlsplit(url)
+        except ValueError:
+            return
+        if parsed.scheme.lower() in {"http", "https"} and parsed.hostname:
+            self.add_download()
+
     def open_batch_dialog(self) -> None:
         dialog = tk.Toplevel(self.root)
         dialog.title("Add several links")
@@ -841,14 +857,82 @@ class DownloaderApp:
         self.jobs.bind("<Double-1>", self._open_clicked_row_action)
         self.jobs.bind("<<TreeviewSelect>>", self._show_selected_thumbnail)
 
-        preview = ttk.Labelframe(queue_frame, text="Image preview", padding=8)
+        preview = ttk.Labelframe(queue_frame, text="Media preview", padding=8)
         preview.grid(row=0, column=2, sticky="nsew", padx=(10, 0))
         preview.columnconfigure(0, weight=1)
         queue_frame.columnconfigure(2, minsize=190)
-        self.preview_image_label = ttk.Label(preview, text="Select a downloaded image")
+        preview.rowconfigure(0, weight=1)
+        self.preview_video_surface = tk.Frame(
+            preview, background="#000000", height=120,
+        )
+        self.preview_video_surface.grid(row=0, column=0, sticky="nsew")
+        self.preview_video_surface.grid_remove()
+        self.preview_video_placeholder = tk.Label(
+            self.preview_video_surface,
+            text="Select a video to preview",
+            background="#000000",
+            foreground="#ffffff",
+            anchor="center",
+            justify="center",
+            wraplength=180,
+        )
+        self.preview_video_placeholder.place(
+            relx=0.5, rely=0.5, anchor="center",
+        )
+        self.preview_image_label = ttk.Label(
+            preview, text="Select a downloaded image",
+        )
         self.preview_image_label.grid(row=0, column=0, sticky="nsew")
+        player_controls = ttk.Frame(preview)
+        player_controls.grid(row=1, column=0, sticky="ew", pady=(5, 0))
+        player_controls.grid_remove()
+        self.preview_player_controls = player_controls
+        self.preview_player_play_button = ttk.Button(
+            player_controls, text="Play", command=self._toggle_video_preview,
+        )
+        self.preview_player_play_button.grid(row=0, column=0, sticky="ew")
+        ttk.Button(
+            player_controls, text="Stop", command=self._stop_video_preview,
+        ).grid(row=0, column=1, sticky="ew", padx=(3, 0))
+        ttk.Button(
+            player_controls, text="−5s", command=lambda: self._seek_video_preview(-5),
+        ).grid(row=0, column=2, sticky="ew", padx=(3, 0))
+        ttk.Button(
+            player_controls, text="+5s", command=lambda: self._seek_video_preview(5),
+        ).grid(row=0, column=3, sticky="ew", padx=(3, 0))
+        ttk.Label(player_controls, text="Vol").grid(
+            row=1, column=0, sticky="e", padx=(0, 3), pady=(4, 0),
+        )
+        ttk.Button(
+            player_controls, text="−", width=2,
+            command=lambda: self._adjust_video_preview_volume(-5),
+        ).grid(row=1, column=1, sticky="ew", pady=(4, 0))
+        self.preview_player_volume = tk.IntVar(value=80)
+        ttk.Scale(
+            player_controls,
+            from_=0,
+            to=100,
+            variable=self.preview_player_volume,
+            command=self._set_video_preview_volume,
+        ).grid(row=1, column=2, sticky="ew", padx=3, pady=(4, 0))
+        ttk.Button(
+            player_controls, text="+", width=2,
+            command=lambda: self._adjust_video_preview_volume(5),
+        ).grid(row=1, column=3, sticky="ew", pady=(4, 0))
+        player_controls.columnconfigure(2, weight=1)
+        self.preview_player_current_time = tk.StringVar(value="00:00 / 00:00")
+        ttk.Label(
+            player_controls, textvariable=self.preview_player_current_time,
+            anchor="center",
+        ).grid(row=2, column=0, columnspan=4, sticky="ew", pady=(3, 0))
+        self._preview_vlc_instance = None
+        self._preview_vlc_player = None
+        self._preview_vlc_media = None
+        self._preview_playback_after = None
+        self._preview_media_path = None
+        self._preview_vlc_dll_directory = None
         self.preview_details = ttk.Label(preview, text="", wraplength=190)
-        self.preview_details.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        self.preview_details.grid(row=2, column=0, sticky="ew", pady=(6, 0))
         self.current_thumbnail = None
 
         controls = ttk.Frame(frame)
@@ -1185,7 +1269,7 @@ class DownloaderApp:
     def _use_recommended_settings(self) -> None:
         self.source.set("Auto")
         self.mode.set("Video")
-        self.quality.set("1080p (Full HD)")
+        self.quality.set("Best available")
         self.playlist_scope.set("Auto (from link)")
         self.speed_mode.set("Balanced")
         self.max_speed.set("Unlimited")
@@ -2143,11 +2227,24 @@ class DownloaderApp:
             self._clear_thumbnail("Select a downloaded image")
             return
         path = self._selected_output_path()
+        if (
+            path is not None
+            and path.is_file()
+            and path.suffix.lower() in VIDEO_PREVIEW_EXTENSIONS
+            and self.jobs.set(selected[0], "status") == "Complete"
+        ):
+            self._show_video_preview(path)
+            self.preview_details.configure(text=path.name)
+            return
         if path is None or not path.is_file() or path.suffix.lower() not in {
             ".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp",
         }:
             self._clear_thumbnail("Select a downloaded image")
             return
+        self._stop_video_preview()
+        self.preview_video_surface.grid_remove()
+        self.preview_player_controls.grid_remove()
+        self.preview_image_label.grid()
         try:
             from PIL import Image, ImageTk
 
@@ -2163,6 +2260,11 @@ class DownloaderApp:
         self.preview_details.configure(text=path.name)
 
     def _clear_thumbnail(self, message: str) -> None:
+        self._stop_video_preview()
+        self._preview_media_path = None
+        self.preview_video_surface.grid_remove()
+        self.preview_player_controls.grid_remove()
+        self.preview_image_label.grid()
         self.current_thumbnail = None
         self.preview_image_label.configure(image="", text=message)
         self.preview_details.configure(text="")
@@ -2347,11 +2449,15 @@ class DownloaderApp:
             "Choose Image gallery to preview and queue images found in common page image tags. "
             "Use Sequence... for numbered image links. Right-click a finished image to convert "
             "or resize it. The speed chart shows recent transfer speed.\n\n"
+            "Select a completed video to play it in Media preview. Use the volume controls "
+            "or the 5-second seek buttons; VLC Media Player must be installed.\n\n"
             "Your download list is saved between app launches. Clear finished hides old "
             "rows rather than deleting their history; turn on Show hidden and use Restore "
             "selected to bring a row back.\n\n"
             "Only public links and content you have permission to save are supported. "
-            "Some sites may block downloads or require unavailable sign-in.",
+            "Some sites may block downloads or require sign-in. For YouTube's bot "
+            "confirmation, choose your signed-in browser under More settings > Connection "
+            "> Browser cookies, then retry.",
         )
 
     def _job_finished(self, job_id: str, future: Future[str]) -> None:
@@ -2562,7 +2668,16 @@ class DownloaderApp:
 
     @staticmethod
     def _friendly_download_error(detail: str) -> str:
-        if "winerror 5" in detail.casefold() or "access is denied" in detail.casefold():
+        folded = detail.casefold()
+        if "sign in to confirm" in folded and "not a bot" in folded:
+            return (
+                "YouTube requires an authenticated session for this video. In More "
+                "settings > Connection, choose the browser where you are signed in "
+                "under Browser cookies, then choose Resume / retry. Close that browser "
+                "first if its cookie database is locked. Only use an account and content "
+                f"you are authorized to access. Details: {detail}"
+            )
+        if "winerror 5" in folded or "access is denied" in folded:
             return (
                 "Windows denied access to the output file. Close any media player or "
                 "preview using the file, check folder permissions and free disk space, "
@@ -2570,7 +2685,187 @@ class DownloaderApp:
             )
         return detail
 
+    @staticmethod
+    def _format_preview_time(milliseconds: int) -> str:
+        seconds = max(0, milliseconds // 1000)
+        return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+    def _prepare_preview_vlc_runtime(self) -> None:
+        if sys.platform != "win32":
+            return
+        app_directory = (
+            Path(sys.executable).resolve().parent
+            if getattr(sys, "frozen", False)
+            else Path(__file__).resolve().parent
+        )
+        candidates = [
+            app_directory / "VLC",
+            Path(os.environ.get("ProgramFiles", "C:/Program Files"))
+            / "VideoLAN" / "VLC",
+            Path(os.environ.get("ProgramFiles(x86)", "C:/Program Files (x86)"))
+            / "VideoLAN" / "VLC",
+        ]
+        vlc_directory = next(
+            (
+                candidate for candidate in candidates
+                if (candidate / "libvlc.dll").is_file()
+                and (candidate / "plugins").is_dir()
+            ),
+            None,
+        )
+        if vlc_directory is None:
+            return
+        plugin_directory = vlc_directory / "plugins"
+        os.environ["PYTHON_VLC_LIB_PATH"] = str(vlc_directory / "libvlc.dll")
+        os.environ["PYTHON_VLC_MODULE_PATH"] = str(plugin_directory)
+        os.environ["VLC_PLUGIN_PATH"] = str(plugin_directory)
+        if (
+            self._preview_vlc_dll_directory is None
+            and hasattr(os, "add_dll_directory")
+        ):
+            self._preview_vlc_dll_directory = os.add_dll_directory(str(vlc_directory))
+        path_entries = os.environ.get("PATH", "").split(os.pathsep)
+        if os.path.normcase(str(vlc_directory)) not in {
+            os.path.normcase(entry) for entry in path_entries
+        }:
+            os.environ["PATH"] = str(vlc_directory) + os.pathsep + os.environ.get(
+                "PATH", ""
+            )
+
+    def _show_video_preview(self, path: Path) -> None:
+        self._stop_video_preview()
+        self._preview_media_path = path
+        self.preview_image_label.grid_remove()
+        self.preview_video_surface.grid()
+        self.preview_player_controls.grid()
+        self.preview_video_placeholder.place(
+            relx=0.5, rely=0.5, anchor="center",
+        )
+        self.preview_video_placeholder.configure(text=f"Loading preview:\n{path.name}")
+        self.preview_player_current_time.set("00:00 / 00:00")
+        try:
+            import importlib
+
+            self._prepare_preview_vlc_runtime()
+            vlc = importlib.import_module("vlc")
+            instance = vlc.Instance()
+            if instance is None:
+                raise RuntimeError("VLC could not initialize.")
+            self._preview_vlc_instance = instance
+            player = instance.media_player_new()
+            self._preview_vlc_player = player
+            self._preview_vlc_media = instance.media_new(str(path))
+            player.set_media(self._preview_vlc_media)
+            self.preview_video_surface.update_idletasks()
+            surface_handle = self.preview_video_surface.winfo_id()
+            if sys.platform == "win32":
+                player.set_hwnd(surface_handle)
+            elif sys.platform == "darwin":
+                player.set_nsobject(surface_handle)
+            else:
+                player.set_xwindow(surface_handle)
+            player.audio_set_volume(self.preview_player_volume.get())
+            if player.play() == -1:
+                raise RuntimeError("VLC could not start playback.")
+            self.preview_video_placeholder.place_forget()
+            self.preview_player_play_button.configure(text="Pause")
+            self._schedule_video_preview_poll()
+        except (AttributeError, ImportError, OSError, RuntimeError) as error:
+            self._stop_video_preview()
+            self._preview_media_path = path
+            self.preview_video_surface.grid()
+            self.preview_player_controls.grid()
+            self.preview_video_placeholder.configure(
+                text=f"Video preview unavailable:\n{error}",
+            )
+            self.preview_video_placeholder.place(
+                relx=0.5, rely=0.5, anchor="center",
+            )
+
+    def _toggle_video_preview(self) -> None:
+        player = self._preview_vlc_player
+        if player is None:
+            path = self._preview_media_path
+            if path is not None:
+                self._show_video_preview(path)
+            return
+        if player.is_playing():
+            player.pause()
+            self.preview_player_play_button.configure(text="Play")
+        else:
+            player.play()
+            self.preview_player_play_button.configure(text="Pause")
+            self._schedule_video_preview_poll()
+
+    def _schedule_video_preview_poll(self) -> None:
+        if self._preview_vlc_player is None or self._preview_playback_after is not None:
+            return
+        self._preview_playback_after = self.root.after(
+            250, self._poll_video_preview,
+        )
+
+    def _poll_video_preview(self) -> None:
+        self._preview_playback_after = None
+        player = self._preview_vlc_player
+        if player is None:
+            return
+        current_time = max(0, player.get_time())
+        duration = max(0, player.get_length())
+        self.preview_player_current_time.set(
+            f"{self._format_preview_time(current_time)} / "
+            f"{self._format_preview_time(duration)}"
+        )
+        if player.is_playing():
+            self._schedule_video_preview_poll()
+        else:
+            self.preview_player_play_button.configure(text="Play")
+
+    def _stop_video_preview(self) -> None:
+        callback_id = getattr(self, "_preview_playback_after", None)
+        if callback_id is not None:
+            try:
+                self.root.after_cancel(callback_id)
+            except tk.TclError:
+                pass
+            self._preview_playback_after = None
+        player = getattr(self, "_preview_vlc_player", None)
+        if player is not None:
+            player.stop()
+            player.release()
+        instance = getattr(self, "_preview_vlc_instance", None)
+        if instance is not None:
+            instance.release()
+        self._preview_vlc_player = None
+        self._preview_vlc_instance = None
+        self._preview_vlc_media = None
+        play_button = getattr(self, "preview_player_play_button", None)
+        if play_button is not None:
+            play_button.configure(text="Play")
+
+    def _seek_video_preview(self, seconds: int) -> None:
+        player = self._preview_vlc_player
+        if player is None or not player.is_seekable():
+            return
+        current_time = max(0, player.get_time())
+        duration = max(0, player.get_length())
+        target = max(0, current_time + seconds * 1000)
+        if duration > 0:
+            target = min(target, duration)
+        player.set_time(target)
+
+    def _adjust_video_preview_volume(self, delta: int) -> None:
+        volume = max(0, min(100, int(self.preview_player_volume.get()) + delta))
+        self.preview_player_volume.set(volume)
+        self._set_video_preview_volume(str(volume))
+
+    def _set_video_preview_volume(self, value: str) -> None:
+        player = self._preview_vlc_player
+        if player is not None:
+            volume = max(0, min(100, round(float(value))))
+            player.audio_set_volume(volume)
+
     def _close(self) -> None:
+        self._stop_video_preview()
         for timer in self.schedule_timers.values():
             timer.cancel()
         for job_id, cancel_event in self.cancel_events.items():

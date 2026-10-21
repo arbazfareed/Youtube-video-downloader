@@ -176,6 +176,63 @@ class _RecordingSession(_FakeSession):
 
 
 class DownloadEngineTests(unittest.TestCase):
+    def test_video_preview_volume_buttons_clamp_and_apply_volume(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.preview_player_volume = _FakeStringVar(80)
+        app._preview_vlc_player = Mock()
+
+        app._adjust_video_preview_volume(5)
+        self.assertEqual(app.preview_player_volume.get(), 85)
+        app._preview_vlc_player.audio_set_volume.assert_called_with(85)
+
+        app._adjust_video_preview_volume(50)
+        self.assertEqual(app.preview_player_volume.get(), 100)
+        app._adjust_video_preview_volume(-150)
+        self.assertEqual(app.preview_player_volume.get(), 0)
+        app._preview_vlc_player.audio_set_volume.assert_called_with(0)
+
+    def test_video_preview_seek_buttons_skip_five_seconds_and_clamp(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app._preview_vlc_player = Mock()
+        app._preview_vlc_player.is_seekable.return_value = True
+        app._preview_vlc_player.get_length.return_value = 60_000
+        app._preview_vlc_player.get_time.return_value = 2_000
+
+        app._seek_video_preview(-5)
+        app._preview_vlc_player.set_time.assert_called_with(0)
+        app._preview_vlc_player.get_time.return_value = 58_000
+        app._seek_video_preview(5)
+        app._preview_vlc_player.set_time.assert_called_with(60_000)
+
+    def test_selecting_completed_video_uses_media_preview(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.jobs = Mock()
+        app.jobs.selection.return_value = ("video-job",)
+        app.jobs.set.return_value = "Complete"
+        app.preview_details = Mock()
+        app._show_video_preview = Mock()
+
+        with TemporaryDirectory() as folder:
+            video = Path(folder) / "clip.mp4"
+            video.touch()
+            app._selected_output_path = Mock(return_value=video)
+
+            app._show_selected_thumbnail()
+
+        app._show_video_preview.assert_called_once_with(video)
+        app.preview_details.configure.assert_called_once_with(text="clip.mp4")
+
+    def test_youtube_bot_check_error_explains_browser_cookie_retry(self):
+        detail = (
+            "ERROR: [youtube] Sign in to confirm you're not a bot. "
+            "Use --cookies-from-browser or --cookies for authentication."
+        )
+        message = DownloaderApp._friendly_download_error(detail)
+        self.assertIn("More settings > Connection", message)
+        self.assertIn("Browser cookies", message)
+        self.assertIn("Resume / retry", message)
+        self.assertIn(detail, message)
+
     def test_destination_changes_only_update_queued_rows(self):
         app = DownloaderApp.__new__(DownloaderApp)
         app.jobs = _FakeJobs({
@@ -382,10 +439,31 @@ class DownloadEngineTests(unittest.TestCase):
         app._apply_theme.assert_called_once()
         self.assertEqual(app.source.get(), "Auto")
         self.assertEqual(app.mode.get(), "Video")
-        self.assertEqual(app.quality.get(), "1080p (Full HD)")
+        self.assertEqual(app.quality.get(), "Best available")
         self.assertEqual(app.playlist_scope.get(), "Auto (from link)")
         self.assertEqual(app.speed_mode.get(), "Balanced")
         self.assertEqual(app.max_speed.get(), "Unlimited")
+
+    def test_pasting_a_valid_url_schedules_an_immediate_download(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.url_entry = _FakeEntry(" https://example.org/video ")
+        app.root = Mock()
+        app.add_download = Mock()
+
+        app._on_url_paste()
+
+        app.root.after_idle.assert_called_once_with(app._download_pasted_url)
+        app._download_pasted_url()
+        app.add_download.assert_called_once_with()
+
+    def test_pasting_non_url_text_does_not_start_a_download(self):
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.url_entry = _FakeEntry("not a URL")
+        app.add_download = Mock()
+
+        app._download_pasted_url()
+
+        app.add_download.assert_not_called()
 
     def test_completed_duplicate_prompts_before_adding_again(self):
         app = DownloaderApp.__new__(DownloaderApp)

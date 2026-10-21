@@ -1,0 +1,423 @@
+from __future__ import annotations
+
+from app_support import (
+    queue,
+    shutil,
+    Future,
+    Path,
+    messagebox,
+    verify_checksum,
+    calculate_checksum,
+    select_upload_source,
+    upload_path,
+    DownloadCancelled,
+    extract_archive,
+    notify,
+)
+
+class EventsMixin:
+    def _job_finished(self, job_id: str, future: Future[str]) -> None:
+        try:
+            result = future.result()
+            options = self.download_options.get(job_id, {})
+            expected = options.get("expected_checksum", "")
+            if expected:
+                result_file = Path(result)
+                if not result_file.is_file():
+                    raise RuntimeError("Checksum verification requires a single output file.")
+                algorithm = options["checksum_algorithm"]
+                actual, matches = verify_checksum(result_file, algorithm, expected)
+                if not matches:
+                    raise RuntimeError(
+                        f"{algorithm.upper()} checksum mismatch. "
+                        f"Expected {expected}; actual {actual}."
+                    )
+                self.verified_checksums[job_id] = (algorithm, actual)
+            if (
+                options.get("cloud_provider", "local") == "local"
+                and Path(result).is_file()
+            ):
+                integrity_path = Path(result).resolve()
+                options["integrity_path"] = str(integrity_path)
+                options["integrity_sha256"] = calculate_checksum(
+                    integrity_path, "sha256"
+                )
+            if options.get("auto_extract"):
+                extracted_folder = extract_archive(Path(result))
+                if extracted_folder is not None:
+                    result = str(extracted_folder)
+            cloud_provider = options.get("cloud_provider", "local")
+            if cloud_provider != "local":
+                staging = options["destination"]
+                try:
+                    remote_paths = upload_path(
+                        select_upload_source(Path(result), staging),
+                        cloud_provider,
+                        options["cloud_folder"],
+                    )
+                except Exception as error:
+                    raise RuntimeError(
+                        f"Cloud upload failed; your local copy is still at {staging}: {error}"
+                    ) from error
+                result = "; ".join(remote_paths)
+                try:
+                    shutil.rmtree(staging)
+                except OSError as error:
+                    result += (
+                        f" (upload complete; local staging copy remains at {staging}: "
+                        f"{error})"
+                    )
+        except DownloadCancelled:
+            self.events.put(("finished", job_id, "Cancelled", ""))
+        except Exception as error:
+            self._capture_diagnostic("download", error)
+            self.events.put(("finished", job_id, "Failed", str(error)))
+        else:
+            self.events.put(("finished", job_id, "Complete", result))
+
+    @staticmethod
+    def _friendly_download_error(detail: str) -> str:
+        folded = detail.casefold()
+        if "sign in to confirm" in folded and "not a bot" in folded:
+            return (
+                "YouTube requires a signed-in browser session for this video. Open "
+                "More settings > Connection, choose the browser where you are signed "
+                "in under Browser cookies, then retry the download. Cookie access is "
+                "only used for the browser you select. If the browser's cookie database "
+                "is locked, close that browser and retry. Only download content you are "
+                f"authorized to access. Details: {detail}"
+            )
+        if "403" in folded and "forbidden" in folded:
+            return (
+                "The server denied access (HTTP 403 Forbidden). YouTube or the host "
+                "server rejected the request or the session token expired. Try selecting "
+                "your signed-in browser under More settings > Connection > Browser cookies, "
+                f"or retry in a few moments. Details: {detail}"
+            )
+        if "members-only" in folded or "channel members" in folded:
+            return (
+                "This video is exclusive to channel members. Under More settings > Connection > "
+                "Browser cookies, select the browser where you are signed in to an account with "
+                f"an active channel membership. Details: {detail}"
+            )
+        if any(term in folded for term in ("premiere will begin", "live event will begin", "upcoming")):
+            return (
+                "This video is a scheduled premiere or upcoming livestream that has not started yet. "
+                f"Try downloading again after the stream begins. Details: {detail}"
+            )
+        return detail
+
+    def _process_events(self) -> None:
+        while True:
+            try:
+                event = self.events.get_nowait()
+            except queue.Empty:
+                break
+
+            if event[0] == "conversion_complete":
+                _, output_path = event
+                self.progress_summary.set(f"MP3 conversion complete: {Path(output_path).name}")
+                messagebox.showinfo(
+                    "MP3 conversion complete",
+                    f"Saved MP3 file to:\n{output_path}",
+                    parent=self.root,
+                )
+            elif event[0] == "diagnostic_failed":
+                _, error = event
+                self.progress_summary.set(
+                    f"Could not save local diagnostic event: {error}"
+                )
+            elif event[0] == "conversion_failed":
+                _, error = event
+                self._capture_diagnostic("media conversion", RuntimeError(error))
+                self.progress_summary.set(f"MP3 conversion failed: {error}")
+                messagebox.showerror("MP3 conversion failed", error, parent=self.root)
+            elif event[0] == "start":
+                _, job_id = event
+                self.schedule_timers.pop(job_id, None)
+                cancel_event = self.cancel_events.get(job_id)
+                if (
+                    self.jobs.exists(job_id)
+                    and cancel_event is not None
+                    and not cancel_event.is_set()
+                ):
+                    self.jobs.set(job_id, "status", "Queued")
+                    self.jobs.set(job_id, "details", "Waiting")
+                    self._refresh_job_style(job_id)
+                    self._apply_queue_filter()
+                    self._persist_job(job_id, "Queued", "—", "Waiting")
+                    self._submit_download(job_id)
+                    self.progress_summary.set(
+                        f"Scheduled download started - {self._download_paths[job_id]}"
+                    )
+            elif event[0] == "progress":
+                _, job_id, status, percent, details = event
+                if status == "Downloading" and details.startswith(
+                    "Skipping unavailable playlist entry:"
+                ):
+                    warnings = getattr(self, "_playlist_warnings", {})
+                    warnings.setdefault(job_id, []).append(details)
+                    self._playlist_warnings = warnings
+                self._record_speed_sample(job_id, details)
+                if self.jobs.exists(job_id):
+                    if percent is None:
+                        self.overall_progress.stop()
+                        self.overall_progress.configure(mode="indeterminate", value=0)
+                        self.overall_progress.start(12)
+                        progress_text = "Working"
+                    else:
+                        self.overall_progress.stop()
+                        self.overall_progress.configure(mode="determinate", value=percent)
+                        progress_text = f"{percent:.1f}%"
+
+                    self.jobs.set(job_id, "status", status)
+                    self.jobs.set(job_id, "progress", progress_text)
+                    self.jobs.set(job_id, "details", details)
+                    self._refresh_job_style(job_id)
+                    self._apply_queue_filter()
+                    self.jobs.set(
+                        job_id,
+                        "location",
+                        getattr(self, "_job_destinations", {}).get(
+                            job_id, str(self._download_paths[job_id])
+                        ),
+                    )
+                    self._persist_job(job_id, status, progress_text, details)
+                    self.progress_summary.set(
+                        f"{status}: {progress_text}"
+                        + (f" - {details}" if details else "")
+                        + f" | Saving to {self._download_paths[job_id]}"
+                    )
+                    if status in {
+                        "Downloading media",
+                        "Processing media",
+                        "Recording live stream",
+                    }:
+                        self._schedule_preview_video_refresh(job_id)
+            else:
+                _, job_id, status, detail = event
+                display_detail = detail
+                if self.jobs.exists(job_id):
+                    self.jobs.set(job_id, "status", status)
+                    if status == "Complete":
+                        skipped_playlist_items = getattr(
+                            self, "_playlist_warnings", {},
+                        ).pop(job_id, [])
+                        options = self.download_options.get(job_id, {})
+                        integrity_path = options.get("integrity_path")
+                        integrity_sha256 = options.get("integrity_sha256")
+                        if isinstance(integrity_path, str) and isinstance(
+                            integrity_sha256, str
+                        ):
+                            self._integrity_baselines[job_id] = (
+                                Path(integrity_path),
+                                integrity_sha256,
+                            )
+                        checksum = self.verified_checksums.pop(job_id, None)
+                        if checksum:
+                            algorithm, digest = checksum
+                            display_detail = f"Verified {algorithm.upper()}: {digest}"
+                        self.jobs.set(job_id, "progress", "100%")
+                        self.jobs.set(job_id, "details", display_detail)
+                        result_path = Path(detail)
+                        if result_path.is_absolute():
+                            self._download_paths[job_id] = result_path
+                            result_folder = result_path if result_path.is_dir() else result_path.parent
+                            self.jobs.set(job_id, "location", str(result_folder))
+                            history_instance = getattr(self, "history", None)
+                            if history_instance is not None:
+                                try:
+                                    job_opts = getattr(self, "download_options", {}).get(job_id, {}).copy()
+                                    job_opts["output_path"] = str(result_path)
+                                    history_instance.update(
+                                        int(job_id),
+                                        status,
+                                        "100%",
+                                        display_detail,
+                                        str(result_folder),
+                                        options=job_opts,
+                                    )
+                                except Exception:
+                                    pass
+                        self.overall_progress.stop()
+                        self.overall_progress.configure(mode="determinate", value=100)
+                        summary = f"Complete - {display_detail}"
+                        if skipped_playlist_items:
+                            skipped_count = len(set(skipped_playlist_items))
+                            summary += (
+                                f" | {skipped_count} playlist error(s) skipped; "
+                                "remaining entries continued. Retry unavailable "
+                                "entries "
+                                "with Browser cookies if sign-in is required."
+                            )
+                        self.progress_summary.set(summary)
+                    elif status in {"Failed", "Cancelled"}:
+                        getattr(self, "_playlist_warnings", {}).pop(job_id, None)
+                        if status == "Failed" and detail.startswith("Cloud upload failed;"):
+                            staging = self._download_paths.get(job_id)
+                            if staging is not None:
+                                self._job_destinations[job_id] = str(staging)
+                                self.jobs.set(job_id, "location", str(staging))
+                        if status == "Failed":
+                            detail = self._friendly_download_error(detail)
+                            display_detail = detail
+                        self.overall_progress.stop()
+                        self.overall_progress.configure(mode="determinate", value=0)
+                        self.progress_summary.set(
+                            f"{status} - {detail or self.jobs.set(job_id, 'link')}"
+                        )
+                        if status == "Failed" and detail:
+                            messagebox.showerror("Download failed", detail)
+                    else:
+                        self.progress_summary.set(f"{status} - {detail}")
+                    self._persist_job(
+                        job_id,
+                        status,
+                        self.jobs.set(job_id, "progress"),
+                        display_detail,
+                    )
+                    self._refresh_job_style(job_id)
+                    self._apply_queue_filter()
+                    if (
+                        self.jobs.selection()
+                        and self.jobs.selection()[0] == job_id
+                    ):
+                        self._refresh_preview_video_choices()
+                    if status == "Complete":
+                        try:
+                            notify(
+                                "Download complete",
+                                Path(detail.replace("\\", "/")).name
+                                if detail
+                                else self.jobs.set(job_id, "link"),
+                            )
+                        except Exception as error:
+                            warning = f"OS notification failed: {error}"
+                            self.progress_summary.set(
+                                f"{self.progress_summary.get()} | {warning}"
+                            )
+                            messagebox.showwarning("Notification unavailable", warning)
+                self.cancel_events.pop(job_id, None)
+                getattr(self, "_download_futures", {}).pop(job_id, None)
+                getattr(self, "_last_progress_update", {}).pop(job_id, None)
+                resume_event = self.resume_events.pop(job_id, None)
+                if resume_event:
+                    resume_event.set()
+                self.schedule_timers.pop(job_id, None)
+                self.download_options.pop(job_id, None)
+                if (
+                    getattr(self, "shutdown_on_complete", None)
+                    and self.shutdown_on_complete.get()
+                    and not self.cancel_events
+                ):
+                    self._initiate_shutdown_countdown()
+
+        self.root.after(100, self._process_events)
+
+    def _initiate_shutdown_countdown(self) -> None:
+        if getattr(self, "_shutdown_dialog_active", False):
+            return
+        self._shutdown_dialog_active = True
+
+        import os
+        import subprocess
+        import tkinter as tk
+        from tkinter import ttk
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("All downloads finished - System Shutdown")
+        dialog.geometry("460x220")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+
+        countdown_secs = [60]
+
+        title_label = ttk.Label(
+            dialog,
+            text="Queue Complete!",
+            font=("Segoe UI", 14, "bold"),
+        )
+        title_label.pack(pady=(16, 6))
+
+        info_label = ttk.Label(
+            dialog,
+            text=f"The PC will shut down in {countdown_secs[0]} seconds.\nClick Cancel to abort shutdown.",
+            justify="center",
+        )
+        info_label.pack(pady=6)
+
+        cancelled = [False]
+        timer_id = [None]
+
+        def abort() -> None:
+            cancelled[0] = True
+            if timer_id[0] is not None:
+                try:
+                    dialog.after_cancel(timer_id[0])
+                except Exception:
+                    pass
+            self._shutdown_dialog_active = False
+            if hasattr(self, "shutdown_on_complete"):
+                self.shutdown_on_complete.set(False)
+            if hasattr(self, "_save_shutdown_preference"):
+                self._save_shutdown_preference()
+            if os.name == "nt":
+                try:
+                    subprocess.run(["shutdown", "/a"], capture_output=True, check=False)
+                except Exception:
+                    pass
+            self.progress_summary.set("Shutdown aborted.")
+            dialog.destroy()
+
+        cancel_btn = ttk.Button(dialog, text="Cancel Shutdown", command=abort)
+        cancel_btn.pack(pady=(12, 16))
+
+        dialog.protocol("WM_DELETE_WINDOW", abort)
+
+        if os.name == "nt":
+            try:
+                subprocess.run(
+                    ["shutdown", "/s", "/t", "60", "/c", "Smart Downloader queue complete. Shutting down in 60s..."],
+                    capture_output=True,
+                    check=False,
+                )
+            except Exception:
+                pass
+
+        def tick() -> None:
+            if cancelled[0]:
+                return
+            countdown_secs[0] -= 1
+            if countdown_secs[0] <= 0:
+                self._shutdown_dialog_active = False
+                try:
+                    dialog.destroy()
+                except Exception:
+                    pass
+                if os.name != "nt":
+                    try:
+                        subprocess.run(["shutdown", "-h", "now"], check=False)
+                    except Exception:
+                        pass
+                return
+            try:
+                info_label.configure(
+                    text=f"The PC will shut down in {countdown_secs[0]} seconds.\nClick Cancel to abort shutdown."
+                )
+                timer_id[0] = dialog.after(1000, tick)
+            except Exception:
+                pass
+
+        timer_id[0] = dialog.after(1000, tick)
+
+    def _close(self) -> None:
+        self._clear_video_preview()
+        self._close_in_app_player()
+        for timer in self.schedule_timers.values():
+            timer.cancel()
+        for cancel_event in self.cancel_events.values():
+            cancel_event.set()
+        for resume_event in self.resume_events.values():
+            resume_event.set()
+        self.executor.shutdown(wait=False, cancel_futures=True)
+        self.root.destroy()

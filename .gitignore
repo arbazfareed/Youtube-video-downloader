@@ -1,0 +1,47 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+dist-*/
+*.spec
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+.venv*/
+env/
+venv/
+ENV/
+
+# PyInstaller / Executables / Archives
+*.exe
+*.zip
+*.tar.gz
+*.7z
+*.rar
+
+# Logs and databases
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.corrupt.bak
+
+# Jupyter Notebook checkpoints & scratch files
+.ipynb_checkpoints/
+Untitled*.ipynb
+tatus
+builds and fix*
+ktop downloader*
+
+# OS generated
+.DS_Store
+Thumbs.db
