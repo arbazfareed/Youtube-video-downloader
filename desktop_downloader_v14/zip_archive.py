@@ -57,15 +57,11 @@ def create_zip_archive(
         if overwrite:
             os.replace(temporary_path, destination)
         else:
-            descriptor = os.open(
-                destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666
-            )
-            os.close(descriptor)
-            try:
-                os.replace(temporary_path, destination)
-            except Exception:
-                destination.unlink(missing_ok=True)
-                raise
+            # Hard-link creation is atomic and fails if any path already exists.
+            # Unlike reserving an empty file then replacing it, this closes the
+            # race where another process could write into the reservation.
+            os.link(temporary_path, destination)
+            temporary_path.unlink()
         temporary_path = None
     finally:
         if temporary_path is not None:
