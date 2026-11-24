@@ -1960,3 +1960,61 @@ class DownloadEngineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ParallelRangeFallbackTests(unittest.TestCase):
+    def test_parallel_range_error_falls_back_to_single_stream(self):
+        from download_engine import _download_direct
+
+        with TemporaryDirectory() as folder:
+            probe = Mock()
+            probe.__enter__ = Mock(return_value=probe)
+            probe.__exit__ = Mock(return_value=False)
+            probe.status_code = 206
+            probe.headers = {
+                "Content-Range": "bytes 0-0/5000000",
+                "Content-Type": "application/octet-stream",
+                "ETag": '"stable-v1"',
+            }
+            probe.url = "https://files.example/asset.bin"
+
+            response = Mock()
+            response.__enter__ = Mock(return_value=response)
+            response.__exit__ = Mock(return_value=False)
+            response.status_code = 200
+            response.headers = {
+                "Content-Type": "application/octet-stream",
+                "Content-Length": "7",
+            }
+            response.iter_content.return_value = iter([b"payload"])
+            response.url = "https://files.example/asset.bin"
+
+            session = Mock()
+            session.headers = {}
+            session.get.side_effect = [probe, response]
+            progress = Mock()
+            with (
+                patch("download_engine.requests.Session", return_value=session),
+                patch("download_engine.load_cookies", return_value=None),
+                patch(
+                    "download_engine._parallel_range_download",
+                    side_effect=RuntimeError("range response was invalid"),
+                ) as parallel,
+            ):
+                result = _download_direct(
+                    "https://files.example/asset.bin",
+                    Path(folder),
+                    threading.Event(),
+                    progress,
+                    retry_policy=RetryPolicy(attempts=1, base_delay=0, max_delay=0),
+                )
+
+            self.assertEqual(Path(result).read_bytes(), b"payload")
+            parallel.assert_called_once()
+            self.assertEqual(session.get.call_count, 2)
+            self.assertTrue(
+                any(
+                    call.args[0] == "Parallel download unavailable; retrying normally"
+                    for call in progress.call_args_list
+                )
+            )
