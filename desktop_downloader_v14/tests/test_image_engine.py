@@ -104,11 +104,6 @@ class ImageEngineTests(unittest.TestCase):
             Image.new("RGB", (12, 8), "green").save(source)
             real_link = os.link
 
-            def race_once(temp_path, destination):
-                if not destination.exists():
-                    destination.write_bytes(b"created by competing process")
-                return real_link(temp_path, destination)
-
             cases = [
                 (lambda: convert_image(source, "JPEG"), "race_converted.jpg",
                  "race_converted (1).jpg"),
@@ -119,8 +114,20 @@ class ImageEngineTests(unittest.TestCase):
             ]
             for operation, first_name, next_name in cases:
                 first = Path(directory) / first_name
+                competitor_created = False
+
+                def race_once(temp_path, destination):
+                    nonlocal competitor_created
+                    # Simulate exactly one competing creation. Later candidates
+                    # must be allowed to publish, or this mock loops forever.
+                    if destination == first and not competitor_created:
+                        competitor_created = True
+                        destination.write_bytes(b"created by competing process")
+                    return real_link(temp_path, destination)
+
                 with patch("image_engine.os.link", side_effect=race_once):
                     result = operation()
+                self.assertTrue(competitor_created)
                 self.assertEqual(first.read_bytes(), b"created by competing process")
                 self.assertEqual(result.name, next_name)
                 self.assertTrue(result.is_file())
