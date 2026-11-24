@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import cli
+import api
 import download_engine
 import plugins
 from download_engine import DownloadCancelled
@@ -54,6 +55,30 @@ class CliAndPluginTests(unittest.TestCase):
             )
             policy = download.call_args.kwargs["retry_policy"]
             self.assertEqual((policy.attempts, policy.base_delay, policy.max_delay), (3, 0.5, 2))
+
+    def test_api_preserves_partial_playlist_terminal_status(self):
+        request = api.JobRequest(
+            url="https://example.org/playlist",
+            output="downloads",
+            playlist_scope="entire playlist",
+        )
+        job = api.ApiJob(id="partial-api-test", request=request)
+
+        def fake_download(*args, **_kwargs):
+            args[7](
+                "Playlist partially complete",
+                None,
+                "Downloaded 4 of 5 playlist items; skipped 1.",
+            )
+            return "playlist-output"
+
+        with patch("api.download_url", side_effect=fake_download):
+            api._run_job(job)
+
+        self.assertEqual(job.status, "partial")
+        self.assertEqual(job.progress, 100.0)
+        self.assertEqual(job.result, "playlist-output")
+        self.assertIn("Playlist partially complete", job.details)
 
     def test_cli_returns_failure_for_download_error_and_cancel_for_interrupt(self):
         with tempfile.TemporaryDirectory() as directory:

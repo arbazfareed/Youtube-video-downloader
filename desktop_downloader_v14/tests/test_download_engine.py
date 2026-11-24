@@ -1560,6 +1560,59 @@ class DownloadEngineTests(unittest.TestCase):
             self.assertIn("playlist_title", options["outtmpl"]["default"])
             self.assertIn("playlist_index", options["outtmpl"]["default"])
 
+    def test_playlist_partial_completion_reports_downloaded_and_skipped_counts(self):
+        with TemporaryDirectory() as folder, patch("download_engine.yt_dlp.YoutubeDL") as youtube_dl:
+            downloader = youtube_dl.return_value.__enter__.return_value
+            progress_events = []
+
+            def extract_with_partial_result(*_args, **_kwargs):
+                options = youtube_dl.call_args.args[0]
+                hook = options["progress_hooks"][0]
+                for index, item_id in ((1, "ok-one"), (2, "ok-two")):
+                    hook({
+                        "status": "finished",
+                        "filename": f"{item_id}.mp4",
+                        "downloaded_bytes": 100,
+                        "info_dict": {"playlist_index": index, "id": item_id},
+                    })
+                options["logger"].error(
+                    "ERROR: Sign in to confirm you are not a bot; cookie expired"
+                )
+                return {
+                    "entries": [
+                        {"id": "ok-one", "playlist_index": 1},
+                        {"id": "ok-two", "playlist_index": 2},
+                        None,
+                    ],
+                    "requested_downloads": [
+                        {"filepath": str(Path(folder) / "item.mp4")}
+                    ],
+                }
+
+            downloader.extract_info.side_effect = extract_with_partial_result
+            _download_with_ytdlp(
+                "https://example.org/playlist",
+                Path(folder),
+                "video",
+                "best",
+                "entire playlist",
+                threading.Event(),
+                lambda status, percent, details: progress_events.append(
+                    (status, percent, details)
+                ),
+            )
+
+            partial = [
+                event for event in progress_events
+                if event[0] == "Playlist partially complete"
+            ]
+            self.assertEqual(len(partial), 1)
+            self.assertIn(
+                "Downloaded 2 of 3 playlist items; skipped 1.",
+                partial[0][2],
+            )
+            self.assertIn("refreshed Browser cookies", partial[0][2])
+
     def test_speed_modes_map_to_fragment_worker_limits(self):
         self.assertEqual(_fragment_workers("balanced"), 4)
         self.assertEqual(_fragment_workers("fast"), 8)

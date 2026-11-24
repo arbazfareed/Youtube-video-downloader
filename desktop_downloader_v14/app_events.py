@@ -77,7 +77,9 @@ class EventsMixin:
             self._capture_diagnostic("download", error)
             self.events.put(("finished", job_id, "Failed", str(error)))
         else:
-            self.events.put(("finished", job_id, "Complete", result))
+            partial_summary = options.get("playlist_partial_summary", "")
+            final_status = "Partial" if partial_summary else "Complete"
+            self.events.put(("finished", job_id, final_status, result))
 
     @staticmethod
     def _friendly_download_error(detail: str) -> str:
@@ -203,7 +205,7 @@ class EventsMixin:
                 display_detail = detail
                 if self.jobs.exists(job_id):
                     self.jobs.set(job_id, "status", status)
-                    if status == "Complete":
+                    if status in {"Complete", "Partial"}:
                         skipped_playlist_items = getattr(
                             self, "_playlist_warnings", {},
                         ).pop(job_id, [])
@@ -221,6 +223,11 @@ class EventsMixin:
                         if checksum:
                             algorithm, digest = checksum
                             display_detail = f"Verified {algorithm.upper()}: {digest}"
+                        if status == "Partial":
+                            display_detail = options.get(
+                                "playlist_partial_summary",
+                                "Some playlist items were skipped.",
+                            )
                         self.jobs.set(job_id, "progress", "100%")
                         self.jobs.set(job_id, "details", display_detail)
                         result_path = Path(detail)
@@ -245,8 +252,8 @@ class EventsMixin:
                                     pass
                         self.overall_progress.stop()
                         self.overall_progress.configure(mode="determinate", value=100)
-                        summary = f"Complete - {display_detail}"
-                        if skipped_playlist_items:
+                        summary = f"{status} - {display_detail}"
+                        if skipped_playlist_items and status == "Complete":
                             skipped_count = len(set(skipped_playlist_items))
                             summary += (
                                 f" | {skipped_count} playlist error(s) skipped; "
@@ -293,10 +300,10 @@ class EventsMixin:
                         and self.jobs.selection()[0] == job_id
                     ):
                         self._refresh_preview_video_choices()
-                    if status == "Complete":
+                    if status in {"Complete", "Partial"}:
                         try:
                             notify(
-                                "Download complete",
+                                "Download partially complete" if status == "Partial" else "Download complete",
                                 Path(detail.replace("\\", "/")).name
                                 if detail
                                 else self.jobs.set(job_id, "link"),

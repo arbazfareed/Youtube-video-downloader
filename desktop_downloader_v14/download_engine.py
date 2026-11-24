@@ -2107,6 +2107,56 @@ def _download_with_ytdlp(
             f"sign-in or cookies, select your signed-in browser under "
             f"More settings > Connection > Browser cookies, then retry."
         )
+    playlist_partial_summary = ""
+    if playlist_scope != "single video":
+        entries = info.get("entries") if isinstance(info, dict) else None
+        try:
+            total_entries = (
+                len(entries)
+                if entries is not None
+                and not isinstance(entries, (str, bytes, Mapping))
+                else 0
+            )
+        except (TypeError, ValueError):
+            total_entries = 0
+        if total_entries:
+            successful_entries = min(total_entries, len(downloaded_playlist_items))
+            skipped_entries = total_entries - successful_entries
+            if successful_entries > 0 and skipped_entries > 0:
+                playlist_partial_summary = (
+                    f"Downloaded {successful_entries} of {total_entries} playlist "
+                    f"items; skipped {skipped_entries}."
+                )
+                cookie_related = any(
+                    any(
+                        marker in error.casefold()
+                        for marker in (
+                            "sign in", "login", "cookie", "authentication",
+                            "not a bot", "session expired",
+                        )
+                    )
+                    for error in playlist_errors
+                )
+                if cookie_related:
+                    playlist_partial_summary += (
+                        " Some skipped items may need refreshed Browser cookies."
+                    )
+                progress(
+                    "Playlist partially complete",
+                    None,
+                    playlist_partial_summary,
+                )
+        elif playlist_errors and downloaded_playlist_items:
+            playlist_partial_summary = (
+                f"Downloaded {len(downloaded_playlist_items)} playlist item(s); "
+                "some entries were skipped (the playlist total was unavailable)."
+            )
+            progress(
+                "Playlist partially complete",
+                None,
+                playlist_partial_summary,
+            )
+
     requested_downloads = info.get("requested_downloads") or []
     filepath = next(
         (item.get("filepath") for item in requested_downloads if item.get("filepath")),

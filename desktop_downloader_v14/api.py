@@ -208,7 +208,11 @@ def _run_job(job: ApiJob) -> None:
                     f"Upload complete; local staging copy remains at "
                     f"{request.output}: {error}"
                 )
-        job.status = "completed"
+        job.status = (
+            "partial"
+            if job.details.startswith("Playlist partially complete:")
+            else "completed"
+        )
         job.progress = 100.0
     except DownloadCancelled as error:
         job.status = "cancelled"
@@ -327,7 +331,7 @@ def get_job(job_id: str) -> dict[str, Any]:
 @app.post("/jobs/{job_id}/cancel", dependencies=[Depends(_authorized)])
 def cancel_job(job_id: str) -> dict[str, Any]:
     job = _get_job(job_id)
-    if job.status in {"completed", "failed", "cancelled"}:
+    if job.status in {"completed", "partial", "failed", "cancelled"}:
         raise HTTPException(status_code=409, detail="This job has already finished.")
     job.cancel_event.set()
     job.resume_event.set()
@@ -431,7 +435,7 @@ def control_mobile_job(
         job.resume_event.set()
         job.status = "running"
     elif action == "cancel":
-        if job.status in {"completed", "failed", "cancelled"}:
+        if job.status in {"completed", "partial", "failed", "cancelled"}:
             raise HTTPException(status_code=409, detail="This job has already finished.")
         job.cancel_event.set()
         job.resume_event.set()
