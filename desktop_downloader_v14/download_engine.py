@@ -2226,6 +2226,7 @@ def download_url(
                                     download_subtitles=download_subtitles,
                                     subtitle_languages=subtitle_languages,
                             playlist_items=playlist_items,
+                            geo_bypass_country=geo_bypass_country,
                                 )
                                 break
                             except DownloadCancelled:
