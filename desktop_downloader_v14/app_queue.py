@@ -253,7 +253,11 @@ class QueueMixin:
             "expected_checksum": saved.get("expected_checksum", ""),
             "proxy": self.proxy_list.get().strip(),
             "browser_cookies": self.browser_cookies.get().lower(),
-            "geo_bypass_country": self.geo_bypass_country.get().strip().upper(),
+            "geo_bypass_country": (
+                getattr(self, "geo_bypass_country", None).get().strip().upper()
+                if getattr(self, "geo_bypass_country", None) is not None
+                else saved.get("geo_bypass_country", "")
+            ),
             "custom_headers": saved.get("custom_headers", {})
             if isinstance(saved.get("custom_headers", {}), dict)
             else {},
