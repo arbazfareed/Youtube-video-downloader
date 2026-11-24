@@ -1696,8 +1696,16 @@ def _download_with_ytdlp(
         _wait_until_resumed(cancel_event, resume_event)
         if data.get("status") == "downloading":
             downloaded = data.get("downloaded_bytes")
+            info_dict = data.get("info_dict") or {}
             if downloaded is not None:
-                delta = max(0, downloaded - last_downloaded[0])
+                # yt-dlp resets downloaded_bytes when a retry or next playlist
+                # item starts. Count the new bytes instead of dropping them from
+                # the shared limiter's accounting.
+                delta = (
+                    downloaded
+                    if downloaded < last_downloaded[0]
+                    else downloaded - last_downloaded[0]
+                )
                 last_downloaded[0] = downloaded
                 if bandwidth_limiter and not bandwidth_limiter.acquire(
                     delta, cancel_event, resume_event
@@ -1705,7 +1713,6 @@ def _download_with_ytdlp(
                     raise DownloadCancelled("Download cancelled.")
             total = data.get("total_bytes") or data.get("total_bytes_estimate")
             percent = downloaded * 100 / total if downloaded and total else None
-            info_dict = data.get("info_dict") or {}
             is_live = (
                 info_dict.get("is_live") is True
                 or info_dict.get("live_status") == "is_live"
