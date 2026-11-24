@@ -338,11 +338,39 @@ class PartialFileIntegrityChecklistTests(unittest.TestCase):
             "invalid range for resume",
         )
 
-    def test_resume_rejects_a_short_range_instead_of_marking_it_complete(self) -> None:
-        self._assert_resume_range_rejected(
-            "bytes 5-7/10",
-            "incomplete range for resume",
-        )
+    def test_resume_short_range_is_not_promoted_before_completion(self) -> None:
+        with TemporaryDirectory() as folder:
+            directory = Path(folder)
+            partial = directory / "file.bin.part"
+            partial.write_bytes(b"known")
+            response = Mock()
+            response.status_code = 206
+            response.headers = {
+                "Content-Range": "bytes 5-7/10",
+                "Content-Length": "3",
+                "Content-Type": "application/octet-stream",
+            }
+            response.__enter__ = Mock(return_value=response)
+            response.__exit__ = Mock(return_value=False)
+            response.iter_content.return_value = iter([b"bad"])
+            session = Mock()
+            session.headers = {}
+            session.get.return_value = response
+
+            with (
+                patch("download_engine.requests.Session", return_value=session),
+                self.assertRaisesRegex(RuntimeError, "Direct download failed"),
+            ):
+                _download_direct(
+                    "https://example.org/file.bin",
+                    directory,
+                    threading.Event(),
+                    lambda *_args: None,
+                    retry_policy=RetryPolicy(attempts=1, base_delay=0, max_delay=0),
+                )
+
+            self.assertFalse((directory / "file.bin").exists())
+            self.assertEqual(partial.read_bytes(), b"knownbad")
 
     def test_oversized_partial_file_is_not_promoted_by_a_416_response(self) -> None:
         with TemporaryDirectory() as folder:
