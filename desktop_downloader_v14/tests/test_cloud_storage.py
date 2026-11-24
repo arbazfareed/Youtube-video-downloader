@@ -52,6 +52,25 @@ class CloudStorageTests(unittest.TestCase):
             self.assertEqual(upload.call_count, 1)
             self.assertEqual(upload.call_args.args[0], inside)
 
+    def test_folder_upload_skips_incomplete_download_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            selected = Path(directory) / "playlist"
+            selected.mkdir()
+            complete = selected / "episode.mp4"
+            complete.write_bytes(b"complete")
+            for suffix in (".part", ".ytdl", ".tmp"):
+                (selected / f"episode.mp4{suffix}").write_bytes(b"incomplete")
+
+            with patch(
+                "cloud_storage._upload_s3",
+                side_effect=lambda path, relative, prefix: relative,
+            ) as upload:
+                results = cloud_storage.upload_path(selected, "s3")
+
+            self.assertEqual(results, ["episode.mp4"])
+            self.assertEqual(upload.call_count, 1)
+            self.assertEqual(upload.call_args.args[0], complete)
+
     def test_playlist_upload_source_includes_all_staged_files(self):
         with tempfile.TemporaryDirectory() as directory:
             staging = Path(directory) / "staging"
