@@ -360,7 +360,7 @@ class DownloadsMixin:
             options["quality"],
             options["playlist_scope"],
             cancel_event,
-            lambda status, percent, details: self._emit_download_progress(
+            lambda status, percent, details: self._handle_download_progress(
                 job_id, status, percent, details
             ),
             options["speed_mode"],
@@ -382,6 +382,19 @@ class DownloadsMixin:
         future.add_done_callback(
             lambda result: self._download_future_finished(job_id, result)
         )
+
+    def _handle_download_progress(
+        self,
+        job_id: str,
+        status: str,
+        percent: float | None,
+        details: str,
+    ) -> None:
+        if status == "Playlist partially complete":
+            self.download_options.setdefault(job_id, {})[
+                "playlist_partial_summary"
+            ] = details
+        self._emit_download_progress(job_id, status, percent, details)
 
     def _emit_download_progress(
         self,
