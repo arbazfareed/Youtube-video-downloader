@@ -81,5 +81,40 @@ class DocumentEngineTests(unittest.TestCase):
             self.assertEqual(output.read_bytes(), b"keep existing")
 
 
+    def test_conversion_publish_no_overwrite_is_race_safe(self):
+        from document_engine import _publish_conversion_output
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            temporary = root / "staged.pdf"
+            destination = root / "final.pdf"
+            temporary.write_bytes(b"new conversion")
+
+            def competing_writer(_temporary, final_path):
+                Path(final_path).write_bytes(b"other process data")
+                raise FileExistsError(final_path)
+
+            with patch("document_engine.os.link", side_effect=competing_writer):
+                with self.assertRaises(FileExistsError):
+                    _publish_conversion_output(temporary, destination, overwrite=False)
+
+            self.assertEqual(destination.read_bytes(), b"other process data")
+            self.assertEqual(temporary.read_bytes(), b"new conversion")
+
+    def test_conversion_publish_overwrite_is_explicit(self):
+        from document_engine import _publish_conversion_output
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            temporary = root / "staged.pdf"
+            destination = root / "final.pdf"
+            temporary.write_bytes(b"new")
+            destination.write_bytes(b"old")
+
+            _publish_conversion_output(temporary, destination, overwrite=True)
+
+            self.assertEqual(destination.read_bytes(), b"new")
+            self.assertFalse(temporary.exists())
+
 if __name__ == "__main__":
     unittest.main()
