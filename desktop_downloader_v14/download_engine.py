@@ -2146,6 +2146,16 @@ def _download_with_ytdlp(
                     None,
                     playlist_partial_summary,
                 )
+        elif playlist_errors and downloaded_playlist_items:
+            playlist_partial_summary = (
+                f"Downloaded {len(downloaded_playlist_items)} playlist item(s); "
+                "some entries were skipped (the playlist total was unavailable)."
+            )
+            progress(
+                "Playlist partially complete",
+                None,
+                playlist_partial_summary,
+            )
 
     requested_downloads = info.get("requested_downloads") or []
     filepath = next(
