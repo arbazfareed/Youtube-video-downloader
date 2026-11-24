@@ -22,6 +22,7 @@ from download_engine import (
     WebPageResponseError,
     _claim_target,
     _download_direct,
+    _range_download_validator,
     _is_direct_file_url,
     _release_target,
     _safe_filename,
@@ -37,6 +38,25 @@ from download_engine import (
 )
 from torrent_engine import _find_aria2, download_torrent, is_torrent_url
 import requests
+
+
+class RangeValidatorSelectionTests(unittest.TestCase):
+    def test_uses_strong_etag_for_if_range(self):
+        self.assertEqual(
+            _range_download_validator({"ETag": '"strong-v1"'}),
+            'etag:"strong-v1"',
+        )
+
+    def test_weak_etag_falls_back_to_last_modified(self):
+        self.assertEqual(
+            _range_download_validator(
+                {"ETag": 'W/"weak-v1"', "Last-Modified": "Tue, 15 Nov 1994 12:45:26 GMT"}
+            ),
+            "last-modified:Tue, 15 Nov 1994 12:45:26 GMT",
+        )
+
+    def test_weak_etag_without_date_disables_validator(self):
+        self.assertEqual(_range_download_validator({"ETag": 'W/"weak-v1"'}), "")
 
 
 class _FakeJobs:
