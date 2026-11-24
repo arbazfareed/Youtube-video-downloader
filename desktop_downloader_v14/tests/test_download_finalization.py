@@ -2,7 +2,7 @@ import threading
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import download_engine
 
@@ -23,6 +23,8 @@ class DirectDownloadFinalizationTests(unittest.TestCase):
             response.url = "https://example.test/video"
             session = Mock()
             session.headers = {}
+            session.get.return_value = MagicMock()
+            session.get.return_value = MagicMock()
             session.get.return_value.__enter__.return_value = response
             converted = Path(folder) / "video.mp3"
             with (
@@ -53,6 +55,7 @@ class DirectDownloadFinalizationTests(unittest.TestCase):
             response.headers = {"Content-Range": f"bytes */{partial.stat().st_size}"}
             session = Mock()
             session.headers = {}
+            session.get.return_value = MagicMock()
             session.get.return_value.__enter__.return_value = response
             converted = Path(folder) / "audio.mp3"
             with (
