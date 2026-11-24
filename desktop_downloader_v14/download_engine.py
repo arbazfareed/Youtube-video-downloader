@@ -1612,21 +1612,38 @@ def _download_direct(
             candidate_name, total, validator = parallel_info
             target = _claim_target(directory, candidate_name)
             reserved_target = target
-            downloaded_result = _parallel_range_download(
-                url,
-                target,
-                total,
-                _fragment_workers(speed_mode),
-                validator,
-                cancel_event,
-                resume_event,
-                progress,
-                bandwidth_limiter,
-                proxy_rotator,
-                cookie_jar,
-                dict(getattr(session, "headers", None) or custom_headers or {}),
-            )
-            return str(_convert_to_mp3_if_needed(Path(downloaded_result), mode))
+            try:
+                downloaded_result = _parallel_range_download(
+                    url,
+                    target,
+                    total,
+                    _fragment_workers(speed_mode),
+                    validator,
+                    cancel_event,
+                    resume_event,
+                    progress,
+                    bandwidth_limiter,
+                    proxy_rotator,
+                    cookie_jar,
+                    dict(getattr(session, "headers", None) or custom_headers or {}),
+                )
+            except DownloadCancelled:
+                raise
+            except Exception as parallel_error:
+                # A server can advertise byte ranges in the probe but reject
+                # them on subsequent requests. Discard range fragments and let
+                # the established single-stream retry/resume path take over.
+                for segment_path in directory.glob(f"{target.name}.part.segment-*"):
+                    segment_path.unlink(missing_ok=True)
+                _parallel_metadata_path(target).unlink(missing_ok=True)
+                target.with_name(target.name + ".part").unlink(missing_ok=True)
+                progress(
+                    "Parallel download unavailable; retrying normally",
+                    None,
+                    _clean_terminal_text(parallel_error),
+                )
+            else:
+                return str(_convert_to_mp3_if_needed(Path(downloaded_result), mode))
 
         for attempt in range(retry_policy.attempts):
             _wait_until_resumed(cancel_event, resume_event)
