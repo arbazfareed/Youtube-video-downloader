@@ -1688,6 +1688,7 @@ def _download_with_ytdlp(
         )
 
     last_downloaded = [0]
+    last_download_identity: list[tuple[object, object] | None] = [None]
     live_started_at: float | None = None
     downloaded_playlist_items: set[str] = set()
 
@@ -1698,15 +1699,27 @@ def _download_with_ytdlp(
             downloaded = data.get("downloaded_bytes")
             info_dict = data.get("info_dict") or {}
             if downloaded is not None:
-                # yt-dlp resets downloaded_bytes when a retry or next playlist
-                # item starts. Count the new bytes instead of dropping them from
-                # the shared limiter's accounting.
+                # A new playlist item may start with a counter larger than the
+                # previous item's final counter. Track item identity so its
+                # first bytes are charged in full; still detect resets on retry.
+                item_identity = (
+                    info_dict.get("playlist_index"),
+                    info_dict.get("id"),
+                )
+                identity_available = any(value is not None for value in item_identity)
+                item_changed = (
+                    identity_available
+                    and last_download_identity[0] is not None
+                    and item_identity != last_download_identity[0]
+                )
                 delta = (
                     downloaded
-                    if downloaded < last_downloaded[0]
+                    if item_changed or downloaded < last_downloaded[0]
                     else downloaded - last_downloaded[0]
                 )
                 last_downloaded[0] = downloaded
+                if identity_available:
+                    last_download_identity[0] = item_identity
                 if bandwidth_limiter and not bandwidth_limiter.acquire(
                     delta, cancel_event, resume_event
                 ):
