@@ -71,8 +71,12 @@ def select_upload_source(
     result_path: Path | str,
     staging_directory: Path | str,
 ) -> Path:
-    result = Path(result_path).expanduser().resolve()
-    staging = Path(staging_directory).expanduser().resolve()
+    result_path = Path(result_path).expanduser()
+    staging_directory = Path(staging_directory).expanduser()
+    if result_path.is_symlink() or staging_directory.is_symlink():
+        raise ValueError("Cloud upload source paths cannot be symbolic links.")
+    result = result_path.resolve()
+    staging = staging_directory.resolve()
     if result.is_file() and staging.is_dir():
         files = [item for item in staging.rglob("*") if item.is_file()]
         if len(files) > 1:
@@ -166,7 +170,10 @@ def _upload_dropbox(path: Path, relative_path: str, prefix: str) -> str:
 
 
 def upload_path(path: Path, provider: str, remote_folder: str = "") -> list[str]:
-    source = path.expanduser().resolve()
+    selected_path = path.expanduser()
+    if selected_path.is_symlink():
+        raise ValueError("Cloud upload source paths cannot be symbolic links.")
+    source = selected_path.resolve()
     if not source.exists():
         raise FileNotFoundError(f"Downloaded file or folder is missing: {source}")
     # A directory upload must stay within the selected tree. is_file() follows
