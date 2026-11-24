@@ -216,6 +216,18 @@ class _ParallelProbeResponse(_FakeResponse):
         yield b"a"
 
 
+class _IncompleteInitialRangeResponse(_FakeResponse):
+    status_code = 206
+    headers = {
+        "Content-Length": "3",
+        "Content-Range": "bytes 0-2/6",
+        "Content-Type": "application/octet-stream",
+    }
+
+    def iter_content(self, chunk_size):
+        yield b"abc"
+
+
 class _RangeResponse(_FakeResponse):
     def __init__(self, payload, start, end, total):
         self.payload = payload
@@ -1449,6 +1461,26 @@ class DownloadEngineTests(unittest.TestCase):
             self.assertTrue(all(header.get("If-Range") == '"stable"' for header in range_headers))
             self.assertEqual(list(Path(folder).glob("*.segment-*")), [])
             self.assertEqual(list(Path(folder).glob("*.segments.json")), [])
+
+    def test_rejects_incomplete_206_response_as_a_complete_new_download(self):
+        with TemporaryDirectory() as folder:
+            session = _RecordingSession(
+                _ParallelProbeResponse(),
+                _IncompleteInitialRangeResponse(),
+            )
+            with patch("download_engine.requests.Session", return_value=session):
+                with self.assertRaisesRegex(
+                    ValueError, "incomplete range for a new download"
+                ):
+                    _download_direct(
+                        "https://example.org/archive.bin",
+                        Path(folder),
+                        threading.Event(),
+                        lambda _status, _percent, _details: None,
+                    )
+
+            self.assertFalse((Path(folder) / "archive.bin").exists())
+            self.assertFalse((Path(folder) / "archive.bin.part").exists())
 
     def test_retries_connection_drop_and_resumes_partial_file(self):
         with TemporaryDirectory() as folder:
