@@ -1491,7 +1491,7 @@ class DownloadEngineTests(unittest.TestCase):
             session = _RecordingSession(
                 _ParallelProbeResponse(),
                 _DisconnectingResponse(),
-                _FakeResponse(),
+                _RangeResponse(b"def", 3, 5, 6),
             )
             with (
                 patch("download_engine.requests.Session", return_value=session),
