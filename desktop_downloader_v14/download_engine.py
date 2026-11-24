@@ -1512,9 +1512,9 @@ def _download_direct(
                             raise ValueError("The server returned an invalid range for resume.")
                         range_end = int(match.group(2))
                         range_total = match.group(3)
-                        if range_total == "*" or range_end + 1 != int(range_total):
+                        if range_total == "*" or range_end >= int(range_total):
                             raise ValueError(
-                                "The server returned an incomplete range for resume."
+                                "The server returned an invalid range for resume."
                             )
                         expected_response_bytes = range_end - existing + 1
                         if expected_response_bytes <= 0:
@@ -1605,6 +1605,14 @@ def _download_direct(
                             "The resumed range ended with an incorrect byte count: "
                             f"received {downloaded - existing} of "
                             f"{expected_response_bytes} bytes."
+                        )
+                    if append and total is not None and downloaded < total:
+                        raise requests.ConnectionError(
+                            "The server returned a valid partial range; continuing resume."
+                        )
+                    if total is not None and downloaded > total:
+                        raise requests.ConnectionError(
+                            "The download exceeded the declared resource size."
                         )
                     _check_cancelled(cancel_event)
                     target = _final_target(target)
