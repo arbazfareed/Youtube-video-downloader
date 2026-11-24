@@ -168,6 +168,41 @@ class RequestOptionTests(unittest.TestCase):
         self.assertEqual(session.headers["X-Api-Key"], "test-token")
         self.assertEqual(session.get.call_count, 3)
 
+    def test_bandwidth_limiter_counts_bytes_after_ytdlp_counter_reset(self):
+        limiter = Mock()
+        limiter.acquire.return_value = True
+
+        with TemporaryDirectory() as folder, patch(
+            "download_engine.yt_dlp.YoutubeDL"
+        ) as youtube_dl:
+            downloader = youtube_dl.return_value.__enter__.return_value
+
+            def emit_progress(*_args, **_kwargs):
+                hook = youtube_dl.call_args.args[0]["progress_hooks"][0]
+                hook({"status": "downloading", "downloaded_bytes": 100,
+                      "info_dict": {"id": "first"}})
+                # Retry or next playlist entry resets yt-dlp's byte counter.
+                hook({"status": "downloading", "downloaded_bytes": 20,
+                      "info_dict": {"id": "second"}})
+                return {"_filename": "playlist.mp4"}
+
+            downloader.extract_info.side_effect = emit_progress
+            _download_with_ytdlp(
+                "https://example.org/playlist",
+                Path(folder),
+                "video",
+                "best",
+                "entire playlist",
+                threading.Event(),
+                lambda *_args: None,
+                bandwidth_limiter=limiter,
+            )
+
+        self.assertEqual(
+            [call.args[0] for call in limiter.acquire.call_args_list],
+            [100, 20],
+        )
+
     def test_supported_site_download_passes_headers_and_retry_policy_to_ytdlp(self):
         policy = RetryPolicy(attempts=3, base_delay=0.5, max_delay=2)
         with TemporaryDirectory() as folder, patch(
