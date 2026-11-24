@@ -133,6 +133,35 @@ class ImageEngineTests(unittest.TestCase):
                 self.assertTrue(result.is_file())
                 self.assertNotEqual(result.read_bytes(), b"created by competing process")
 
+    def test_resize_preserves_all_animated_gif_frames_and_timing(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "animated.gif"
+            first = Image.new("RGBA", (30, 20), (255, 0, 0, 255))
+            second = Image.new("RGBA", (30, 20), (0, 0, 255, 255))
+            first.save(
+                source,
+                save_all=True,
+                append_images=[second],
+                duration=[120, 240],
+                loop=4,
+                disposal=2,
+            )
+
+            resized = resize_image(source, 12, 10)
+
+            with Image.open(resized) as animation:
+                self.assertEqual(animation.n_frames, 2)
+                self.assertEqual(animation.info.get("loop"), 4)
+                self.assertEqual(animation.info.get("duration"), 120)
+                animation.seek(0)
+                self.assertEqual(animation.size, (12, 8))
+                first_pixel = animation.convert("RGB").getpixel((2, 2))
+                animation.seek(1)
+                self.assertEqual(animation.info.get("duration"), 240)
+                self.assertEqual(animation.size, (12, 8))
+                second_pixel = animation.convert("RGB").getpixel((2, 2))
+                self.assertNotEqual(first_pixel, second_pixel)
+
     def test_resize_applies_exif_orientation_before_enforcing_bounds(self):
         with TemporaryDirectory() as directory:
             source = Path(directory) / "portrait.jpg"

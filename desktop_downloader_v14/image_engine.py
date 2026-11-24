@@ -151,15 +151,43 @@ def resize_image(path: str | Path, max_width: int, max_height: int) -> Path:
     target = None
     try:
         with Image.open(source) as opened:
-            # Normalize EXIF orientation before sizing; otherwise a rotated
-            # portrait image can exceed the requested displayed dimensions.
-            image = ImageOps.exif_transpose(opened)
-            image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
-            if source.suffix.lower() in {".jpg", ".jpeg"} and image.mode not in {"RGB", "L"}:
-                image = image.convert("RGB")
-            target = _save_unique_output(
-                source, "resized", source.suffix, lambda temporary: image.save(temporary)
-            )
+            if source.suffix.lower() == ".gif" and getattr(opened, "n_frames", 1) > 1:
+                # Resizing only the currently selected Pillow frame silently
+                # turns an animated GIF into a still image. Resize every frame
+                # and retain the animation timing and loop metadata.
+                frames = []
+                durations = []
+                for frame_index in range(opened.n_frames):
+                    opened.seek(frame_index)
+                    frame = ImageOps.exif_transpose(opened.copy()).convert("RGBA")
+                    frame.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+                    frames.append(frame)
+                    durations.append(opened.info.get("duration", 100))
+                loop = opened.info.get("loop", 0)
+
+                def save_animation(temporary):
+                    frames[0].save(
+                        temporary,
+                        format="GIF",
+                        save_all=True,
+                        append_images=frames[1:],
+                        duration=durations,
+                        loop=loop,
+                        disposal=2,
+                        optimize=False,
+                    )
+
+                target = _save_unique_output(source, "resized", ".gif", save_animation)
+            else:
+                # Normalize EXIF orientation before sizing; otherwise a rotated
+                # portrait image can exceed the requested displayed dimensions.
+                image = ImageOps.exif_transpose(opened)
+                image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+                if source.suffix.lower() in {".jpg", ".jpeg"} and image.mode not in {"RGB", "L"}:
+                    image = image.convert("RGB")
+                target = _save_unique_output(
+                    source, "resized", source.suffix, lambda temporary: image.save(temporary)
+                )
     except Image.DecompressionBombError as error:
         raise ValueError("Image dimensions exceed the safe processing limit.") from error
     return target
