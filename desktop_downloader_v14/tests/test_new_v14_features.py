@@ -516,6 +516,36 @@ class TestNewV14Features(unittest.TestCase):
             self.assertEqual(run.call_count, 2)
             self.assertEqual(run.call_args_list[1].args[0][run.call_args_list[1].args[0].index("-ss") + 1], "00:00:00")
 
+    def test_failed_thumbnail_removes_partial_file_so_cache_retries(self) -> None:
+        from app_support import extract_video_thumbnail
+        import subprocess
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "broken.mp4"
+            source.write_bytes(b"video")
+            ffmpeg_directory = root / "ffmpeg"
+            ffmpeg_directory.mkdir()
+            (ffmpeg_directory / "ffmpeg").write_bytes(b"fake ffmpeg")
+            destination = root / "broken.png"
+
+            def write_partial_and_fail(command, **_kwargs):
+                Path(command[-1]).write_bytes(b"nonempty but invalid partial image")
+                return subprocess.CompletedProcess(command, 1, stdout="", stderr="decode error")
+
+            with patch("app_support.subprocess.run", side_effect=write_partial_and_fail) as run:
+                self.assertIsNone(extract_video_thumbnail(
+                    source, destination=destination, ffmpeg_directory=ffmpeg_directory
+                ))
+                self.assertFalse(destination.exists())
+                # A second call must run FFmpeg again, not accept the bad cache file.
+                self.assertIsNone(extract_video_thumbnail(
+                    source, destination=destination, ffmpeg_directory=ffmpeg_directory
+                ))
+
+            self.assertEqual(run.call_count, 4)  # two timestamps per retry
+            self.assertFalse(destination.exists())
+
     def test_extract_video_thumbnail_helper(self) -> None:
         from app_support import extract_video_thumbnail
 
