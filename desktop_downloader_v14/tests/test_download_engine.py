@@ -1721,6 +1721,57 @@ class DownloadEngineTests(unittest.TestCase):
 
             self.assertEqual(operations, ["limit", "write"])
 
+    def test_parallel_resume_discards_oversized_segment_from_progress(self):
+        import json
+        from download_engine import _parallel_range_download
+
+        data = b"abcdef"
+        progress_values = []
+
+        with TemporaryDirectory() as folder:
+            directory = Path(folder)
+            target = directory / "archive.bin"
+            target.with_name(target.name + ".segments.json").write_text(
+                json.dumps({
+                    "url": "https://example.org/archive.bin",
+                    "total": len(data),
+                    "validator": 'etag:"stable"',
+                    "segments": [
+                        {"index": 0, "start": 0, "end": 1},
+                        {"index": 1, "start": 2, "end": 3},
+                        {"index": 2, "start": 4, "end": 5},
+                    ],
+                }),
+                encoding="utf-8",
+            )
+            # The persisted first segment is longer than its assigned range.
+            # Initial progress counts its expected two bytes, then the worker
+            # must remove that stale count before fetching the segment again.
+            target.with_name(target.name + ".part.segment-00").write_bytes(b"bad")
+
+            def ranged_get(_url, headers, **_kwargs):
+                start, end = map(int, headers["Range"].removeprefix("bytes=").split("-"))
+                return _RangeResponse(data[start:end + 1], start, end, len(data))
+
+            with patch("download_engine.requests.get", side_effect=ranged_get):
+                result = _parallel_range_download(
+                    "https://example.org/archive.bin",
+                    target,
+                    len(data),
+                    3,
+                    'etag:"stable"',
+                    threading.Event(),
+                    None,
+                    lambda _status, percent, _details: (
+                        progress_values.append(percent) if percent is not None else None
+                    ),
+                )
+
+            self.assertEqual(Path(result).read_bytes(), data)
+            self.assertTrue(progress_values)
+            self.assertLessEqual(max(progress_values), 100.0)
+            self.assertEqual(progress_values[-1], 100.0)
+
     def test_parallel_direct_download_uses_multiple_ranges_and_assembles_file(self):
         data = b"abcdef"
         range_headers = []
