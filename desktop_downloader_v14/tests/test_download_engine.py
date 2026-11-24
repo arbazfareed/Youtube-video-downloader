@@ -28,6 +28,7 @@ from download_engine import (
     _safe_filename,
     _video_format_selector,
     _audio_language_format_ids,
+    _audio_format_selector,
     _all_audio_tracks_selector,
     _download_with_ytdlp,
     _fragment_workers,
@@ -376,6 +377,19 @@ class _RecordingSession(_FakeSession):
 
 
 class DownloadEngineTests(unittest.TestCase):
+    def test_audio_language_selector_matches_language_tokens_not_substrings(self):
+        self.assertEqual(
+            _audio_format_selector("French"),
+            "bestaudio[language^=fr]/bestaudio/best",
+        )
+        self.assertEqual(
+            _audio_format_selector("Hindi, English"),
+            "bestaudio[language^=hi]/bestaudio[language^=en]/bestaudio/best",
+        )
+        self.assertEqual(
+            _audio_format_selector("de,fr"),
+            "bestaudio[language^=de]/bestaudio[language^=fr]/bestaudio/best",
+        )
     def test_youtube_bot_check_error_explains_browser_cookie_retry(self):
         detail = (
             "ERROR: [youtube] Sign in to confirm you're not a bot. "
