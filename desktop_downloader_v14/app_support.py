@@ -175,10 +175,16 @@ def extract_video_thumbnail(
         thumb_dir = Path(tempfile.gettempdir()) / "smart_downloader_thumbs"
         thumb_dir.mkdir(parents=True, exist_ok=True)
         try:
-            mtime = int(source.stat().st_mtime)
+            source_stat = source.stat()
+            # Second-resolution mtime keys can collide when a file is replaced
+            # or updated twice within one second. Include nanoseconds and size
+            # so the cached preview is invalidated for ordinary file changes.
+            cache_identity = (
+                f"{source.resolve()}:{source_stat.st_mtime_ns}:{source_stat.st_size}"
+            )
         except OSError:
-            mtime = 0
-        dest_name = f"{hashlib.md5(f'{source}_{mtime}'.encode()).hexdigest()[:16]}.png"
+            cache_identity = f"{source.resolve()}:missing"
+        dest_name = f"{hashlib.md5(cache_identity.encode()).hexdigest()[:16]}.png"
         destination = thumb_dir / dest_name
     if destination.is_file() and destination.stat().st_size > 0:
         return destination
