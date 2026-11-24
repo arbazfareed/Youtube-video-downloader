@@ -170,7 +170,10 @@ def _upload_dropbox(path: Path, relative_path: str, prefix: str) -> str:
 
 
 def upload_path(path: Path, provider: str, remote_folder: str = "") -> list[str]:
-    source = path.expanduser().resolve()
+    selected_path = path.expanduser()
+    if selected_path.is_symlink():
+        raise ValueError("Cloud upload source paths cannot be symbolic links.")
+    source = selected_path.resolve()
     if not source.exists():
         raise FileNotFoundError(f"Downloaded file or folder is missing: {source}")
     # A directory upload must stay within the selected tree. is_file() follows
