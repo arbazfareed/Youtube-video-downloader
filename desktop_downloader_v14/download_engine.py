@@ -1325,29 +1325,33 @@ def _convert_to_mp3_if_needed(target: Path, mode: str) -> Path:
             "Install or bundle FFmpeg and retry; the original download was kept."
         )
     ffmpeg_bin = ffmpeg_dir / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
-    mp3_target = target.with_suffix(".mp3")
+    # Claim a collision-free output before invoking FFmpeg. Never use -y:
+    # a pre-existing user's MP3 must not be silently overwritten.
+    mp3_target = _claim_target(target.parent, target.stem + ".mp3")
     try:
-        import subprocess
-        completed = subprocess.run(
-            [str(ffmpeg_bin), "-y", "-i", str(target), "-vn", "-acodec", "libmp3lame", "-q:a", "2", str(mp3_target)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        if not mp3_target.is_file() or mp3_target.stat().st_size == 0:
-            raise RuntimeError("FFmpeg completed without creating a valid MP3 file.")
-    except Exception as error:
-        mp3_target.unlink(missing_ok=True)
-        detail = getattr(error, "stderr", None)
-        if isinstance(detail, bytes):
-            detail = detail.decode("utf-8", errors="replace")
-        detail = (detail or str(error)).strip()
-        raise RuntimeError(
-            f"MP3 conversion failed; the original download was kept. {detail}"
-        ) from error
-    target.unlink(missing_ok=True)
-    return mp3_target
-
+        try:
+            import subprocess
+            completed = subprocess.run(
+                [str(ffmpeg_bin), "-n", "-i", str(target), "-vn", "-acodec", "libmp3lame", "-q:a", "2", str(mp3_target)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            if not mp3_target.is_file() or mp3_target.stat().st_size == 0:
+                raise RuntimeError("FFmpeg completed without creating a valid MP3 file.")
+        except Exception as error:
+            mp3_target.unlink(missing_ok=True)
+            detail = getattr(error, "stderr", None)
+            if isinstance(detail, bytes):
+                detail = detail.decode("utf-8", errors="replace")
+            detail = (detail or str(error)).strip()
+            raise RuntimeError(
+                f"MP3 conversion failed; the original download was kept. {detail}"
+            ) from error
+        target.unlink(missing_ok=True)
+        return mp3_target
+    finally:
+        _release_target(mp3_target)
 
 def _range_download_validator(headers: Mapping[str, str]) -> str:
     etag = headers.get("ETag", "").strip()
@@ -1434,6 +1438,7 @@ def _download_direct(
             session_headers.update(custom_headers)
     proxy_rotator = ProxyRotator(proxy)
     target: Path | None = None
+    reserved_target: Path | None = None
     last_error: Exception | None = None
     required_space: int | None = None
     suggested_name = PurePosixPath(unquote(urlsplit(url).path)).name
@@ -1443,6 +1448,7 @@ def _download_direct(
         suggested_partial = suggested_target.with_name(suggested_target.name + ".part")
         if not suggested_target.exists() and suggested_partial.exists():
             target = _claim_target(directory, suggested_name)
+            reserved_target = target
 
     try:
         parallel_enabled = (
@@ -1528,6 +1534,7 @@ def _download_direct(
         if parallel_info:
             candidate_name, total, validator = parallel_info
             target = _claim_target(directory, candidate_name)
+            reserved_target = target
             downloaded_result = _parallel_range_download(
                 url,
                 target,
@@ -1566,6 +1573,8 @@ def _download_direct(
                         match = re.fullmatch(r"bytes \*/(\d+)", content_range, re.IGNORECASE)
                         if match and int(match.group(1)) == existing:
                             target = _final_target(target)
+                    reserved_target = target
+                        reserved_target = target
                             _replace_with_retry(
                                 partial, target, cancel_event, resume_event
                             )
@@ -1582,6 +1591,7 @@ def _download_direct(
 
                     if target is None:
                         target = _claim_target(directory, _response_filename(response))
+                        reserved_target = target
                         partial = target.with_name(target.name + ".part")
 
                     append = existing > 0 and response.status_code == 206
@@ -1733,7 +1743,7 @@ def _download_direct(
         try:
             session.close()
         finally:
-            _release_target(target)
+            _release_target(reserved_target)
 
 
 def _download_with_ytdlp(
