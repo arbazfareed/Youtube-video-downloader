@@ -188,7 +188,19 @@ def extract_video_thumbnail(
         destination = thumb_dir / dest_name
     if destination.is_file() and destination.stat().st_size > 0:
         return destination
+    # Each request renders to a private temporary file. Publishing the final
+    # cache name with a hard link is atomic and refuses to replace a concurrent
+    # request's completed thumbnail.
+    temporary_path: Path | None = None
     try:
+        with tempfile.NamedTemporaryFile(
+            prefix=f".{destination.stem}.thumbnail-",
+            suffix=".png",
+            dir=destination.parent,
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+        temporary_path.unlink()
         # First try a representative frame at one second. Very short clips
         # can end before that timestamp, so retry at the beginning if seeking
         # fails or FFmpeg produces no usable frame.
@@ -196,15 +208,31 @@ def extract_video_thumbnail(
             cmd = [
                 str(ffmpeg), "-hide_banner", "-loglevel", "error", "-nostdin",
                 "-y", "-ss", timestamp, "-i", str(source),
-                "-vframes", "1", "-vf", "scale=320:-1", str(destination),
+                "-vframes", "1", "-vf", "scale=320:-1", str(temporary_path),
             ]
             res = subprocess.run(cmd, capture_output=True, check=False, timeout=8)
-            if res.returncode == 0 and destination.is_file() and destination.stat().st_size > 0:
-                return destination
+            if (
+                res.returncode == 0
+                and temporary_path.is_file()
+                and temporary_path.stat().st_size > 0
+            ):
+                try:
+                    os.link(temporary_path, destination)
+                    return destination
+                except FileExistsError:
+                    # Another request won the publication race. Its file is
+                    # complete because it only publishes after FFmpeg succeeds.
+                    if destination.is_file() and destination.stat().st_size > 0:
+                        return destination
+                    # If a non-cooperating process created an unusable entry,
+                    # keep retrying the normal extraction path.
     except Exception:
         pass
-    # FFmpeg may leave a non-empty but corrupt/partial file on failure. Do
-    # not let that artifact masquerade as a valid cached thumbnail next time.
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+    # Failed FFmpeg may leave a partial private file, but it must never poison
+    # the shared cache entry.
     try:
         destination.unlink(missing_ok=True)
     except OSError:
