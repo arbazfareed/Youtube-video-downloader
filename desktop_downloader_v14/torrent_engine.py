@@ -252,7 +252,20 @@ def download_torrent(
                 should_pause = resume_event is not None and not resume_event.is_set()
                 if should_pause != paused:
                     method = "pause" if should_pause else "unpause"
-                    _rpc_call(endpoint, secret, method, gid)
+                    try:
+                        _rpc_call(endpoint, secret, method, gid)
+                    except (urllib.error.URLError, TimeoutError, ConnectionError):
+                        if process.poll() is not None:
+                            raise RuntimeError(_aria2_process_error(process, log_file))
+                        if rpc_failure_since is None:
+                            rpc_failure_since = time.monotonic()
+                        elif time.monotonic() - rpc_failure_since >= RPC_FAILURE_TIMEOUT:
+                            raise RuntimeError(
+                                "aria2 stopped responding to RPC requests."
+                            )
+                        time.sleep(POLL_INTERVAL)
+                        continue
+                    rpc_failure_since = None
                     paused = should_pause
 
                 try:
