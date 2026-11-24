@@ -128,9 +128,14 @@ def strip_exif(path: str | Path) -> Path:
         target = source.with_name(f"{source.stem}_no_exif ({suffix}){source.suffix}")
         suffix += 1
     try:
-        with Image.open(source) as image:
-            if getattr(image, "n_frames", 1) > 1:
+        from PIL import ImageOps
+
+        with Image.open(source) as opened:
+            if getattr(opened, "n_frames", 1) > 1:
                 raise ValueError("Animated images are not supported for EXIF removal.")
+            # Apply the orientation stored in EXIF before dropping metadata.
+            # Otherwise portrait phone photos can become sideways after cleanup.
+            image = ImageOps.exif_transpose(opened)
             image.load()
             image_format = image.format
             mode = image.mode
