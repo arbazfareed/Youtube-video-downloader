@@ -2433,7 +2433,21 @@ class MediaMixin:
             status = self._t("Playback paused")
             self._set_in_app_launcher_buttons(False)
         else:
-            player.play()
+            # VLC reports an immediate start failure with -1. Do not update
+            # controls or schedule polling as though playback had begun.
+            if player.play() == -1:
+                self._set_in_app_launcher_buttons(False)
+                button = getattr(self, "_in_app_playback_button", None)
+                if button is not None:
+                    button.configure(text="▶")
+                self._set_in_app_player_status(self._t("Could not start playback"))
+                messagebox.showerror(
+                    self._t("Could not play media"),
+                    self._t("VLC could not start playback."),
+                    parent=getattr(self, "_in_app_player_window", None),
+                )
+                self._show_in_app_controls()
+                return
             label = self._t("Pause")
             status = self._t("Playback started")
             self._set_in_app_launcher_buttons(True)
