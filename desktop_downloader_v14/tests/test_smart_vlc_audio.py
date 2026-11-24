@@ -217,7 +217,7 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.mixin._in_app_playback_after = "stale-fired-callback"
 
         self.mixin._poll_in_app_playback()
-        self.assertIsNone(self.mixin._in_app_playback_after)
+        self.assertIsNone(getattr(self.mixin, "_in_app_playback_after", None))
         self.assertEqual(self.mixin.root.timers, {})
 
         current_state["value"] = playing
