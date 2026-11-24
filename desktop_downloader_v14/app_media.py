@@ -2519,10 +2519,23 @@ class MediaMixin:
                 btn.configure(text=f"A:[{self._format_in_app_time(current_time)}]", foreground="#3b82f6")
             self._set_in_app_player_status(f"Loop point A set at {self._format_in_app_time(current_time)}")
         elif loop["B"] is None:
+            duration = max(0, player.get_length())
             if current_time <= loop["A"]:
                 loop["B"] = loop["A"] + 2000
             else:
                 loop["B"] = current_time
+
+            # Keep the B marker inside the media duration. If A is already
+            # at the end, there is no valid interval to loop.
+            if duration > 0:
+                loop["B"] = min(loop["B"], duration)
+                if loop["B"] <= loop["A"]:
+                    loop["B"] = None
+                    self._set_in_app_player_status(
+                        "Loop point B must be after A; move A earlier."
+                    )
+                    return
+
             if btn:
                 btn.configure(text="🔁 A-B", foreground="#22c55e")
             self._set_in_app_player_status(
