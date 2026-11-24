@@ -244,5 +244,38 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.assertIsNone(self.mixin._in_app_playback_after)
 
 
+    def test_snapshots_use_unique_paths_and_preserve_previous_file(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as folder:
+            self.mixin.destination = _FakeTkVar(folder)
+            self.mixin._in_app_player_window = MagicMock()
+            self.mixin._set_in_app_player_status = MagicMock()
+            player = MagicMock()
+
+            def write_snapshot(_display, path, _width, _height):
+                Path(path).write_bytes(b"snapshot")
+                return 0
+
+            player.video_take_snapshot.side_effect = write_snapshot
+            self.mixin._in_app_player = player
+            fixed_time = MagicMock()
+            fixed_time.strftime.return_value = "20261124_210000_123456"
+
+            with patch("app_media.datetime") as mock_datetime:
+                mock_datetime.now.return_value = fixed_time
+                self.mixin._take_in_app_snapshot()
+                first = next(Path(folder, "Screenshots").glob("snapshot_*.png"))
+                first.write_bytes(b"first saved image")
+
+                self.mixin._take_in_app_snapshot()
+                files = sorted(Path(folder, "Screenshots").glob("snapshot_*.png"))
+
+            self.assertEqual(len(files), 2)
+            self.assertEqual(first.read_bytes(), b"first saved image")
+            self.assertEqual(player.video_take_snapshot.call_count, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
