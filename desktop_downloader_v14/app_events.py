@@ -134,7 +134,11 @@ class EventsMixin:
             except queue.Empty:
                 break
 
-            if event[0] == "conversion_complete":
+            if event[0] == "archive_extract_warning":
+                _, job_id, warning = event
+                self.progress_summary.set(warning)
+                messagebox.showwarning("Archive extraction incomplete", warning, parent=self.root)
+            elif event[0] == "conversion_complete":
                 _, output_path = event
                 self.progress_summary.set(f"MP3 conversion complete: {Path(output_path).name}")
                 messagebox.showinfo(
