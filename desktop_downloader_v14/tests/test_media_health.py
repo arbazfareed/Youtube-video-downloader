@@ -31,7 +31,7 @@ class MediaHealthTests(unittest.TestCase):
     def test_nonempty_media_bytes_pass(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "clip.mp4"
-            path.write_bytes(b"\\x00\\x00\\x00\\x18ftypmp42" + b"x" * 100)
+            path.write_bytes(bytes([0, 0, 0, 24]) + b"ftypmp42" + b"x" * 100)
             ok, message = inspect_download(path)
             self.assertTrue(ok)
             self.assertIn("passed", message)
