@@ -108,7 +108,7 @@ class DocumentEngineTests(unittest.TestCase):
 
             with patch.dict(sys.modules, {"pdf2docx": fake_pdf2docx}):
                 with patch("document_engine.os.link", side_effect=competing_writer):
-                    with self.assertRaisesRegex(RuntimeError, "FileExistsError"):
+                    with self.assertRaisesRegex(RuntimeError, "Could not convert source.pdf to DOCX"):
                         convert_pdf_to_docx(source, destination, overwrite=False)
 
             self.assertEqual(destination.read_bytes(), b"created by competing process")
