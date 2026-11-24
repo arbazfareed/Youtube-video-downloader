@@ -142,6 +142,7 @@ class ProxyAndCookieTests(unittest.TestCase):
                 lambda *_args: None,
                 proxy="socks5://proxy.test:1080",
                 browser_cookies="firefox",
+                geo_bypass_country="US",
             )
         self.assertTrue(result.endswith("saved.mp4"))
         options = youtube_dl.call_args.args[0]
