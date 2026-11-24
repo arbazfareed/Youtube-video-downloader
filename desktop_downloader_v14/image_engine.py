@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import re
+import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
@@ -84,6 +86,33 @@ def _unique_output_path(source: Path, suffix: str, extension: str) -> Path:
     return candidate
 
 
+def _save_unique_output(source: Path, suffix: str, extension: str, save_image) -> Path:
+    """Save to a temporary file, then atomically publish without overwriting."""
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{source.stem}_{suffix}-",
+        suffix=extension,
+        dir=source.parent,
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        save_image(temporary)
+        candidate = source.with_name(f"{source.stem}_{suffix}{extension}")
+        index = 1
+        while True:
+            try:
+                # A hard link atomically creates the name and fails if it exists.
+                os.link(temporary, candidate)
+                return candidate
+            except FileExistsError:
+                candidate = source.with_name(
+                    f"{source.stem}_{suffix} ({index}){extension}"
+                )
+                index += 1
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def convert_image(path: str | Path, target_format: str, quality: int = 90) -> Path:
     from PIL import Image
 
@@ -94,7 +123,7 @@ def convert_image(path: str | Path, target_format: str, quality: int = 90) -> Pa
     if not 1 <= quality <= 100:
         raise ValueError("Image quality must be between 1 and 100.")
     extension = ".jpg" if output_format == "JPEG" else f".{output_format.lower()}"
-    target = _unique_output_path(source, "converted", extension)
+    target = None
     try:
         with Image.open(source) as image:
             if output_format == "JPEG" and image.mode in {"RGBA", "LA", "P"}:
@@ -104,7 +133,10 @@ def convert_image(path: str | Path, target_format: str, quality: int = 90) -> Pa
                 image = background
             elif output_format in {"JPEG", "WEBP"} and image.mode not in {"RGB", "L"}:
                 image = image.convert("RGB")
-            image.save(target, format=output_format, quality=quality)
+            target = _save_unique_output(
+                source, "converted", extension,
+                lambda temporary: image.save(temporary, format=output_format, quality=quality),
+            )
     except Image.DecompressionBombError as error:
         raise ValueError("Image dimensions exceed the safe processing limit.") from error
     return target
@@ -116,7 +148,7 @@ def resize_image(path: str | Path, max_width: int, max_height: int) -> Path:
     if max_width <= 0 or max_height <= 0:
         raise ValueError("Width and height must be greater than zero.")
     source = Path(path)
-    target = _unique_output_path(source, "resized", source.suffix)
+    target = None
     try:
         with Image.open(source) as opened:
             # Normalize EXIF orientation before sizing; otherwise a rotated
@@ -125,7 +157,9 @@ def resize_image(path: str | Path, max_width: int, max_height: int) -> Path:
             image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
             if source.suffix.lower() in {".jpg", ".jpeg"} and image.mode not in {"RGB", "L"}:
                 image = image.convert("RGB")
-            image.save(target)
+            target = _save_unique_output(
+                source, "resized", source.suffix, lambda temporary: image.save(temporary)
+            )
     except Image.DecompressionBombError as error:
         raise ValueError("Image dimensions exceed the safe processing limit.") from error
     return target
@@ -136,11 +170,7 @@ def strip_exif(path: str | Path) -> Path:
     from PIL import Image
 
     source = Path(path)
-    target = source.with_name(f"{source.stem}_no_exif{source.suffix}")
-    suffix = 1
-    while target.exists():
-        target = source.with_name(f"{source.stem}_no_exif ({suffix}){source.suffix}")
-        suffix += 1
+    target = None
     try:
         from PIL import ImageOps
 
@@ -162,7 +192,10 @@ def strip_exif(path: str | Path) -> Path:
                 clean.putpalette(image.getpalette())
             if image_format == "JPEG" and mode not in {"RGB", "L"}:
                 clean = clean.convert("RGB")
-            clean.save(target, format=image_format)
+            target = _save_unique_output(
+                source, "no_exif", source.suffix,
+                lambda temporary: clean.save(temporary, format=image_format),
+            )
     except Image.DecompressionBombError as error:
         raise ValueError("Image dimensions exceed the safe processing limit.") from error
     return target

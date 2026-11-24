@@ -1,7 +1,10 @@
+import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
+
+import image_engine
 
 from PIL import Image
 
@@ -94,6 +97,41 @@ class ImageEngineTests(unittest.TestCase):
             resized = resize_image(source, 10, 10)
             self.assertEqual(resized.name, "photo_resized (1).png")
             self.assertEqual(resized_path.read_bytes(), b"keep previous resize")
+
+    def test_generated_image_saves_do_not_overwrite_a_concurrent_file(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "race.png"
+            Image.new("RGB", (12, 8), "green").save(source)
+            real_link = os.link
+
+            cases = [
+                (lambda: convert_image(source, "JPEG"), "race_converted.jpg",
+                 "race_converted (1).jpg"),
+                (lambda: resize_image(source, 6, 4), "race_resized.png",
+                 "race_resized (1).png"),
+                (lambda: strip_exif(source), "race_no_exif.png",
+                 "race_no_exif (1).png"),
+            ]
+            for operation, first_name, next_name in cases:
+                first = Path(directory) / first_name
+                competitor_created = False
+
+                def race_once(temp_path, destination):
+                    nonlocal competitor_created
+                    # Simulate exactly one competing creation. Later candidates
+                    # must be allowed to publish, or this mock loops forever.
+                    if destination == first and not competitor_created:
+                        competitor_created = True
+                        destination.write_bytes(b"created by competing process")
+                    return real_link(temp_path, destination)
+
+                with patch("image_engine.os.link", side_effect=race_once):
+                    result = operation()
+                self.assertTrue(competitor_created)
+                self.assertEqual(first.read_bytes(), b"created by competing process")
+                self.assertEqual(result.name, next_name)
+                self.assertTrue(result.is_file())
+                self.assertNotEqual(result.read_bytes(), b"created by competing process")
 
     def test_resize_applies_exif_orientation_before_enforcing_bounds(self):
         with TemporaryDirectory() as directory:
