@@ -214,6 +214,7 @@ class QueueMixin:
                 "source", "mode", "quality", "playlist_scope", "speed_mode",
                 "max_speed", "checksum_algorithm", "expected_checksum",
                 "browser_cookies", "auto_extract", "cloud_provider", "cloud_folder",
+                "playlist_items",
                 "integrity_path", "integrity_sha256", "custom_headers",
             )
             if key in options
@@ -245,6 +246,7 @@ class QueueMixin:
             "mode": saved.get("mode", "video"),
             "quality": saved.get("quality", "best"),
             "playlist_scope": saved.get("playlist_scope", "auto (from link)"),
+            "playlist_items": saved.get("playlist_items", ""),
             "speed_mode": saved.get("speed_mode", "balanced"),
             "max_speed": saved.get("max_speed"),
             "checksum_algorithm": saved.get("checksum_algorithm", "sha256"),
