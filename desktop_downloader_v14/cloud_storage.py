@@ -172,7 +172,12 @@ def upload_path(path: Path, provider: str, remote_folder: str = "") -> list[str]
     # A directory upload must stay within the selected tree. is_file() follows
     # file symlinks, which could otherwise upload data outside that directory.
     files = (
-        sorted(item for item in source.rglob("*") if item.is_file() and not item.is_symlink())
+        sorted(
+            item for item in source.rglob("*")
+            if item.is_file()
+            and not item.is_symlink()
+            and not item.name.lower().endswith((".part", ".ytdl", ".tmp"))
+        )
         if source.is_dir()
         else [source]
     )
