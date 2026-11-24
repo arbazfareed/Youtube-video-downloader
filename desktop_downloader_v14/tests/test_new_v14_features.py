@@ -459,6 +459,36 @@ class TestNewV14Features(unittest.TestCase):
             result = plugins.emit("on_complete", "job-1", "file.mp4")
             self.assertIsNone(result)
 
+    def test_thumbnail_cache_invalidates_when_file_changes_within_same_second(self) -> None:
+        from app_support import extract_video_thumbnail
+        import os
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "sample.mp4"
+            source.write_bytes(b"first video version")
+            fixed_mtime_ns = 1_800_000_000_123_456_789
+            os.utime(source, ns=(fixed_mtime_ns, fixed_mtime_ns))
+            ffmpeg_directory = root / "ffmpeg"
+            ffmpeg_directory.mkdir()
+            executable = ffmpeg_directory / "ffmpeg"
+            executable.write_bytes(b"fake ffmpeg")
+
+            def render_thumbnail(command, **_kwargs):
+                Path(command[-1]).write_bytes(b"thumbnail bytes")
+                return __import__("subprocess").CompletedProcess(command, 0)
+
+            with patch("app_support.subprocess.run", side_effect=render_thumbnail) as run:
+                first = extract_video_thumbnail(source, ffmpeg_directory=ffmpeg_directory)
+                source.write_bytes(b"second video version with different size")
+                os.utime(source, ns=(fixed_mtime_ns, fixed_mtime_ns))
+                second = extract_video_thumbnail(source, ffmpeg_directory=ffmpeg_directory)
+
+            self.assertIsNotNone(first)
+            self.assertIsNotNone(second)
+            self.assertNotEqual(first, second)
+            self.assertEqual(run.call_count, 2)
+
     def test_extract_video_thumbnail_helper(self) -> None:
         from app_support import extract_video_thumbnail
 
