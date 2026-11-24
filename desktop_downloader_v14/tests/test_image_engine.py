@@ -90,7 +90,7 @@ class ImageEngineTests(unittest.TestCase):
             with Image.open(resized) as image:
                 self.assertLessEqual(image.width, 20)
                 self.assertLessEqual(image.height, 10)
-                self.assertEqual(image.size, (8, 10))
+                self.assertEqual(image.size, (7, 10))  # Pillow rounds 12 * 10 / 16 down.
                 self.assertEqual(image.getexif().get(0x0112), None)
 
     def test_strip_exif_saves_metadata_free_copy_and_preserves_source(self):
