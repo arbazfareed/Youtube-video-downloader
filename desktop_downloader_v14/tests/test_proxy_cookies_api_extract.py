@@ -423,6 +423,55 @@ if __name__ == "__main__":
     unittest.main()
 
 
+    def test_api_cancellation_after_download_prevents_postprocessing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "download.bin"
+            output.write_bytes(b"downloaded")
+            job = api.ApiJob(
+                "cancel-after-download",
+                api.JobRequest(url="https://example.test/file.bin", output=directory),
+            )
+
+            def download_then_cancel(*args, **kwargs):
+                job.cancel_event.set()
+                return str(output)
+
+            with patch.object(api, "download_url", side_effect=download_then_cancel):
+                api._run_job(job)
+
+            self.assertEqual(job.status, "cancelled")
+            self.assertTrue(output.exists())
+
+    def test_api_cancel_during_cloud_upload_keeps_staging_and_marks_cancelled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            staging = Path(directory) / "staging"
+            staging.mkdir()
+            output = staging / "file.bin"
+            output.write_bytes(b"downloaded")
+            job = api.ApiJob(
+                "cancel-during-upload",
+                api.JobRequest(
+                    url="https://example.test/file.bin",
+                    output=str(staging),
+                    cloud_provider="s3",
+                ),
+            )
+
+            def upload_then_cancel(*args, **kwargs):
+                job.cancel_event.set()
+                return ["s3://bucket/file.bin"]
+
+            with patch.object(api, "download_url", return_value=str(output)), patch(
+                "cloud_storage.upload_path", side_effect=upload_then_cancel
+            ):
+                api._run_job(job)
+
+            self.assertEqual(job.status, "cancelled")
+            self.assertTrue(staging.exists())
+            self.assertTrue(output.exists())
+            self.assertIn("retained", job.error.lower())
+
+
 class AutomaticGeoProxyTests(unittest.TestCase):
     def test_country_labeled_proxy_pool_prioritizes_allowed_country(self):
         rotator = ProxyRotator(
