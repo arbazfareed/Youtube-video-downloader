@@ -169,7 +169,7 @@ def convert_pdf_to_docx(
                 converter.close()
             if not temporary_output.is_file() or temporary_output.stat().st_size == 0:
                 raise RuntimeError("PDF to DOCX conversion produced an empty output.")
-            temporary_output.replace(destination)
+            _publish_conversion_output(temporary_output, destination, overwrite)
     except Exception as error:
         raise RuntimeError(f"Could not convert {source.name} to DOCX: {error}") from error
     return destination
