@@ -70,5 +70,28 @@ class ZipCreationTests(unittest.TestCase):
                 create_zip_archive(root / "missing.txt", root / "output.zip")
 
 
+    def test_atomic_no_overwrite_preserves_competing_file(self):
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "input.txt"
+            source.write_text("archive content", encoding="utf-8")
+            destination = root / "output.zip"
+
+            def simulate_competing_creator(_temporary, final_path):
+                Path(final_path).write_bytes(b"created by another process")
+                raise FileExistsError(final_path)
+
+            with patch("zip_archive.os.link", side_effect=simulate_competing_creator):
+                with self.assertRaises(FileExistsError):
+                    create_zip_archive(source, destination)
+
+            self.assertEqual(destination.read_bytes(), b"created by another process")
+            self.assertEqual(
+                sorted(path.name for path in root.iterdir()),
+                ["input.txt", "output.zip"],
+            )
+
 if __name__ == "__main__":
     unittest.main()
