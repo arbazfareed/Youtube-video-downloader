@@ -76,6 +76,7 @@ class ProxyAndCookieTests(unittest.TestCase):
                 lambda *_args: None,
                 proxy="http://first.test:8080,https://second.test:8443",
                 browser_cookies="firefox",
+                geo_bypass_country="us",
             )
         self.assertEqual(media.call_args.args[-2:], ("http://first.test:8080", "firefox"))
 
@@ -145,6 +146,21 @@ class ProxyAndCookieTests(unittest.TestCase):
         options = youtube_dl.call_args.args[0]
         self.assertEqual(options["proxy"], "socks5://proxy.test:1080")
         self.assertEqual(options["cookiesfrombrowser"], ("firefox", None, None, None))
+        self.assertTrue(options["geo_bypass"])
+        self.assertEqual(options["geo_bypass_country"], "US")
+
+    def test_geo_bypass_country_rejects_invalid_codes(self):
+        with self.assertRaisesRegex(ValueError, "two-letter ISO country code"):
+            download_engine._download_with_ytdlp(
+                "https://example.test/watch/1",
+                Path("downloads"),
+                "video",
+                "1080p",
+                "single video",
+                threading.Event(),
+                lambda *_args: None,
+                geo_bypass_country="USA",
+            )
 
 
 class ArchiveExtractionTests(unittest.TestCase):
