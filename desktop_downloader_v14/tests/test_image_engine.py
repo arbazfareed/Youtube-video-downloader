@@ -78,6 +78,21 @@ class ImageEngineTests(unittest.TestCase):
                 self.assertLessEqual(image.width, 20)
                 self.assertLessEqual(image.height, 20)
 
+    def test_resize_applies_exif_orientation_before_enforcing_bounds(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "portrait.jpg"
+            exif = Image.Exif()
+            exif[0x0112] = 6  # Stored 16x12, displayed as 12x16.
+            Image.new("RGB", (16, 12), "blue").save(source, exif=exif)
+
+            resized = resize_image(source, 20, 10)
+
+            with Image.open(resized) as image:
+                self.assertLessEqual(image.width, 20)
+                self.assertLessEqual(image.height, 10)
+                self.assertEqual(image.size, (8, 10))
+                self.assertEqual(image.getexif().get(0x0112), None)
+
     def test_strip_exif_saves_metadata_free_copy_and_preserves_source(self):
         with TemporaryDirectory() as directory:
             source = Path(directory) / "private.jpg"
