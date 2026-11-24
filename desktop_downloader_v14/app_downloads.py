@@ -183,6 +183,11 @@ class DownloadsMixin:
         )
         proxy_setting = getattr(self, "proxy_list", None)
         proxy_value = proxy_setting.get().strip() if proxy_setting else ""
+        geo_bypass_country = getattr(self, "geo_bypass_country", None)
+        geo_bypass_country = geo_bypass_country.get().strip().upper() if geo_bypass_country else ""
+        if geo_bypass_country and not re.fullmatch(r"[A-Z]{2}", geo_bypass_country):
+            messagebox.showerror("Invalid geo-bypass country", "Enter a two-letter ISO country code, such as US or GB.")
+            return
         if browser_cookies != "none" and browser_cookies not in SUPPORTED_BROWSERS:
             messagebox.showerror("Invalid browser", "Choose a supported browser for cookies.")
             return
@@ -288,6 +293,7 @@ class DownloadsMixin:
             "expected_checksum": expected_checksum,
             "proxy": proxy_value,
             "browser_cookies": browser_cookies,
+            "geo_bypass_country": geo_bypass_country,
             "custom_headers": custom_headers,
             "retry_policy": retry_policy,
             "auto_extract": getattr(self, "auto_extract", None).get()
@@ -370,6 +376,7 @@ class DownloadsMixin:
             download_subtitles=options.get("download_subtitles", False),
             subtitle_languages=options.get("subtitle_languages", "en,hi"),
             playlist_items=options.get("playlist_items", ""),
+            geo_bypass_country=options.get("geo_bypass_country", ""),
         )
         self._download_futures[job_id] = future
         future.add_done_callback(
