@@ -196,9 +196,21 @@ def _run_job(job: ApiJob) -> None:
     except DownloadCancelled as error:
         job.status = "cancelled"
         job.error = str(error)
+        if (
+            job.request.cloud_provider.lower() != "local"
+            and Path(job.request.output).exists()
+            and job.request.output not in job.error
+        ):
+            job.error += f" Cloud-job files were retained at {job.request.output}."
     except Exception as error:
         job.status = "failed"
         job.error = str(error)
+        if (
+            job.request.cloud_provider.lower() != "local"
+            and Path(job.request.output).exists()
+            and job.request.output not in job.error
+        ):
+            job.error += f" Cloud-job files were retained at {job.request.output}."
 
 
 def _validate_request(request: JobRequest) -> None:
