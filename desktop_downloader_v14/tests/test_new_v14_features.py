@@ -592,6 +592,45 @@ class TestNewV14Features(unittest.TestCase):
             self.assertEqual(list(root.glob(".shared-cache.thumbnail-*")), [])
 
 
+    def test_failed_concurrent_thumbnail_render_does_not_remove_valid_cache(self) -> None:
+        from app_support import extract_video_thumbnail
+        import subprocess
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "video.mp4"
+            source.write_bytes(b"video")
+            ffmpeg_directory = root / "ffmpeg"
+            ffmpeg_directory.mkdir()
+            (ffmpeg_directory / "ffmpeg").write_bytes(b"fake ffmpeg")
+            destination = root / "shared.png"
+            both_rendered = Barrier(2)
+
+            def competing_render(command, **_kwargs):
+                output = Path(command[-1])
+                if threading.current_thread().name.endswith("_0"):
+                    output.write_bytes(b"valid winning image")
+                    both_rendered.wait(timeout=5)
+                    return subprocess.CompletedProcess(command, 0, "", "")
+                output.write_bytes(b"partial losing image")
+                both_rendered.wait(timeout=5)
+                return subprocess.CompletedProcess(command, 1, "", "render failed")
+
+            import threading
+            with patch("app_support.subprocess.run", side_effect=competing_render):
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    futures = [
+                        executor.submit(extract_video_thumbnail, source, destination, ffmpeg_directory),
+                        executor.submit(extract_video_thumbnail, source, destination, ffmpeg_directory),
+                    ]
+                    results = [future.result(timeout=10) for future in futures]
+
+            self.assertIn(destination, results)
+            self.assertEqual(destination.read_bytes(), b"valid winning image")
+
+
 if __name__ == "__main__":
     unittest.main()
 
