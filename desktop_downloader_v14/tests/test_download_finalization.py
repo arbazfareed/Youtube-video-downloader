@@ -55,6 +55,7 @@ class DirectDownloadFinalizationTests(unittest.TestCase):
             response.headers = {"Content-Range": f"bytes */{partial.stat().st_size}"}
             session = Mock()
             session.headers = {}
+            session.get.return_value = MagicMock()
             session.get.return_value.__enter__.return_value = response
             converted = Path(folder) / "audio.mp3"
             with (
