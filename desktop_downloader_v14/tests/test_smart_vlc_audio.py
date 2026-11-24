@@ -217,7 +217,7 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.mixin._in_app_playback_after = "stale-fired-callback"
 
         self.mixin._poll_in_app_playback()
-        self.assertIsNone(self.mixin._in_app_playback_after)
+        self.assertIsNone(getattr(self.mixin, "_in_app_playback_after", None))
         self.assertEqual(self.mixin.root.timers, {})
 
         current_state["value"] = playing
@@ -275,6 +275,31 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
             self.assertEqual(len(files), 2)
             self.assertEqual(first.read_bytes(), b"first saved image")
             self.assertEqual(player.video_take_snapshot.call_count, 2)
+
+
+    def test_playback_start_failure_does_not_claim_playing_or_poll(self):
+        player = _FakePlayer(is_playing=False)
+        player.play = MagicMock(return_value=-1)
+        self.mixin._in_app_player = player
+        self.mixin._in_app_player_window = MagicMock()
+        self.mixin._in_app_playback_button = MagicMock()
+        self.mixin._set_in_app_launcher_buttons = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+        self.mixin._show_in_app_controls = MagicMock()
+
+        with patch("app_media.messagebox.showerror") as show_error:
+            self.mixin._toggle_in_app_playback()
+
+        player.play.assert_called_once_with()
+        self.mixin._set_in_app_launcher_buttons.assert_called_once_with(False)
+        self.mixin._in_app_playback_button.configure.assert_called_once_with(text="▶")
+        self.assertIsNone(getattr(self.mixin, "_in_app_playback_after", None))
+        self.assertEqual(self.mixin.root.timers, {})
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Could not start playback"
+        )
+        show_error.assert_called_once()
+
 
 
 if __name__ == "__main__":
