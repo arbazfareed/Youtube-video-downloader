@@ -671,19 +671,52 @@ def _audio_format_selector(audio_languages: str = "all") -> str:
     pref = audio_languages.strip().lower()
     if pref in {"", "all", "auto", "all languages", "original", "original only", "default", "none"}:
         return "bestaudio/best"
-    if "hin" in pref or "hi" in pref:
-        return "bestaudio[language^=hi]/bestaudio[language^=hin]/bestaudio/best"
-    if "eng" in pref or "en" in pref:
-        return "bestaudio[language^=en]/bestaudio[language^=eng]/bestaudio/best"
-    if "urd" in pref or "ur" in pref:
-        return "bestaudio[language^=ur]/bestaudio[language^=urd]/bestaudio/best"
-    if "spa" in pref or "es" in pref:
-        return "bestaudio[language^=es]/bestaudio[language^=spa]/bestaudio/best"
-    raw_tokens = [t.strip().replace("only", "").strip() for t in pref.split(",") if t.strip()]
-    if raw_tokens:
-        tok = raw_tokens[0]
-        return f"bestaudio[language^={tok}]/bestaudio/best"
-    return "bestaudio/best"
+
+    # Match whole language tokens, not substrings: "French" contains "en",
+    # which previously caused French requests to select English audio.
+    aliases = {
+        "english": "en", "eng": "en", "en": "en",
+        "hindi": "hi", "hin": "hi", "hi": "hi",
+        "urdu": "ur", "urd": "ur", "ur": "ur",
+        "spanish": "es", "spa": "es", "es": "es",
+        "french": "fr", "fra": "fr", "fre": "fr", "fr": "fr",
+        "german": "de", "deu": "de", "ger": "de", "de": "de",
+        "arabic": "ar", "ara": "ar", "ar": "ar",
+        "bengali": "bn", "bangla": "bn", "ben": "bn", "bn": "bn",
+        "japanese": "ja", "jpn": "ja", "ja": "ja",
+        "korean": "ko", "kor": "ko", "ko": "ko",
+        "portuguese": "pt", "por": "pt", "pt": "pt",
+        "italian": "it", "ita": "it", "it": "it",
+        "chinese": "zh", "zho": "zh", "chi": "zh", "zh": "zh",
+        "russian": "ru", "rus": "ru", "ru": "ru",
+        "punjabi": "pa", "pan": "pa", "pa": "pa",
+        "tamil": "ta", "tam": "ta", "ta": "ta",
+        "telugu": "te", "tel": "te", "te": "te",
+        "gujarati": "gu", "guj": "gu", "gu": "gu",
+        "indonesian": "id", "ind": "id", "id": "id",
+        "kannada": "kn", "kan": "kn", "kn": "kn",
+        "malayalam": "ml", "mal": "ml", "ml": "ml",
+        "marathi": "mr", "mar": "mr", "mr": "mr",
+        "dutch": "nl", "nld": "nl", "dut": "nl", "nl": "nl",
+        "polish": "pl", "pol": "pl", "pl": "pl",
+        "turkish": "tr", "tur": "tr", "tr": "tr",
+        "ukrainian": "uk", "ukr": "uk", "uk": "uk",
+        "vietnamese": "vi", "vie": "vi", "vi": "vi",
+    }
+    tokens = [
+        token.strip().replace("only", "").strip()
+        for token in pref.replace(";", ",").replace("+", ",").replace("&", ",").split(",")
+        if token.strip()
+    ]
+    languages = []
+    for token in tokens:
+        code = aliases.get(token, token if re.fullmatch(r"[a-z]{2,3}", token) else "")
+        if code and code not in languages:
+            languages.append(code)
+    if not languages:
+        return "bestaudio/best"
+    selectors = [f"bestaudio[language^={code}]" for code in languages]
+    return "/".join(selectors + ["bestaudio/best"])
 
 
 def _single_audio_track_selector(downloader, audio_languages: str = "all"):
