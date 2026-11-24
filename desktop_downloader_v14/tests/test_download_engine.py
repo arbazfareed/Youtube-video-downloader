@@ -413,6 +413,21 @@ class DownloadEngineTests(unittest.TestCase):
         self.assertNotIn("proxy", persisted)
         self.assertEqual(persisted["output_path"], "C:\\Downloads\\video.mp4")
 
+    def test_resume_options_persist_and_restore_custom_headers(self):
+        headers = {"Referer": "https://example.org/", "X-Test": "value"}
+        saved = DownloaderApp._persistent_job_options_values(
+            {"destination": Path("C:\\Downloads"), "custom_headers": headers}
+        )
+        record = SimpleNamespace(
+            url="https://example.org/file", destination="C:\\Downloads", options=saved
+        )
+        app = DownloaderApp.__new__(DownloaderApp)
+        app.proxy_list = _FakeStringVar("")
+        app.browser_cookies = _FakeStringVar("none")
+        restored = app._options_for_record(record)
+        self.assertEqual(saved["custom_headers"], headers)
+        self.assertEqual(restored["custom_headers"], headers)
+
     def test_download_history_persists_updates_and_marks_interrupted_jobs(self):
         with TemporaryDirectory() as folder:
             history = DownloadHistory(Path(folder) / "history.sqlite3")
