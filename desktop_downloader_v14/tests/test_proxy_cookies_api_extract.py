@@ -184,6 +184,33 @@ class ArchiveExtractionTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 extract_archive(archive_path)
 
+    def test_competing_destination_created_at_publish_is_not_replaced(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive_path = root / "package.zip"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("readme.txt", "archive contents")
+
+            destination = root / "package"
+
+            def competing_publish(_staging, final_path):
+                final_path.mkdir()
+                (final_path / "owned-by-other-process.txt").write_text(
+                    "keep me", encoding="utf-8"
+                )
+                raise FileExistsError(final_path)
+
+            with patch("extract._publish_directory_no_replace", side_effect=competing_publish):
+                with self.assertRaises(FileExistsError):
+                    extract_archive(archive_path)
+
+            self.assertEqual(
+                (destination / "owned-by-other-process.txt").read_text(encoding="utf-8"),
+                "keep me",
+            )
+            self.assertEqual(list(destination.iterdir()), [destination / "owned-by-other-process.txt"])
+            self.assertFalse((destination / "readme.txt").exists())
+
     def test_leaves_unsupported_7z_for_manual_extraction(self):
         with tempfile.TemporaryDirectory() as directory:
             archive_path = Path(directory) / "package.7z"
