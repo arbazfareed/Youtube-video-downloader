@@ -1528,9 +1528,27 @@ def _download_direct(
                             )
                     else:
                         existing = 0
+                        if response.status_code == 206:
+                            content_range = response.headers.get("Content-Range", "")
+                            match = CONTENT_RANGE.match(content_range)
+                            if (
+                                not match
+                                or int(match.group(1)) != 0
+                                or match.group(3) == "*"
+                                or int(match.group(2)) + 1 != int(match.group(3))
+                            ):
+                                raise ValueError(
+                                    "The server returned an incomplete range for a new download."
+                                )
+                            expected_response_bytes = (
+                                int(match.group(2)) - int(match.group(1)) + 1
+                            )
+                            total = int(match.group(3))
+                        else:
+                            expected_response_bytes = None
 
                     content_length = response.headers.get("Content-Length")
-                    if not append:
+                    if not append and response.status_code != 206:
                         total = (
                             existing + int(content_length)
                             if content_length and content_length.isdigit()
@@ -1579,7 +1597,7 @@ def _download_direct(
                                 "Response ended with an incorrect byte count: "
                                 f"received {received} of {expected} bytes."
                             )
-                    elif (
+                    if (
                         expected_response_bytes is not None
                         and downloaded - existing != expected_response_bytes
                     ):
