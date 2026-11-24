@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 from history_store import DownloadRecord
 
 
-_TERMINAL_STATUSES = {"complete", "failed", "cancelled", "interrupted"}
+_TERMINAL_STATUSES = {"complete", "partial", "failed", "cancelled", "interrupted"}
 
 
 @dataclass(frozen=True)
