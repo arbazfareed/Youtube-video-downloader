@@ -30,6 +30,36 @@ class CloudStorageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "cannot contain"):
             cloud_storage._remote_path("../outside", "file.bin")
 
+    def test_single_file_upload_rejects_symlink_to_external_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            private = root / "private.txt"
+            private.write_text("private data", encoding="utf-8")
+            link = root / "selected.txt"
+            try:
+                link.symlink_to(private)
+            except (OSError, NotImplementedError):
+                self.skipTest("File symlinks are unavailable on this platform")
+
+            with patch("cloud_storage._upload_s3") as upload:
+                with self.assertRaisesRegex(ValueError, "cannot be symbolic links"):
+                    cloud_storage.upload_path(link, "s3")
+            upload.assert_not_called()
+
+    def test_select_upload_source_rejects_symlink_result_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            private = root / "private.bin"
+            private.write_bytes(b"private")
+            link = root / "download.bin"
+            try:
+                link.symlink_to(private)
+            except (OSError, NotImplementedError):
+                self.skipTest("File symlinks are unavailable on this platform")
+
+            with self.assertRaisesRegex(ValueError, "cannot be symbolic links"):
+                cloud_storage.select_upload_source(link, root / "staging")
+
     def test_folder_upload_skips_symlinks_to_files_outside_source(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
