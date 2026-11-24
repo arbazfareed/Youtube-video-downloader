@@ -1045,7 +1045,9 @@ def _delta_sync_existing_file(
                 )
 
         _check_cancelled(cancel_event)
-        target = _replace_with_retry(partial, target, cancel_event, resume_event)
+        target = _replace_with_retry(
+            partial, target, cancel_event, resume_event, allow_replace=True
+        )
         progress("Download complete", 100.0, str(target))
         return str(target)
     except Exception as error:
@@ -1110,19 +1112,26 @@ def _replace_with_retry(
     destination: Path,
     cancel_event: threading.Event,
     resume_event: threading.Event | None = None,
+    *,
+    allow_replace: bool = False,
 ) -> Path:
-    """Publish a completed download without ever replacing an existing file."""
+    """Publish a completed download, refusing to clobber unrelated files."""
     for attempt in range(5):
         try:
-            # source and destination live in the same directory/filesystem.
-            # Creating the destination link is atomic and fails if it exists.
-            os.link(source, destination)
-            source.unlink()
+            if allow_replace:
+                # Delta synchronization intentionally updates the file that
+                # was selected and validated as its existing destination.
+                source.replace(destination)
+            else:
+                # Atomic same-filesystem creation fails if another process
+                # has created the destination since the filename check.
+                os.link(source, destination)
+                source.unlink()
             return destination
         except FileExistsError:
-            # A different process won the filename after our earlier check.
-            # Re-select while respecting other in-process reservations, then
-            # retry the atomic publication against that new name.
+            # Drop our own reservation before looking for the next free name;
+            # otherwise _final_target would mistake it for another downloader.
+            _release_target(destination)
             destination = _final_target(destination)
         except PermissionError:
             if attempt == 4:
