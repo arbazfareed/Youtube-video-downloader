@@ -2460,13 +2460,29 @@ class MediaMixin:
         snapshot_dir = dest_folder / "Screenshots"
         try:
             snapshot_dir.mkdir(parents=True, exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            target_file = snapshot_dir / f"snapshot_{timestamp}.png"
-            result = player.video_take_snapshot(0, str(target_file), 0, 0)
-            if result == 0:
-                self._set_in_app_player_status(f"Snapshot saved: {target_file.name}")
-            else:
-                self._set_in_app_player_status("Could not take snapshot (no active video)")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            # Reserve the path atomically so concurrent snapshots never overwrite.
+            suffix = 0
+            while True:
+                suffix_text = f"_{suffix}" if suffix else ""
+                target_file = snapshot_dir / f"snapshot_{timestamp}{suffix_text}.png"
+                try:
+                    with target_file.open("xb"):
+                        pass
+                    break
+                except FileExistsError:
+                    suffix += 1
+
+            try:
+                result = player.video_take_snapshot(0, str(target_file), 0, 0)
+                if result == 0:
+                    self._set_in_app_player_status(f"Snapshot saved: {target_file.name}")
+                else:
+                    target_file.unlink(missing_ok=True)
+                    self._set_in_app_player_status("Could not take snapshot (no active video)")
+            except Exception:
+                target_file.unlink(missing_ok=True)
+                raise
         except Exception as error:
             self._set_in_app_player_status(f"Snapshot error: {error}")
 
