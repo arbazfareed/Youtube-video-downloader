@@ -91,6 +91,19 @@ class ImageEngineTests(unittest.TestCase):
                 self.assertEqual(dict(clean.getexif()), {})
                 self.assertEqual(clean.size, (16, 12))
 
+    def test_strip_exif_applies_orientation_before_removing_it(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "portrait.jpg"
+            exif = Image.Exif()
+            exif[0x0112] = 6
+            Image.new("RGB", (16, 12), "blue").save(source, exif=exif)
+
+            stripped = strip_exif(source)
+
+            with Image.open(stripped) as clean:
+                self.assertEqual(clean.size, (12, 16))
+                self.assertEqual(dict(clean.getexif()), {})
+
 
 if __name__ == "__main__":
     unittest.main()
