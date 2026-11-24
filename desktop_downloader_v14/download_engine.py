@@ -1359,6 +1359,32 @@ def _range_download_validator(headers: Mapping[str, str]) -> str:
     return ""
 
 
+def _strip_custom_headers_on_cross_origin_redirect(
+    prepared_request: requests.PreparedRequest,
+    response: requests.Response,
+    custom_headers: Mapping[str, str],
+) -> None:
+    """Keep user credentials scoped to the origin they were configured for."""
+    previous_url = getattr(getattr(response, "request", None), "url", "")
+    next_url = prepared_request.url or ""
+
+    def origin(url: str) -> tuple[str, str, int | None]:
+        parsed = urlsplit(url)
+        scheme = parsed.scheme.lower()
+        hostname = (parsed.hostname or "").lower()
+        try:
+            port = parsed.port
+        except ValueError:
+            return scheme, hostname, None
+        if port is None:
+            port = 443 if scheme == "https" else 80 if scheme == "http" else None
+        return scheme, hostname, port
+
+    if origin(previous_url) != origin(next_url):
+        for name in custom_headers:
+            prepared_request.headers.pop(name, None)
+
+
 def _download_direct(
     url: str,
     directory: Path,
@@ -1377,6 +1403,18 @@ def _download_direct(
     directory.mkdir(parents=True, exist_ok=True)
     cookie_jar = load_cookies(browser_cookies)
     session = requests.Session()
+    if custom_headers:
+        original_rebuild_auth = session.rebuild_auth
+
+        def rebuild_auth_without_cross_origin_custom_headers(
+            prepared_request, response
+        ) -> None:
+            original_rebuild_auth(prepared_request, response)
+            _strip_custom_headers_on_cross_origin_redirect(
+                prepared_request, response, custom_headers
+            )
+
+        session.rebuild_auth = rebuild_auth_without_cross_origin_custom_headers
     session_headers = getattr(session, "headers", None)
     if cookie_jar:
         session.cookies.update(cookie_jar)
@@ -1409,6 +1447,7 @@ def _download_direct(
             target is None
             and max_speed is None
             and not proxy_rotator.enabled
+            and not custom_headers
             and _fragment_workers(speed_mode) > 1
         )
         parallel_info: tuple[str, int, str] | None = None
