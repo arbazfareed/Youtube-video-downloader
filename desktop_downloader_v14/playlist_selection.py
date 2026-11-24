@@ -9,8 +9,7 @@ def normalize_playlist_items(value: str) -> str:
     if not text:
         return ""
     parts = text.split(",")
-    normalized = []
-    total = 0
+    ranges = []
     for part in parts:
         if not part:
             raise ValueError("Playlist selection contains an empty item.")
@@ -21,8 +20,22 @@ def normalize_playlist_items(value: str) -> str:
         end = int(match.group(2) or start)
         if start < 1 or end < start:
             raise ValueError("Playlist positions must be positive and ranges must ascend.")
-        total += end - start + 1
-        if total > 10000:
-            raise ValueError("Select no more than 10,000 playlist entries at once.")
-        normalized.append(str(start) if start == end else f"{start}-{end}")
-    return ",".join(normalized)
+        ranges.append((start, end))
+
+    # Canonicalize the union, not the raw input: overlapping or repeated
+    # positions otherwise reach yt-dlp more than once and can duplicate files.
+    ranges.sort()
+    merged = []
+    total = 0
+    for start, end in ranges:
+        if merged and start <= merged[-1][1] + 1:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    total = sum(end - start + 1 for start, end in merged)
+    if total > 10000:
+        raise ValueError("Select no more than 10,000 playlist entries at once.")
+    return ",".join(
+        str(start) if start == end else f"{start}-{end}"
+        for start, end in merged
+    )
