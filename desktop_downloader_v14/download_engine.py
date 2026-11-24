@@ -1143,6 +1143,7 @@ def _parallel_range_download(
     bandwidth_limiter: GlobalBandwidthLimiter | None = None,
     proxy_rotator: ProxyRotator | None = None,
     cookies=None,
+    request_headers: Mapping[str, str] | None = None,
 ) -> str:
     segment_target = target
     partial = target.with_name(target.name + ".part")
@@ -1210,7 +1211,8 @@ def _parallel_range_download(
                     return
 
                 range_start = start + existing
-                headers = {"Range": f"bytes={range_start}-{end}"}
+                headers = dict(request_headers or {})
+                headers["Range"] = f"bytes={range_start}-{end}"
                 if validator:
                     if validator.startswith("etag:"):
                         headers["If-Range"] = validator[5:]
@@ -1497,6 +1499,7 @@ def _download_direct(
                 bandwidth_limiter,
                 proxy_rotator,
                 cookie_jar,
+                dict(session.headers),
             )
             return str(_convert_to_mp3_if_needed(Path(downloaded_result), mode))
 
