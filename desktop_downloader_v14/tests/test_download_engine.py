@@ -1510,6 +1510,34 @@ class DownloadEngineTests(unittest.TestCase):
             )
             self.assertEqual(Path(result).read_bytes(), b"abcdef")
 
+    def test_resume_continues_when_server_returns_valid_short_range(self):
+        with TemporaryDirectory() as folder:
+            directory = Path(folder)
+            (directory / "archive.bin.part").write_bytes(b"ab")
+            session = _RecordingSession(
+                _RangeResponse(b"cd", 2, 3, 6),
+                _RangeResponse(b"ef", 4, 5, 6),
+            )
+            with (
+                patch("download_engine.requests.Session", return_value=session),
+                patch("download_engine._wait_for_retry", return_value=False),
+            ):
+                result = _download_direct(
+                    "https://example.org/archive.bin",
+                    directory,
+                    threading.Event(),
+                    lambda _status, _percent, _details: None,
+                )
+
+            self.assertEqual(Path(result).read_bytes(), b"abcdef")
+            self.assertEqual(
+                session.request_headers,
+                [
+                    {"Range": "bytes=2-"},
+                    {"Range": "bytes=4-"},
+                ],
+            )
+
     def test_pause_waits_for_resume_and_observes_cancellation(self):
         cancel_event = threading.Event()
         resume_event = threading.Event()
