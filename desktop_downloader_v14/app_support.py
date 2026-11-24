@@ -231,12 +231,9 @@ def extract_video_thumbnail(
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
-    # Failed FFmpeg may leave a partial private file, but it must never poison
-    # the shared cache entry.
-    try:
-        destination.unlink(missing_ok=True)
-    except OSError:
-        pass
+    # The renderer only touched its private temporary path. Never delete the
+    # shared destination here: another concurrent request may have atomically
+    # published a valid cache entry while this request failed.
     return None
 
 
