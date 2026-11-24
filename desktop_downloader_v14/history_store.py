@@ -25,16 +25,33 @@ class DownloadRecord:
 
 
 def normalize_url(url: str) -> str:
-    parsed = urlsplit(url.strip())
+    """Canonicalize host/default ports without changing credentials or IPv6 syntax."""
+    raw_url = url.strip()
+    parsed = urlsplit(raw_url)
     scheme = parsed.scheme.lower()
     hostname = (parsed.hostname or "").lower()
     try:
         port = parsed.port
     except ValueError:
-        return url.strip().casefold()
+        return raw_url.casefold()
+
+    # Credentials are case-sensitive and can identify different protected
+    # resources, so retain their original spelling for history matching.
+    userinfo = ""
+    if "@" in parsed.netloc:
+        userinfo = parsed.netloc.rsplit("@", 1)[0] + "@"
+
+    # urlsplit().hostname strips IPv6 brackets; restore them in netloc.
+    if ":" in hostname and not hostname.startswith("["):
+        hostname = f"[{hostname}]"
     if port and not (scheme == "http" and port == 80) and not (scheme == "https" and port == 443):
         hostname = f"{hostname}:{port}"
-    return parsed._replace(scheme=scheme, netloc=hostname, fragment="").geturl()
+
+    return parsed._replace(
+        scheme=scheme,
+        netloc=f"{userinfo}{hostname}",
+        fragment="",
+    ).geturl()
 
 
 class DownloadHistory:
