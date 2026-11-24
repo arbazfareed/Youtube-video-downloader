@@ -203,6 +203,12 @@ def extract_video_thumbnail(
                 return destination
     except Exception:
         pass
+    # FFmpeg may leave a non-empty but corrupt/partial file on failure. Do
+    # not let that artifact masquerade as a valid cached thumbnail next time.
+    try:
+        destination.unlink(missing_ok=True)
+    except OSError:
+        pass
     return None
 
 
