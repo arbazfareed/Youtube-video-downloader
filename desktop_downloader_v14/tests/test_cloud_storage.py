@@ -214,5 +214,56 @@ class CloudApiTests(unittest.TestCase):
         self.assertTrue(staging.exists())
 
 
+    def test_api_cloud_download_failure_reports_retained_staging_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            staging = Path(directory) / "cloud-staging"
+            staging.mkdir()
+            partial = staging / "recoverable-file.part"
+            job = api.ApiJob(
+                "cloud-download-failure",
+                api.JobRequest(
+                    url="https://example.test/file.bin",
+                    output=str(staging),
+                    source="direct file",
+                    cloud_provider="s3",
+                ),
+            )
+
+            def fail_download(*_args, **_kwargs):
+                partial.write_bytes(b"recoverable partial data")
+                raise OSError("remote server disconnected")
+
+            with patch.object(api, "download_url", side_effect=fail_download):
+                api._run_job(job)
+
+            self.assertEqual(job.status, "failed")
+            self.assertIn(str(staging), job.error or "")
+            self.assertTrue(partial.is_file())
+            self.assertEqual(partial.read_bytes(), b"recoverable partial data")
+
+    def test_api_cloud_cancellation_reports_retained_staging_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            staging = Path(directory) / "cloud-staging"
+            staging.mkdir()
+            retained = staging / "already-downloaded.mp4"
+            retained.write_bytes(b"completed earlier item")
+            job = api.ApiJob(
+                "cloud-cancelled",
+                api.JobRequest(
+                    url="https://example.test/playlist",
+                    output=str(staging),
+                    source="direct file",
+                    cloud_provider="dropbox",
+                ),
+            )
+
+            with patch.object(api, "download_url", side_effect=api.DownloadCancelled("cancelled")):
+                api._run_job(job)
+
+            self.assertEqual(job.status, "cancelled")
+            self.assertIn(str(staging), job.error or "")
+            self.assertTrue(retained.is_file())
+
+
 if __name__ == "__main__":
     unittest.main()
