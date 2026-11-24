@@ -46,8 +46,13 @@ class AutoExtractFailureRecoveryTests(unittest.TestCase):
             while not harness.events.empty():
                 queued.append(harness.events.get_nowait())
 
-            warning = next(item for item in queued if item[0] == "archive_extract_warning")
             finished = next(item for item in queued if item[0] == "finished")
+            self.assertEqual(
+                finished[2],
+                "Partial",
+                f"Expected preserved partial completion; queued events: {queued!r}",
+            )
+            warning = next(item for item in queued if item[0] == "archive_extract_warning")
             self.assertEqual(finished, ("finished", "job-archive", "Partial", str(archive)))
             self.assertIn(str(archive), warning[2])
             self.assertIn("retry extraction manually", warning[2])
