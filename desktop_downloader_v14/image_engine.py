@@ -73,6 +73,17 @@ def generate_sequence_urls(pattern: str, start: int, end: int) -> list[str]:
         raise ValueError("The link pattern must contain one numeric placeholder, such as {:03d}.") from error
 
 
+
+def _unique_output_path(source: Path, suffix: str, extension: str) -> Path:
+    """Choose a generated filename without clobbering an earlier result."""
+    candidate = source.with_name(f"{source.stem}_{suffix}{extension}")
+    index = 1
+    while candidate.exists():
+        candidate = source.with_name(f"{source.stem}_{suffix} ({index}){extension}")
+        index += 1
+    return candidate
+
+
 def convert_image(path: str | Path, target_format: str, quality: int = 90) -> Path:
     from PIL import Image
 
@@ -83,7 +94,7 @@ def convert_image(path: str | Path, target_format: str, quality: int = 90) -> Pa
     if not 1 <= quality <= 100:
         raise ValueError("Image quality must be between 1 and 100.")
     extension = ".jpg" if output_format == "JPEG" else f".{output_format.lower()}"
-    target = source.with_name(f"{source.stem}_converted{extension}")
+    target = _unique_output_path(source, "converted", extension)
     try:
         with Image.open(source) as image:
             if output_format == "JPEG" and image.mode in {"RGBA", "LA", "P"}:
@@ -105,7 +116,7 @@ def resize_image(path: str | Path, max_width: int, max_height: int) -> Path:
     if max_width <= 0 or max_height <= 0:
         raise ValueError("Width and height must be greater than zero.")
     source = Path(path)
-    target = source.with_name(f"{source.stem}_resized{source.suffix}")
+    target = _unique_output_path(source, "resized", source.suffix)
     try:
         with Image.open(source) as opened:
             # Normalize EXIF orientation before sizing; otherwise a rotated

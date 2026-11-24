@@ -78,6 +78,23 @@ class ImageEngineTests(unittest.TestCase):
                 self.assertLessEqual(image.width, 20)
                 self.assertLessEqual(image.height, 20)
 
+    def test_conversion_and_resize_preserve_existing_generated_files(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "photo.png"
+            Image.new("RGB", (40, 20), "blue").save(source)
+
+            converted_path = Path(directory) / "photo_converted.jpg"
+            converted_path.write_bytes(b"keep previous conversion")
+            converted = convert_image(source, "JPEG")
+            self.assertEqual(converted.name, "photo_converted (1).jpg")
+            self.assertEqual(converted_path.read_bytes(), b"keep previous conversion")
+
+            resized_path = Path(directory) / "photo_resized.png"
+            resized_path.write_bytes(b"keep previous resize")
+            resized = resize_image(source, 10, 10)
+            self.assertEqual(resized.name, "photo_resized (1).png")
+            self.assertEqual(resized_path.read_bytes(), b"keep previous resize")
+
     def test_resize_applies_exif_orientation_before_enforcing_bounds(self):
         with TemporaryDirectory() as directory:
             source = Path(directory) / "portrait.jpg"
