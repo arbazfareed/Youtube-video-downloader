@@ -147,6 +147,42 @@ class RequestOptionTests(unittest.TestCase):
             with self.subTest(values=values), self.assertRaises(ValueError):
                 RetryPolicy(**values)
 
+    def test_custom_headers_are_stripped_on_cross_origin_redirect(self):
+        from download_engine import _strip_custom_headers_on_cross_origin_redirect
+
+        original = requests.Request(
+            "GET", "https://origin.example/file", headers={"X-Api-Key": "secret"}
+        ).prepare()
+        redirected = requests.Request(
+            "GET", "https://cdn.example/file", headers={"X-Api-Key": "secret"}
+        ).prepare()
+        response = requests.Response()
+        response.request = original
+
+        _strip_custom_headers_on_cross_origin_redirect(
+            redirected, response, {"X-Api-Key": "secret"}
+        )
+
+        self.assertNotIn("X-Api-Key", redirected.headers)
+
+    def test_custom_headers_remain_on_same_origin_redirect(self):
+        from download_engine import _strip_custom_headers_on_cross_origin_redirect
+
+        original = requests.Request(
+            "GET", "https://origin.example/file", headers={"X-Api-Key": "secret"}
+        ).prepare()
+        redirected = requests.Request(
+            "GET", "https://origin.example/other", headers={"X-Api-Key": "secret"}
+        ).prepare()
+        response = requests.Response()
+        response.request = original
+
+        _strip_custom_headers_on_cross_origin_redirect(
+            redirected, response, {"X-Api-Key": "secret"}
+        )
+
+        self.assertEqual(redirected.headers["X-Api-Key"], "secret")
+
     def test_direct_download_uses_custom_headers_and_configured_attempt_count(self):
         session = Mock()
         session.headers = {}
