@@ -1540,18 +1540,23 @@ class DownloadEngineTests(unittest.TestCase):
 
             options = youtube_dl.call_args.args[0]
             self.assertFalse(options["noplaylist"])
-            self.assertEqual(options["ignoreerrors"], "only_download")
+            self.assertIs(options["ignoreerrors"], True)
             self.assertEqual(options["skip_playlist_after_errors"], 0)
             self.assertTrue(options["lazy_playlist"])
-            options["logger"].error("ERROR: Sign in to confirm you are not a bot")
+            options["logger"].error(
+                "ERROR: Sign in to confirm you are not a bot; browser cookie expired"
+            )
             self.assertIn(
                 (
                     "Downloading",
                     None,
-                    "Skipping unavailable playlist entry: ERROR: Sign in to confirm you are not a bot",
+                    "Skipping unavailable playlist entry: A playlist item needs a "
+                    "refreshed sign-in session; it was skipped. Continuing with "
+                    "remaining entries.",
                 ),
                 progress_events,
             )
+            self.assertNotIn("cookie expired", progress_events[-1][2])
             self.assertIn("playlist_title", options["outtmpl"]["default"])
             self.assertIn("playlist_index", options["outtmpl"]["default"])
 
