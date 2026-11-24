@@ -175,7 +175,7 @@ def download_verified_update(
 
 def update_ytdlp() -> tuple[str, str]:
     """Updates yt-dlp to the latest version. Returns (old_version, new_version)."""
-    import importlib
+    import importlib.metadata
     import subprocess
     import sys
     try:
@@ -200,11 +200,12 @@ def update_ytdlp() -> tuple[str, str]:
         error_msg = process.stderr.strip() or process.stdout.strip()
         raise UpdateError(f"yt-dlp update failed: {error_msg}")
 
+    # Read the installed distribution metadata, not the cached module attribute.
+    # Reloading yt_dlp alone leaves yt_dlp.version cached in sys.modules, so
+    # __version__ can still describe the pre-upgrade package.
     try:
-        import yt_dlp
-        importlib.reload(yt_dlp)
-        new_version = str(getattr(yt_dlp, "__version__", old_version))
-    except Exception:
+        new_version = importlib.metadata.version("yt-dlp")
+    except importlib.metadata.PackageNotFoundError:
         new_version = old_version
 
     return old_version, new_version
