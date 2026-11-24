@@ -341,7 +341,7 @@ class ApiTests(unittest.TestCase):
                 },
             )
         self.assertEqual(valid.status_code, 202)
-        submitted_job = submit.call_args.args[0]
+        submitted_job = submit.call_args.args[1]
         self.assertEqual(submitted_job.request.geo_bypass_country, "US")
 
         invalid = self.client.post(
