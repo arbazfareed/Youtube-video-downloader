@@ -8,6 +8,7 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from http.client import HTTPException
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -167,7 +168,7 @@ def download_verified_update(
             raise UpdateError("Update SHA-256 verification failed; the file was discarded.")
         os.replace(temporary_path, destination)
         return destination
-    except (OSError, URLError, TimeoutError) as error:
+    except (OSError, URLError, TimeoutError, HTTPException) as error:
         raise UpdateError(f"Could not download the update: {error}") from error
     finally:
         temporary_path.unlink(missing_ok=True)
