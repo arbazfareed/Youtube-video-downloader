@@ -435,7 +435,7 @@ def control_mobile_job(
         job.resume_event.set()
         job.status = "running"
     elif action == "cancel":
-        if job.status in {"completed", "failed", "cancelled"}:
+        if job.status in {"completed", "partial", "failed", "cancelled"}:
             raise HTTPException(status_code=409, detail="This job has already finished.")
         job.cancel_event.set()
         job.resume_event.set()
