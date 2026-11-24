@@ -226,6 +226,24 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.assertIn(self.mixin._in_app_playback_after, self.mixin.root.timers)
 
 
+    def test_stop_cancels_playback_poll_timer(self):
+        player = _FakePlayer(is_playing=True)
+        player.stop = MagicMock()
+        self.mixin._in_app_player = player
+        self.mixin._in_app_playback_after = self.mixin.root.after(
+            250, self.mixin._poll_in_app_playback
+        )
+
+        timer_id = self.mixin._in_app_playback_after
+        self.assertIn(timer_id, self.mixin.root.timers)
+
+        self.mixin._stop_in_app_player()
+
+        player.stop.assert_called_once()
+        self.assertNotIn(timer_id, self.mixin.root.timers)
+        self.assertIsNone(self.mixin._in_app_playback_after)
+
+
     def test_snapshots_use_unique_paths_and_preserve_previous_file(self):
         import tempfile
         from pathlib import Path
