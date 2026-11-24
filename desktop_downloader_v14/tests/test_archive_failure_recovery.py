@@ -14,8 +14,10 @@ class _EventsHarness(EventsMixin):
     def __init__(self, output: Path) -> None:
         self.events = queue.Queue()
         self.download_options = {
-            "auto_extract": True,
-            "cloud_provider": "local",
+            "job-archive": {
+                "auto_extract": True,
+                "cloud_provider": "local",
+            }
         }
         self.verified_checksums = {}
         self.diagnostics = []
@@ -39,9 +41,10 @@ class AutoExtractFailureRecoveryTests(unittest.TestCase):
             ), patch(
                 "app_events.extract_archive",
                 side_effect=RuntimeError("unsupported compression method"),
-            ):
+            ) as extract:
                 harness._job_finished("job-archive", future)
 
+            extract.assert_called_once_with(archive)
             queued = []
             while not harness.events.empty():
                 queued.append(harness.events.get_nowait())
@@ -58,7 +61,10 @@ class AutoExtractFailureRecoveryTests(unittest.TestCase):
             self.assertIn("retry extraction manually", warning[2])
             self.assertEqual(archive.read_bytes(), b"valid downloaded bytes")
             self.assertEqual(harness.diagnostics, [])
-            self.assertEqual(harness.download_options["archive_extract_warning"], warning[2])
+            self.assertEqual(
+                harness.download_options["job-archive"]["archive_extract_warning"],
+                warning[2],
+            )
 
 
 if __name__ == "__main__":
