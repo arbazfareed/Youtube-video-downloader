@@ -253,7 +253,7 @@ class EventsMixin:
                         self.overall_progress.stop()
                         self.overall_progress.configure(mode="determinate", value=100)
                         summary = f"{status} - {display_detail}"
-                        if skipped_playlist_items:
+                        if skipped_playlist_items and status == "Complete":
                             skipped_count = len(set(skipped_playlist_items))
                             summary += (
                                 f" | {skipped_count} playlist error(s) skipped; "
