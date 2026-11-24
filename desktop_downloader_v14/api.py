@@ -331,7 +331,7 @@ def get_job(job_id: str) -> dict[str, Any]:
 @app.post("/jobs/{job_id}/cancel", dependencies=[Depends(_authorized)])
 def cancel_job(job_id: str) -> dict[str, Any]:
     job = _get_job(job_id)
-    if job.status in {"completed", "failed", "cancelled"}:
+    if job.status in {"completed", "partial", "failed", "cancelled"}:
         raise HTTPException(status_code=409, detail="This job has already finished.")
     job.cancel_event.set()
     job.resume_event.set()
