@@ -188,5 +188,42 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
             self.mixin._end_in_app_control_interaction.assert_called_once()
 
 
+    def test_replay_after_end_restarts_playback_polling(self):
+        from types import SimpleNamespace
+
+        ended, playing, error = object(), object(), object()
+        current_state = {"value": ended}
+        player = _FakePlayer(active_track=1, is_playing=False)
+        player.get_state = lambda: current_state["value"]
+        player.get_length = lambda: 60000
+        player.play = lambda: setattr(player, "_is_playing", True) or 0
+        self.mixin._in_app_player = player
+        self.mixin._in_app_player_window = MagicMock()
+        self.mixin._in_app_vlc = SimpleNamespace(
+            State=SimpleNamespace(Ended=ended, Playing=playing, Error=error)
+        )
+        self.mixin._in_app_duration = _FakeTkVar("")
+        self.mixin._in_app_current_time = _FakeTkVar("")
+        self.mixin._in_app_position_var = _FakeTkVar(0)
+        self.mixin._in_app_playback_button = MagicMock()
+        self.mixin._in_app_player_status = _FakeTkVar("")
+        self.mixin._in_app_ab_loop = {"A": None, "B": None}
+        self.mixin._draw_in_app_timeline = MagicMock()
+        self.mixin._refresh_in_app_audio_tracks = MagicMock()
+        self.mixin._refresh_in_app_subtitle_tracks = MagicMock()
+        self.mixin._show_in_app_controls = MagicMock()
+        self.mixin._set_in_app_launcher_buttons = MagicMock()
+        self.mixin._in_app_playback_after = "stale-fired-callback"
+
+        self.mixin._poll_in_app_playback()
+        self.assertIsNone(self.mixin._in_app_playback_after)
+        self.assertEqual(self.mixin.root.timers, {})
+
+        current_state["value"] = playing
+        self.mixin._toggle_in_app_playback()
+        self.assertIsNotNone(self.mixin._in_app_playback_after)
+        self.assertIn(self.mixin._in_app_playback_after, self.mixin.root.timers)
+
+
 if __name__ == "__main__":
     unittest.main()
