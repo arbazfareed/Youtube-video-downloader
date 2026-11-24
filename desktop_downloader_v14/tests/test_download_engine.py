@@ -1515,7 +1515,6 @@ class DownloadEngineTests(unittest.TestCase):
             directory = Path(folder)
             (directory / "archive.bin.part").write_bytes(b"ab")
             session = _RecordingSession(
-                _ParallelProbeResponse(),
                 _RangeResponse(b"cd", 2, 3, 6),
                 _RangeResponse(b"ef", 4, 5, 6),
             )
@@ -1534,7 +1533,6 @@ class DownloadEngineTests(unittest.TestCase):
             self.assertEqual(
                 session.request_headers,
                 [
-                    {"Range": "bytes=0-0"},
                     {"Range": "bytes=2-"},
                     {"Range": "bytes=4-"},
                 ],
