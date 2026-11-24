@@ -585,17 +585,17 @@ class FilenameAndStorageChecklistTests(unittest.TestCase):
             source = Path(folder) / "output.part"
             destination = Path(folder) / "output.bin"
             source.write_bytes(b"complete")
-            replace = Path.replace
+            real_link = os.link
             attempts = 0
 
-            def locked_twice(path: Path, target: Path) -> Path:
+            def locked_twice(path: Path, target: Path) -> None:
                 nonlocal attempts
                 attempts += 1
                 if attempts < 3:
                     raise PermissionError("file is temporarily locked")
-                return replace(path, target)
+                return real_link(path, target)
 
-            with patch.object(Path, "replace", locked_twice):
+            with patch("download_engine.os.link", side_effect=locked_twice):
                 _replace_with_retry(source, destination, threading.Event())
 
             self.assertEqual(attempts, 3)
@@ -608,9 +608,8 @@ class FilenameAndStorageChecklistTests(unittest.TestCase):
             destination = Path(folder) / "output.bin"
             source.write_bytes(b"complete")
 
-            with patch.object(
-                Path,
-                "replace",
+            with patch(
+                "download_engine.os.link",
                 side_effect=PermissionError("file remains locked"),
             ):
                 with self.assertRaisesRegex(PermissionError, "remains locked"):
