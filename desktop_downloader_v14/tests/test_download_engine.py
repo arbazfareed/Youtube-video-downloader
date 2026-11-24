@@ -41,6 +41,40 @@ from torrent_engine import _find_aria2, download_torrent, is_torrent_url
 import requests
 
 
+class DownloadFinalizationRaceTests(unittest.TestCase):
+    def test_final_publish_preserves_file_created_after_target_check(self):
+        import os
+        from download_engine import _claim_target, _replace_with_retry
+
+        with TemporaryDirectory() as folder:
+            directory = Path(folder)
+            partial = directory / "archive.zip.part"
+            partial.write_bytes(b"completed download")
+            destination = _claim_target(directory, "archive.zip")
+            real_link = os.link
+            competitor_created = False
+
+            def create_competitor_once(source, target):
+                nonlocal competitor_created
+                if target == destination and not competitor_created:
+                    competitor_created = True
+                    target.write_bytes(b"another process file")
+                return real_link(source, target)
+
+            try:
+                with patch("download_engine.os.link", side_effect=create_competitor_once):
+                    result = _replace_with_retry(
+                        partial, destination, threading.Event()
+                    )
+                self.assertTrue(competitor_created)
+                self.assertEqual(destination.read_bytes(), b"another process file")
+                self.assertEqual(result.name, "archive (1).zip")
+                self.assertEqual(result.read_bytes(), b"completed download")
+                self.assertFalse(partial.exists())
+            finally:
+                _release_target(result if "result" in locals() else destination)
+
+
 class Mp3ConversionSafetyTests(unittest.TestCase):
     def test_conversion_preserves_existing_mp3_and_uses_unique_output(self):
         from download_engine import _convert_to_mp3_if_needed
