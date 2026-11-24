@@ -1964,7 +1964,10 @@ def _download_with_ytdlp(
     if playlist_scope != "single video":
         if playlist_items:
             options["playlist_items"] = playlist_items
-        options["ignoreerrors"] = "only_download"
+        # Playlist entry extraction can fail after a browser cookie/session
+        # expires. Ignore per-entry extraction AND download errors so yt-dlp
+        # continues processing later entries instead of aborting the playlist.
+        options["ignoreerrors"] = True
         options["skip_playlist_after_errors"] = 0
         options["lazy_playlist"] = True
 
@@ -1972,15 +1975,32 @@ def _download_with_ytdlp(
             def debug(self, _message: str) -> None:
                 pass
 
-            def warning(self, message: str) -> None:
+            def warning(self, _message: str) -> None:
                 pass
 
             def error(self, message: str) -> None:
                 playlist_errors.append(message)
+                lowered = message.casefold()
+                if any(
+                    marker in lowered
+                    for marker in (
+                        "sign in", "login", "logged in", "cookie",
+                        "authentication", "not a bot", "session expired",
+                    )
+                ):
+                    details = (
+                        "A playlist item needs a refreshed sign-in session; "
+                        "it was skipped. Continuing with remaining entries."
+                    )
+                else:
+                    details = (
+                        "A playlist item is unavailable; it was skipped. "
+                        "Continuing with remaining entries."
+                    )
                 progress(
                     "Downloading",
                     None,
-                    f"Skipping unavailable playlist entry: {message}",
+                    f"Skipping unavailable playlist entry: {details}",
                 )
 
         options["logger"] = PlaylistLogger()
