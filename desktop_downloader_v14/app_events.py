@@ -47,9 +47,23 @@ class EventsMixin:
                     integrity_path, "sha256"
                 )
             if options.get("auto_extract"):
-                extracted_folder = extract_archive(Path(result))
-                if extracted_folder is not None:
-                    result = str(extracted_folder)
+                try:
+                    extracted_folder = extract_archive(Path(result))
+                except Exception as error:
+                    # Extraction is optional post-processing. Keep the verified
+                    # downloaded archive and finish the download job as Partial
+                    # instead of losing its output behind a generic Failed state.
+                    options["archive_extract_warning"] = (
+                        f"Archive extraction failed. The downloaded archive was "
+                        f"preserved at {result}. You can retry extraction manually. "
+                        f"Details: {error}"
+                    )
+                    self.events.put(
+                        ("archive_extract_warning", job_id, options["archive_extract_warning"])
+                    )
+                else:
+                    if extracted_folder is not None:
+                        result = str(extracted_folder)
             cloud_provider = options.get("cloud_provider", "local")
             if cloud_provider != "local":
                 staging = options["destination"]
@@ -78,7 +92,7 @@ class EventsMixin:
             self.events.put(("finished", job_id, "Failed", str(error)))
         else:
             partial_summary = options.get("playlist_partial_summary", "")
-            final_status = "Partial" if partial_summary else "Complete"
+            final_status = "Partial" if (partial_summary or options.get("archive_extract_warning")) else "Complete"
             self.events.put(("finished", job_id, final_status, result))
 
     @staticmethod
