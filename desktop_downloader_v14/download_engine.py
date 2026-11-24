@@ -1314,6 +1314,16 @@ def _convert_to_mp3_if_needed(target: Path, mode: str) -> Path:
     return mp3_target
 
 
+def _range_download_validator(headers: Mapping[str, str]) -> str:
+    etag = headers.get("ETag", "").strip()
+    if etag and not etag.lstrip().startswith("W/"):
+        return "etag:" + etag
+    last_modified = headers.get("Last-Modified", "").strip()
+    if last_modified:
+        return "last-modified:" + last_modified
+    return ""
+
+
 def _download_direct(
     url: str,
     directory: Path,
@@ -1390,13 +1400,7 @@ def _download_direct(
                         total = int(match.group(3))
                         candidate_name = _response_filename(probe)
                         candidate = directory / candidate_name
-                        validator = (
-                            "etag:" + probe.headers["ETag"]
-                            if probe.headers.get("ETag")
-                            else "last-modified:" + probe.headers["Last-Modified"]
-                            if probe.headers.get("Last-Modified")
-                            else ""
-                        )
+                        validator = _range_download_validator(probe.headers)
                         manifest_path = probe.headers.get(DELTA_MANIFEST_HEADER, "").strip()
                         if manifest_path and candidate.is_file():
                             delta_info = (
