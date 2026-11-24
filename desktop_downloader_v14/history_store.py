@@ -50,6 +50,7 @@ def normalize_url(url: str) -> str:
     return parsed._replace(
         scheme=scheme,
         netloc=f"{userinfo}{hostname}",
+        path=parsed.path or ("/" if scheme in {"http", "https"} and hostname else ""),
         fragment="",
     ).geturl()
 
