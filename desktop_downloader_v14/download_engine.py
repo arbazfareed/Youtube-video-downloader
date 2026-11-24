@@ -1345,29 +1345,50 @@ def _convert_to_mp3_if_needed(target: Path, mode: str) -> Path:
             "Install or bundle FFmpeg and retry; the original download was kept."
         )
     ffmpeg_bin = ffmpeg_dir / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
-    # Claim a collision-free output before invoking FFmpeg. Never use -y:
-    # a pre-existing user's MP3 must not be silently overwritten.
+    # Reserve the final name for this process, but let FFmpeg write only into
+    # a private temporary directory. A competing process can still create the
+    # reserved final path, so publish with an atomic no-overwrite hard link.
     mp3_target = _claim_target(target.parent, target.stem + ".mp3")
     try:
-        try:
-            import subprocess
-            completed = subprocess.run(
-                [str(ffmpeg_bin), "-n", "-i", str(target), "-vn", "-acodec", "libmp3lame", "-q:a", "2", str(mp3_target)],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            if not mp3_target.is_file() or mp3_target.stat().st_size == 0:
-                raise RuntimeError("FFmpeg completed without creating a valid MP3 file.")
-        except Exception as error:
-            mp3_target.unlink(missing_ok=True)
-            detail = getattr(error, "stderr", None)
-            if isinstance(detail, bytes):
-                detail = detail.decode("utf-8", errors="replace")
-            detail = (detail or str(error)).strip()
-            raise RuntimeError(
-                f"MP3 conversion failed; the original download was kept. {detail}"
-            ) from error
+        import subprocess
+        import tempfile
+
+        with tempfile.TemporaryDirectory(
+            prefix=f".{target.stem}.mp3-convert-",
+            dir=target.parent,
+        ) as temporary_directory:
+            temporary_mp3 = Path(temporary_directory) / "converted.mp3"
+            try:
+                subprocess.run(
+                    [
+                        str(ffmpeg_bin), "-n", "-i", str(target), "-vn",
+                        "-acodec", "libmp3lame", "-q:a", "2", str(temporary_mp3),
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                if not temporary_mp3.is_file() or temporary_mp3.stat().st_size == 0:
+                    raise RuntimeError("FFmpeg completed without creating a valid MP3 file.")
+            except Exception as error:
+                detail = getattr(error, "stderr", None)
+                if isinstance(detail, bytes):
+                    detail = detail.decode("utf-8", errors="replace")
+                detail = (detail or str(error)).strip()
+                raise RuntimeError(
+                    f"MP3 conversion failed; the original download was kept. {detail}"
+                ) from error
+
+            while True:
+                try:
+                    # Atomic publication fails rather than replacing a file
+                    # created by another process after our reservation check.
+                    os.link(temporary_mp3, mp3_target)
+                    break
+                except FileExistsError:
+                    _release_target(mp3_target)
+                    mp3_target = _final_target(mp3_target)
+
         target.unlink(missing_ok=True)
         return mp3_target
     finally:
