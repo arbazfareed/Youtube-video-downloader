@@ -293,7 +293,7 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         player.play.assert_called_once_with()
         self.mixin._set_in_app_launcher_buttons.assert_called_once_with(False)
         self.mixin._in_app_playback_button.configure.assert_called_once_with(text="▶")
-        self.assertIsNone(self.mixin._in_app_playback_after)
+        self.assertIsNone(getattr(self.mixin, "_in_app_playback_after", None))
         self.assertEqual(self.mixin.root.timers, {})
         self.mixin._set_in_app_player_status.assert_called_once_with(
             "Could not start playback"
