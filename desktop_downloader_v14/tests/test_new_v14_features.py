@@ -489,6 +489,33 @@ class TestNewV14Features(unittest.TestCase):
             self.assertNotEqual(first, second)
             self.assertEqual(run.call_count, 2)
 
+    def test_thumbnail_retries_at_start_for_subsecond_video(self) -> None:
+        from app_support import extract_video_thumbnail
+        import subprocess
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "tiny.mp4"
+            source.write_bytes(b"short clip")
+            ffmpeg_directory = root / "ffmpeg"
+            ffmpeg_directory.mkdir()
+            (ffmpeg_directory / "ffmpeg").write_bytes(b"fake ffmpeg")
+
+            def fake_run(command, **_kwargs):
+                if "00:00:01" in command:
+                    return subprocess.CompletedProcess(command, 1, stdout="", stderr="seek past EOF")
+                Path(command[-1]).write_bytes(b"valid thumbnail")
+                return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+            with patch("app_support.subprocess.run", side_effect=fake_run) as run:
+                thumbnail = extract_video_thumbnail(
+                    source, destination=root / "tiny.png", ffmpeg_directory=ffmpeg_directory
+                )
+
+            self.assertEqual(thumbnail, root / "tiny.png")
+            self.assertEqual(run.call_count, 2)
+            self.assertEqual(run.call_args_list[1].args[0][run.call_args_list[1].args[0].index("-ss") + 1], "00:00:00")
+
     def test_extract_video_thumbnail_helper(self) -> None:
         from app_support import extract_video_thumbnail
 
