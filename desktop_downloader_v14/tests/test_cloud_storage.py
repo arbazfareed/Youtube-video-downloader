@@ -30,6 +30,28 @@ class CloudStorageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "cannot contain"):
             cloud_storage._remote_path("../outside", "file.bin")
 
+    def test_folder_upload_skips_symlinks_to_files_outside_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            selected = root / "selected"
+            selected.mkdir()
+            inside = selected / "inside.txt"
+            inside.write_text("inside", encoding="utf-8")
+            outside = root / "private.txt"
+            outside.write_text("outside", encoding="utf-8")
+            link = selected / "outside-link.txt"
+            try:
+                link.symlink_to(outside)
+            except (OSError, NotImplementedError):
+                self.skipTest("File symlinks are unavailable on this platform")
+
+            with patch("cloud_storage._upload_s3", side_effect=lambda path, relative, prefix: relative) as upload:
+                results = cloud_storage.upload_path(selected, "s3")
+
+            self.assertEqual(results, ["inside.txt"])
+            self.assertEqual(upload.call_count, 1)
+            self.assertEqual(upload.call_args.args[0], inside)
+
     def test_playlist_upload_source_includes_all_staged_files(self):
         with tempfile.TemporaryDirectory() as directory:
             staging = Path(directory) / "staging"
