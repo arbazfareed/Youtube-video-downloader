@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import ctypes
+import errno
+import os
 import shutil
 import stat
 import tarfile
@@ -85,6 +88,39 @@ def _extract_rar(archive_path: Path, target: Path) -> None:
                     _copy_member(source, destination)
 
 
+def _publish_directory_no_replace(source: Path, destination: Path) -> None:
+    """Atomically publish a directory without replacing an existing path."""
+    if os.name == "nt":
+        # Windows rename refuses to replace an existing destination.
+        os.rename(source, destination)
+        return
+
+    source_bytes = os.fsencode(source)
+    destination_bytes = os.fsencode(destination)
+    if sys_platform := __import__("sys").platform:
+        if sys_platform.startswith("linux"):
+            libc = ctypes.CDLL(None, use_errno=True)
+            renameat2 = getattr(libc, "renameat2", None)
+            if renameat2 is None:
+                raise OSError(errno.ENOTSUP, "No safe no-replace directory rename available")
+            renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+            renameat2.restype = ctypes.c_int
+            result = renameat2(-100, source_bytes, -100, destination_bytes, 1)
+        elif sys_platform == "darwin":
+            libc = ctypes.CDLL(None, use_errno=True)
+            renamex_np = getattr(libc, "renamex_np", None)
+            if renamex_np is None:
+                raise OSError(errno.ENOTSUP, "No safe no-replace directory rename available")
+            renamex_np.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+            renamex_np.restype = ctypes.c_int
+            result = renamex_np(source_bytes, destination_bytes, 4)
+        else:
+            raise OSError(errno.ENOTSUP, "No safe no-replace directory rename available")
+    if result != 0:
+        error_number = ctypes.get_errno()
+        raise OSError(error_number, os.strerror(error_number), str(destination))
+
+
 def extract_archive(path: Path) -> Path | None:
     archive_path = path.expanduser().resolve()
     if not archive_path.is_file():
@@ -126,5 +162,5 @@ def extract_archive(path: Path) -> Path | None:
             _extract_tar(archive_path, staging)
         elif archive_type == "rar":
             _extract_rar(archive_path, staging)
-        staging.rename(destination)
+        _publish_directory_no_replace(staging, destination)
     return destination
