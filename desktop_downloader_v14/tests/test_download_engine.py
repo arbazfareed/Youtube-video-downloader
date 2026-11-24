@@ -182,10 +182,9 @@ class _FakeHistory:
 
 
 class _FakeResponse:
-    status_code = 206
+    status_code = 200
     headers = {
         "Content-Length": "3",
-        "Content-Range": "bytes 3-5/6",
         "Content-Type": "application/octet-stream",
     }
     url = "https://example.org/archive.bin"
@@ -244,6 +243,10 @@ class _FakeSession:
 
     def get(self, _url, headers, **_kwargs):
         self.headers = headers
+        if headers.get("Range") == "bytes=0-0":
+            return _ParallelProbeResponse()
+        if headers.get("Range", "").startswith("bytes=3-"):
+            return _RangeResponse(b"def", 3, 5, 6)
         return _FakeResponse()
 
     def close(self):
