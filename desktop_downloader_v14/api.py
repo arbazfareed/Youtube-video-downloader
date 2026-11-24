@@ -132,7 +132,14 @@ def _get_job(job_id: str) -> ApiJob:
     return job
 
 
+def _check_job_cancelled(job: ApiJob) -> None:
+    """Honor API cancellation between download and post-processing stages."""
+    if job.cancel_event.is_set():
+        raise DownloadCancelled("Download cancelled by user.")
+
+
 def _run_job(job: ApiJob) -> None:
+    _check_job_cancelled(job)
     job.status = "running"
 
     def report(state: str, percent: float | None, details: str) -> None:
@@ -166,15 +173,18 @@ def _run_job(job: ApiJob) -> None:
                 request.retry_max_delay,
             ),
         )
+        _check_job_cancelled(job)
         if request.auto_extract:
             from extract import extract_archive
 
             extracted = extract_archive(Path(job.result))
             if extracted is not None:
                 job.result = str(extracted)
+            _check_job_cancelled(job)
         if request.cloud_provider.lower() != "local":
             from cloud_storage import select_upload_source, upload_path
 
+            _check_job_cancelled(job)
             try:
                 remote_paths = upload_path(
                     select_upload_source(Path(job.result), Path(request.output)),
@@ -186,6 +196,10 @@ def _run_job(job: ApiJob) -> None:
                     f"Cloud upload failed; the downloaded copy remains at {request.output}: {error}"
                 ) from error
             job.result = "; ".join(remote_paths)
+            # Cloud providers may not expose a cancellable upload call. If the
+            # request arrives while upload is in flight, preserve staging and
+            # report cancellation rather than silently claiming the job finished.
+            _check_job_cancelled(job)
             try:
                 shutil.rmtree(request.output)
             except OSError as error:
