@@ -307,6 +307,9 @@ class UiMixin:
         ttk.Button(add_buttons, text=self._t("Playlist items"), command=self.open_playlist_selection_dialog).pack(
             side="left", padx=(6, 0)
         )
+        ttk.Button(add_buttons, text=self._t("Format tips"), command=self.show_format_tips).pack(
+            side="left", padx=(6, 0)
+        )
         ttk.Button(add_buttons, text=self._t("Batch"), command=self.open_batch_dialog).pack(
             side="left", padx=(6, 0)
         )
@@ -735,7 +738,8 @@ class UiMixin:
             (self._t("Source"), self.source, ("Auto", "Direct file", "Supported site", "Torrent/magnet")),
             (self._t("Media"), self.mode, ("Video", "Best audio", "MP3 audio", "Image gallery")),
             (self._t("Resolution"), self.quality, (
-                "Best available", "8K (4320p)", "5K (2880p)", "4K (2160p)",
+                "Best available", "Smart: Balanced 1080p", "Smart: Smaller file (720p)",
+                "Smart: MP4 compatible", "Smart: Fastest", "8K (4320p)", "5K (2880p)", "4K (2160p)",
                 "1440p (2K)", "1080p (Full HD)", "720p (HD)", "480p",
                 "360p", "240p", "144p",
             )),
