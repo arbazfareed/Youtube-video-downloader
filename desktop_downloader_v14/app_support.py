@@ -189,14 +189,18 @@ def extract_video_thumbnail(
     if destination.is_file() and destination.stat().st_size > 0:
         return destination
     try:
-        cmd = [
-            str(ffmpeg), "-hide_banner", "-loglevel", "error", "-nostdin",
-            "-y", "-ss", "00:00:01", "-i", str(source),
-            "-vframes", "1", "-vf", "scale=320:-1", str(destination),
-        ]
-        res = subprocess.run(cmd, capture_output=True, check=False, timeout=8)
-        if res.returncode == 0 and destination.is_file() and destination.stat().st_size > 0:
-            return destination
+        # First try a representative frame at one second. Very short clips
+        # can end before that timestamp, so retry at the beginning if seeking
+        # fails or FFmpeg produces no usable frame.
+        for timestamp in ("00:00:01", "00:00:00"):
+            cmd = [
+                str(ffmpeg), "-hide_banner", "-loglevel", "error", "-nostdin",
+                "-y", "-ss", timestamp, "-i", str(source),
+                "-vframes", "1", "-vf", "scale=320:-1", str(destination),
+            ]
+            res = subprocess.run(cmd, capture_output=True, check=False, timeout=8)
+            if res.returncode == 0 and destination.is_file() and destination.stat().st_size > 0:
+                return destination
     except Exception:
         pass
     return None
