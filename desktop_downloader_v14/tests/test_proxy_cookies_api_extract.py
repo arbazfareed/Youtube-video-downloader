@@ -79,6 +79,7 @@ class ProxyAndCookieTests(unittest.TestCase):
                 geo_bypass_country="us",
             )
         self.assertEqual(media.call_args.args[-2:], ("http://first.test:8080", "firefox"))
+        self.assertEqual(media.call_args.kwargs["geo_bypass_country"], "US")
 
     def test_direct_requests_use_selected_proxy_and_browser_cookie_jar(self):
         class Response:
