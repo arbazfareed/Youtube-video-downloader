@@ -1253,6 +1253,13 @@ def _parallel_range_download(
                 _wait_until_resumed(cancel_event, resume_event)
                 existing = segment_path.stat().st_size if segment_path.exists() else 0
                 if existing > expected_length:
+                    # The initial progress estimate counted this segment up to
+                    # its expected length. Remove that stale contribution before
+                    # redownloading, or progress can exceed 100%.
+                    with progress_lock:
+                        nonlocal_completed[0] = max(
+                            0, nonlocal_completed[0] - expected_length
+                        )
                     segment_path.unlink()
                     existing = 0
                 if existing == expected_length:
