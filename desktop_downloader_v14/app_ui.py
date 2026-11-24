@@ -304,6 +304,9 @@ class UiMixin:
             add_buttons, text=self._t("Add download"), command=self.add_download,
             style="Accent.TButton",
         ).pack(side="left")
+        ttk.Button(add_buttons, text=self._t("Playlist items"), command=self.open_playlist_selection_dialog).pack(
+            side="left", padx=(6, 0)
+        )
         ttk.Button(add_buttons, text=self._t("Batch"), command=self.open_batch_dialog).pack(
             side="left", padx=(6, 0)
         )
