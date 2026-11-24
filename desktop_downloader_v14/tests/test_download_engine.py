@@ -119,6 +119,69 @@ class Mp3ConversionSafetyTests(unittest.TestCase):
             self.assertEqual(ACTIVE_TARGETS, set())
 
 
+    def test_failed_ffmpeg_does_not_delete_competing_mp3(self):
+        import subprocess
+        from download_engine import _convert_to_mp3_if_needed
+
+        with TemporaryDirectory() as folder:
+            directory = Path(folder)
+            source = directory / "lecture.webm"
+            source.write_bytes(b"original media")
+            competitor = directory / "lecture.mp3"
+
+            def competitor_wins(command, **_kwargs):
+                competitor.write_bytes(b"another process audio")
+                raise subprocess.CalledProcessError(1, command, stderr="File exists")
+
+            with (
+                patch("download_engine._ffmpeg_directory", return_value=directory),
+                patch("subprocess.run", side_effect=competitor_wins),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "original download was kept"):
+                    _convert_to_mp3_if_needed(source, "mp3 audio")
+
+            self.assertEqual(competitor.read_bytes(), b"another process audio")
+            self.assertEqual(source.read_bytes(), b"original media")
+            self.assertEqual(ACTIVE_TARGETS, set())
+
+    def test_publish_collision_retries_without_overwriting_competing_mp3(self):
+        import os
+        from download_engine import _convert_to_mp3_if_needed
+
+        with TemporaryDirectory() as folder:
+            directory = Path(folder)
+            source = directory / "lecture.webm"
+            source.write_bytes(b"original media")
+            competitor = directory / "lecture.mp3"
+            real_link = os.link
+            competitor_created = False
+
+            def create_competitor_once(temp_source, destination):
+                nonlocal competitor_created
+                if destination == competitor and not competitor_created:
+                    competitor_created = True
+                    competitor.write_bytes(b"another process audio")
+                return real_link(temp_source, destination)
+
+            def fake_ffmpeg(command, **_kwargs):
+                Path(command[-1]).write_bytes(b"converted audio")
+                return SimpleNamespace(stderr="")
+
+            with (
+                patch("download_engine._ffmpeg_directory", return_value=directory),
+                patch("subprocess.run", side_effect=fake_ffmpeg),
+                patch("download_engine.os.link", side_effect=create_competitor_once),
+            ):
+                result = _convert_to_mp3_if_needed(source, "mp3 audio")
+
+            self.assertTrue(competitor_created)
+            self.assertEqual(competitor.read_bytes(), b"another process audio")
+            self.assertEqual(result.name, "lecture (1).mp3")
+            self.assertEqual(result.read_bytes(), b"converted audio")
+            self.assertFalse(source.exists())
+            self.assertEqual(ACTIVE_TARGETS, set())
+
+
 class RangeValidatorSelectionTests(unittest.TestCase):
     def test_uses_strong_etag_for_if_range(self):
         self.assertEqual(
