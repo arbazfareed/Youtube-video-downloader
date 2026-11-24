@@ -41,6 +41,50 @@ from torrent_engine import _find_aria2, download_torrent, is_torrent_url
 import requests
 
 
+class Mp3ConversionSafetyTests(unittest.TestCase):
+    def test_conversion_preserves_existing_mp3_and_uses_unique_output(self):
+        from download_engine import _convert_to_mp3_if_needed
+
+        with TemporaryDirectory() as folder:
+            source = Path(folder) / "lecture.webm"
+            source.write_bytes(b"original media")
+            existing = Path(folder) / "lecture.mp3"
+            existing.write_bytes(b"existing user audio")
+
+            def fake_ffmpeg(command, **_kwargs):
+                Path(command[-1]).write_bytes(b"converted audio")
+                return SimpleNamespace(stderr="")
+
+            with (
+                patch("download_engine._ffmpeg_directory", return_value=Path(folder)),
+                patch("subprocess.run", side_effect=fake_ffmpeg) as run,
+            ):
+                result = _convert_to_mp3_if_needed(source, "mp3 audio")
+
+            self.assertEqual(result.name, "lecture (1).mp3")
+            self.assertEqual(existing.read_bytes(), b"existing user audio")
+            self.assertEqual(result.read_bytes(), b"converted audio")
+            self.assertFalse(source.exists())
+            self.assertIn("-n", run.call_args.args[0])
+
+    def test_failed_conversion_keeps_source_and_releases_output_claim(self):
+        from download_engine import _convert_to_mp3_if_needed
+
+        with TemporaryDirectory() as folder:
+            source = Path(folder) / "lecture.webm"
+            source.write_bytes(b"original media")
+            with (
+                patch("download_engine._ffmpeg_directory", return_value=Path(folder)),
+                patch("subprocess.run", side_effect=RuntimeError("ffmpeg failed")),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "original download was kept"):
+                    _convert_to_mp3_if_needed(source, "mp3 audio")
+
+            self.assertTrue(source.is_file())
+            self.assertFalse((Path(folder) / "lecture.mp3").exists())
+            self.assertEqual(ACTIVE_TARGETS, set())
+
+
 class RangeValidatorSelectionTests(unittest.TestCase):
     def test_uses_strong_etag_for_if_range(self):
         self.assertEqual(
