@@ -330,6 +330,31 @@ class ApiTests(unittest.TestCase):
                 )
                 self.assertEqual(response.status_code, 422)
 
+    def test_api_geo_bypass_country_validation_returns_422_and_normalizes(self):
+        with patch.object(api._EXECUTOR, "submit") as submit:
+            valid = self.client.post(
+                "/jobs",
+                headers=self.headers,
+                json={
+                    "url": "https://example.test/video",
+                    "geo_bypass_country": "us",
+                },
+            )
+        self.assertEqual(valid.status_code, 202)
+        submitted_job = submit.call_args.args[0]
+        self.assertEqual(submitted_job.request.geo_bypass_country, "US")
+
+        invalid = self.client.post(
+            "/jobs",
+            headers=self.headers,
+            json={
+                "url": "https://example.test/video",
+                "geo_bypass_country": "U!",
+            },
+        )
+        self.assertEqual(invalid.status_code, 422)
+        self.assertIn("two-letter ISO country code", invalid.json()["detail"])
+
     def test_api_pause_resume_and_cancel_controls(self):
         with patch.object(api._EXECUTOR, "submit"):
             response = self.client.post(
