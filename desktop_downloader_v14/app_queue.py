@@ -38,11 +38,11 @@ class QueueMixin:
             if self._queue_filter == "downloading":
                 matches = status not in FINISHED_STATUSES
             elif self._queue_filter == "completed":
-                matches = status == "Complete"
+                matches = status in {"Complete", "Partial"}
             elif self._queue_filter == "media":
                 media_path = self._download_paths.get(job_id)
                 matches = (
-                    status == "Complete"
+                    status in {"Complete", "Partial"}
                     and media_path is not None
                     and media_path.suffix.lower() in MEDIA_EXTENSIONS
                 )
