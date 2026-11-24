@@ -561,10 +561,34 @@ class DownloadsMixin:
         )
         self._submit_download(job_id)
 
+    def show_format_tips(self) -> None:
+        from format_assistant import preset_details
+
+        label = self.quality.get().lower()
+        key = "best"
+        if "balanced" in label:
+            key = "balanced"
+        elif "smaller" in label:
+            key = "small"
+        elif "compatible" in label:
+            key = "compatible"
+        elif "fastest" in label:
+            key = "fast"
+        name, details = preset_details(key)
+        messagebox.showinfo("Format assistant", f"{name}\n\n{details}", parent=self.root)
+
     def _quality_key(self) -> str:
         label = self.quality.get().lower()
         if label.startswith("best"):
             return "best"
+        if "balanced" in label:
+            return "balanced"
+        if "smaller" in label:
+            return "small"
+        if "compatible" in label:
+            return "compatible"
+        if "fastest" in label:
+            return "fast"
         match = re.search(r"(\d{3,4}p)", label)
         if not match:
             raise ValueError(f"Unknown resolution option: {self.quality.get()}")
