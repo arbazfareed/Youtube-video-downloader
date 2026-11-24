@@ -581,6 +581,8 @@ class FilenameAndStorageChecklistTests(unittest.TestCase):
             self.assertEqual(target.name, "video name.mp4")
 
     def test_file_assembly_retries_transient_antivirus_permission_errors(self) -> None:
+        import os
+
         with TemporaryDirectory() as folder:
             source = Path(folder) / "output.part"
             destination = Path(folder) / "output.bin"
