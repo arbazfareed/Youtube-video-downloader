@@ -244,6 +244,33 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.assertIsNone(self.mixin._in_app_playback_after)
 
 
+    def test_stop_cancels_pending_audio_switch_and_allows_new_selection(self):
+        player = _FakePlayer(is_playing=True)
+        player.stop = MagicMock()
+        self.mixin._in_app_player = player
+        self.mixin._in_app_audio_track = _FakeTkVar("Hindi")
+        self.mixin._show_in_app_controls = MagicMock()
+        self.mixin._set_in_app_launcher_buttons = MagicMock()
+        self.mixin._in_app_playback_button = MagicMock()
+
+        pending_timer = self.mixin.root.after(250, lambda: self.fail(
+            "A stopped audio-switch callback must not run"
+        ))
+        self.mixin._in_app_audio_switch = {"target": 2, "after": pending_timer}
+
+        self.mixin._stop_in_app_player()
+
+        player.stop.assert_called_once()
+        self.assertNotIn(pending_timer, self.mixin.root.timers)
+        self.assertIsNone(self.mixin._in_app_audio_switch)
+
+        # A fresh selection after Stop must create a new, independent request.
+        self.mixin._choose_in_app_audio_track(1)
+        self.assertEqual(player.set_track_calls, [1])
+        self.assertEqual(self.mixin._in_app_audio_switch["target"], 1)
+        self.assertIsNotNone(self.mixin._in_app_audio_switch["after"])
+
+
     def test_snapshots_use_unique_paths_and_preserve_previous_file(self):
         import tempfile
         from pathlib import Path
