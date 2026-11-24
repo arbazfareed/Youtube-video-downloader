@@ -47,6 +47,19 @@ class DownloadStatisticsTests(unittest.TestCase):
             ),
         )
 
+    def test_partial_downloads_are_terminal_not_active(self):
+        statistics = calculate_statistics([
+            _record("https://example.com/partial", "Partial"),
+            _record("https://example.com/complete", "Complete"),
+            _record("https://example.com/downloading", "Downloading"),
+        ])
+
+        self.assertEqual(statistics.total_downloads, 3)
+        self.assertEqual(statistics.completed, 1)
+        self.assertEqual(statistics.active, 1)
+        # Partial is terminal but not a fully completed download.
+        self.assertEqual(statistics.success_rate, 50.0)
+
     def test_empty_history_and_records_without_web_domains_are_safe(self):
         statistics = calculate_statistics(
             [_record("magnet:?xt=urn:btih:abc", "Queued")]
