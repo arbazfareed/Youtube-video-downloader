@@ -169,7 +169,13 @@ def upload_path(path: Path, provider: str, remote_folder: str = "") -> list[str]
     source = path.expanduser().resolve()
     if not source.exists():
         raise FileNotFoundError(f"Downloaded file or folder is missing: {source}")
-    files = sorted(item for item in source.rglob("*") if item.is_file()) if source.is_dir() else [source]
+    # A directory upload must stay within the selected tree. is_file() follows
+    # file symlinks, which could otherwise upload data outside that directory.
+    files = (
+        sorted(item for item in source.rglob("*") if item.is_file() and not item.is_symlink())
+        if source.is_dir()
+        else [source]
+    )
     if not files:
         raise RuntimeError("There are no downloaded files to upload.")
 
