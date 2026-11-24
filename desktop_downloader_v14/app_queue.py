@@ -214,7 +214,7 @@ class QueueMixin:
                 "source", "mode", "quality", "playlist_scope", "speed_mode",
                 "max_speed", "checksum_algorithm", "expected_checksum",
                 "browser_cookies", "auto_extract", "cloud_provider", "cloud_folder",
-                "integrity_path", "integrity_sha256",
+                "integrity_path", "integrity_sha256", "custom_headers",
             )
             if key in options
         }
@@ -251,7 +251,9 @@ class QueueMixin:
             "expected_checksum": saved.get("expected_checksum", ""),
             "proxy": self.proxy_list.get().strip(),
             "browser_cookies": self.browser_cookies.get().lower(),
-            "custom_headers": {},
+            "custom_headers": saved.get("custom_headers", {})
+            if isinstance(saved.get("custom_headers", {}), dict)
+            else {},
             "retry_policy": RetryPolicy(
                 saved.get("retry_attempts", 10),
                 saved.get("retry_base_delay", 1.0),

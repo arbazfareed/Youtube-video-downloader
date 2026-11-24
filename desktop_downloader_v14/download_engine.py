@@ -1277,20 +1277,33 @@ def _convert_to_mp3_if_needed(target: Path, mode: str) -> Path:
         return target
     ffmpeg_dir = _ffmpeg_directory()
     if not ffmpeg_dir:
-        return target
+        raise RuntimeError(
+            "MP3 conversion requires FFmpeg, but FFmpeg was not found. "
+            "Install or bundle FFmpeg and retry; the original download was kept."
+        )
     ffmpeg_bin = ffmpeg_dir / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
     mp3_target = target.with_suffix(".mp3")
     try:
         import subprocess
-        subprocess.run(
+        completed = subprocess.run(
             [str(ffmpeg_bin), "-y", "-i", str(target), "-vn", "-acodec", "libmp3lame", "-q:a", "2", str(mp3_target)],
             check=True,
             capture_output=True,
+            text=True,
         )
-        target.unlink(missing_ok=True)
-        return mp3_target
-    except Exception:
-        return target
+        if not mp3_target.is_file() or mp3_target.stat().st_size == 0:
+            raise RuntimeError("FFmpeg completed without creating a valid MP3 file.")
+    except Exception as error:
+        mp3_target.unlink(missing_ok=True)
+        detail = getattr(error, "stderr", None)
+        if isinstance(detail, bytes):
+            detail = detail.decode("utf-8", errors="replace")
+        detail = (detail or str(error)).strip()
+        raise RuntimeError(
+            f"MP3 conversion failed; the original download was kept. {detail}"
+        ) from error
+    target.unlink(missing_ok=True)
+    return mp3_target
 
 
 def _download_direct(
