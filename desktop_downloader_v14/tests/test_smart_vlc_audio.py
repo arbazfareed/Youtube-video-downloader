@@ -302,5 +302,40 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
 
 
 
+    def test_ab_loop_default_endpoint_is_clamped_to_media_duration(self):
+        player = _FakePlayer(is_playing=True)
+        player.get_length = lambda: 60000
+        player.set_time = MagicMock()
+        self.mixin._in_app_player = player
+        self.mixin._in_app_player_window = MagicMock()
+        self.mixin._in_app_ab_loop = {"A": 59000, "B": None}
+        self.mixin._in_app_ab_loop_button = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        self.mixin._toggle_in_app_ab_loop()
+
+        self.assertEqual(self.mixin._in_app_ab_loop, {"A": 59000, "B": 60000})
+        player.set_time.assert_called_once_with(59000)
+
+    def test_ab_loop_rejects_a_point_at_media_end(self):
+        player = _FakePlayer(is_playing=True)
+        player.get_length = lambda: 60000
+        player.set_time = MagicMock()
+        self.mixin._in_app_player = player
+        self.mixin._in_app_player_window = MagicMock()
+        self.mixin._in_app_ab_loop = {"A": 60000, "B": None}
+        self.mixin._in_app_ab_loop_button = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        self.mixin._toggle_in_app_ab_loop()
+
+        self.assertEqual(self.mixin._in_app_ab_loop, {"A": 60000, "B": None})
+        player.set_time.assert_not_called()
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Loop point B must be after A; move A earlier."
+        )
+
+
+
 if __name__ == "__main__":
     unittest.main()

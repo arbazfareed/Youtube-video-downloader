@@ -165,6 +165,8 @@ class TestNewV14Features(unittest.TestCase):
         # Initial state: no loop
         app._in_app_ab_loop = {"A": None, "B": None}
         app._in_app_player.get_time.return_value = 5000  # 5.0 seconds
+        # A-B loop now reads the media duration to keep its endpoint valid.
+        app._in_app_player.get_length.return_value = 60000
 
         # Step 1: Click sets Point A
         MediaMixin._toggle_in_app_ab_loop(app)
