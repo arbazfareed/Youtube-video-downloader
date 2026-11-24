@@ -658,6 +658,7 @@ class MediaPlaybackTests(unittest.TestCase):
 
             with (
                 patch("app_media.sys.platform", "win32"),
+                patch("app_media.shutil.which", return_value=None),
                 patch("app_media.sys.frozen", True, create=True),
                 patch("app_media.sys.executable", str(executable)),
                 patch.dict("os.environ", {}, clear=True),
@@ -897,6 +898,7 @@ class MediaPlaybackTests(unittest.TestCase):
                     position.get.return_value = 0
                     with (
                         patch("app_media.sys.platform", "win32"),
+                        patch("app_media.shutil.which", return_value=None),
                         patch.dict("sys.modules", {"vlc": vlc_module}),
                         patch(
                             "app_media.tk.Toplevel",
