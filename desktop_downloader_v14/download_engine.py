@@ -1404,7 +1404,9 @@ def _download_direct(
     cookie_jar = load_cookies(browser_cookies)
     session = requests.Session()
     if custom_headers:
-        original_rebuild_auth = session.rebuild_auth
+        original_rebuild_auth = getattr(
+            session, "rebuild_auth", requests.Session.rebuild_auth
+        )
 
         def rebuild_auth_without_cross_origin_custom_headers(
             prepared_request, response
