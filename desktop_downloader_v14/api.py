@@ -139,8 +139,8 @@ def _check_job_cancelled(job: ApiJob) -> None:
 
 
 def _run_job(job: ApiJob) -> None:
-    _check_job_cancelled(job)
-    job.status = "running"
+    if not job.cancel_event.is_set():
+        job.status = "running"
 
     def report(state: str, percent: float | None, details: str) -> None:
         job.status = "paused" if not job.resume_event.is_set() else "running"
@@ -148,6 +148,7 @@ def _run_job(job: ApiJob) -> None:
         job.details = f"{state}: {details}" if details else state
 
     try:
+        _check_job_cancelled(job)
         request = job.request
         job.result = download_url(
             request.url,
