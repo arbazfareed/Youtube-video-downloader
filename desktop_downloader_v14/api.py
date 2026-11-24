@@ -175,12 +175,23 @@ def _run_job(job: ApiJob) -> None:
             ),
         )
         _check_job_cancelled(job)
+        extraction_failed = False
         if request.auto_extract:
             from extract import extract_archive
 
-            extracted = extract_archive(Path(job.result))
-            if extracted is not None:
-                job.result = str(extracted)
+            try:
+                extracted = extract_archive(Path(job.result))
+            except Exception as error:
+                # Extraction is optional: retain the completed archive and
+                # report a partial result rather than failing the API job.
+                extraction_failed = True
+                job.details = (
+                    f"Archive extraction failed; downloaded archive preserved at "
+                    f"{job.result}. Retry extraction manually. Details: {error}"
+                )
+            else:
+                if extracted is not None:
+                    job.result = str(extracted)
             _check_job_cancelled(job)
         if request.cloud_provider.lower() != "local":
             from cloud_storage import select_upload_source, upload_path
@@ -210,7 +221,7 @@ def _run_job(job: ApiJob) -> None:
                 )
         job.status = (
             "partial"
-            if job.details.startswith("Playlist partially complete:")
+            if extraction_failed or job.details.startswith("Playlist partially complete:")
             else "completed"
         )
         job.progress = 100.0
