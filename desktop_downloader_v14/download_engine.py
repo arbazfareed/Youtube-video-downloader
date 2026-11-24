@@ -2110,8 +2110,16 @@ def _download_with_ytdlp(
     playlist_partial_summary = ""
     if playlist_scope != "single video":
         entries = info.get("entries") if isinstance(info, dict) else None
-        if isinstance(entries, (list, tuple)):
-            total_entries = len(entries)
+        try:
+            total_entries = (
+                len(entries)
+                if entries is not None
+                and not isinstance(entries, (str, bytes, Mapping))
+                else 0
+            )
+        except (TypeError, ValueError):
+            total_entries = 0
+        if total_entries:
             successful_entries = min(total_entries, len(downloaded_playlist_items))
             skipped_entries = total_entries - successful_entries
             if successful_entries > 0 and skipped_entries > 0:
