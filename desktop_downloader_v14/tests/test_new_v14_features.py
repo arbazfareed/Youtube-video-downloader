@@ -22,12 +22,13 @@ class TestNewV14Features(unittest.TestCase):
         mock_proc.stderr = ""
 
         mock_ytdlp = MagicMock()
-        mock_ytdlp.__version__ = "2026.01.01"
+        # Simulate a stale already-imported module after pip updates the package.
+        mock_ytdlp.__version__ = "2025.12.01"
 
         with (
             patch("subprocess.run", return_value=mock_proc) as mock_run,
             patch.dict("sys.modules", {"yt_dlp": mock_ytdlp}),
-            patch("importlib.reload", return_value=mock_ytdlp),
+            patch("importlib.metadata.version", return_value="2026.01.01"),
         ):
             old_ver, new_ver = update_ytdlp()
             mock_run.assert_called_once()
