@@ -11,14 +11,21 @@ class SmartFormatPresetTests(unittest.TestCase):
             self.assertTrue(name)
             self.assertTrue(detail)
 
-    def test_size_preset_caps_at_720p(self):
-        self.assertIn("height<=720", _video_format_selector("small"))
+    def test_size_preset_caps_at_720p_without_unbounded_fallback(self):
+        selector = _video_format_selector("small")
+        self.assertIn("height<=720", selector)
+        self.assertNotRegex(selector, r"/best(?:$|/)")
 
-    def test_compatibility_preset_prefers_mp4(self):
-        self.assertIn("ext=mp4", _video_format_selector("compatible"))
+    def test_compatibility_preset_prefers_mp4_without_unbounded_fallback(self):
+        selector = _video_format_selector("compatible")
+        self.assertIn("ext=mp4", selector)
+        self.assertNotRegex(selector, r"/best(?:$|/)")
 
-    def test_fast_preset_uses_single_format_fallback(self):
-        self.assertNotIn("+bestaudio", _video_format_selector("fast"))
+    def test_fast_preset_uses_single_format_and_keeps_720p_cap(self):
+        selector = _video_format_selector("fast")
+        self.assertNotIn("+bestaudio", selector)
+        self.assertIn("height<=720", selector)
+        self.assertNotRegex(selector, r"/best(?:$|/)")
 
 
 if __name__ == "__main__":
