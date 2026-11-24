@@ -3186,6 +3186,15 @@ class MediaMixin:
         )
 
     def _stop_in_app_player(self) -> None:
+        # Stop the periodic UI poll as well; a stopped player must not keep
+        # scheduling callbacks until the window is closed.
+        after_id = getattr(self, "_in_app_playback_after", None)
+        if after_id is not None:
+            try:
+                self.root.after_cancel(after_id)
+            except tk.TclError:
+                pass
+        self._in_app_playback_after = None
         player = getattr(self, "_in_app_player", None)
         if player is not None:
             player.stop()
