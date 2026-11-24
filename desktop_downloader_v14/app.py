@@ -107,6 +107,7 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         self.mode = tk.StringVar(value="Video")
         self.quality = tk.StringVar(value="1080p (Full HD)")
         self.playlist_scope = tk.StringVar(value="Auto (from link)")
+        self.playlist_items = tk.StringVar(value=self.history.get_setting("playlist_items", ""))
         self.speed_mode = tk.StringVar(value="Fast")
         self.max_speed = tk.StringVar(value="Unlimited")
         self.global_max_speed = tk.StringVar(value="Unlimited")

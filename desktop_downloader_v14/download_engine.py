@@ -1640,6 +1640,7 @@ def _download_with_ytdlp(
     audio_languages: str = "all",
     download_subtitles: bool = False,
     subtitle_languages: str = "en,hi",
+    playlist_items: str = "",
 ) -> str:
     ffmpeg_directory = _ffmpeg_directory()
     if mode == "mp3 audio" and ffmpeg_directory is None:
@@ -1735,6 +1736,8 @@ def _download_with_ytdlp(
         options["js_runtimes"] = {"node": {}}
     playlist_errors: list[str] = []
     if playlist_scope != "single video":
+        if playlist_items:
+            options["playlist_items"] = playlist_items
         options["ignoreerrors"] = "only_download"
         options["skip_playlist_after_errors"] = 0
         options["lazy_playlist"] = True
@@ -1897,7 +1900,11 @@ def download_url(
     audio_languages: str = "all",
     download_subtitles: bool = False,
     subtitle_languages: str = "en,hi",
+    playlist_items: str = "",
 ) -> str:
+    from playlist_selection import normalize_playlist_items
+
+    playlist_items = normalize_playlist_items(playlist_items)
     custom_headers = parse_custom_headers(custom_headers)
     if not isinstance(retry_policy, RetryPolicy):
         raise ValueError("Retry policy must be a RetryPolicy instance.")
@@ -1992,6 +1999,7 @@ def download_url(
                             audio_languages=audio_languages,
                             download_subtitles=download_subtitles,
                             subtitle_languages=subtitle_languages,
+                            playlist_items=playlist_items,
                         )
                 else:
                     result = ""
@@ -2017,6 +2025,7 @@ def download_url(
                                     audio_languages=audio_languages,
                                     download_subtitles=download_subtitles,
                                     subtitle_languages=subtitle_languages,
+                            playlist_items=playlist_items,
                                 )
                                 break
                             except DownloadCancelled:

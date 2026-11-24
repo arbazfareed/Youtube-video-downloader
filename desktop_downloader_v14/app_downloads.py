@@ -89,6 +89,41 @@ class DownloadsMixin:
             return
         messagebox.showinfo("Link compatibility", format_analysis(result), parent=self.root)
 
+    def open_playlist_selection_dialog(self) -> None:
+        import tkinter as tk
+        from tkinter import ttk
+        from playlist_selection import normalize_playlist_items
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Playlist item selection")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+        value = tk.StringVar(value=self.playlist_items.get())
+        ttk.Label(dialog, text="Download only these playlist positions (1-based):").grid(
+            row=0, column=0, padx=14, pady=(14, 5), sticky="w"
+        )
+        entry = ttk.Entry(dialog, textvariable=value, width=42)
+        entry.grid(row=1, column=0, padx=14, sticky="ew")
+        ttk.Label(dialog, text="Examples: 1,4,7-10. Leave blank to download all.").grid(
+            row=2, column=0, padx=14, pady=6, sticky="w"
+        )
+
+        def apply_selection() -> None:
+            try:
+                normalized = normalize_playlist_items(value.get())
+            except ValueError as error:
+                messagebox.showerror("Invalid playlist selection", str(error), parent=dialog)
+                return
+            self.playlist_items.set(normalized)
+            self.history.set_setting("playlist_items", normalized)
+            dialog.destroy()
+
+        ttk.Button(dialog, text="Apply", command=apply_selection, style="Accent.TButton").grid(
+            row=3, column=0, padx=14, pady=12, sticky="e"
+        )
+        dialog.grab_set()
+        entry.focus_set()
+
     def add_download(self) -> None:
         url = self.url_entry.get().strip()
         mode = getattr(self, "mode", None)
@@ -246,6 +281,7 @@ class DownloadsMixin:
             "mode": self.mode.get().lower(),
             "quality": quality,
             "playlist_scope": self.playlist_scope.get().lower(),
+            "playlist_items": self.playlist_items.get().strip(),
             "speed_mode": self.speed_mode.get().lower(),
             "max_speed": max_speed,
             "checksum_algorithm": checksum_algorithm,
@@ -333,6 +369,7 @@ class DownloadsMixin:
             audio_languages=options.get("audio_languages", "all"),
             download_subtitles=options.get("download_subtitles", False),
             subtitle_languages=options.get("subtitle_languages", "en,hi"),
+            playlist_items=options.get("playlist_items", ""),
         )
         self._download_futures[job_id] = future
         future.add_done_callback(
