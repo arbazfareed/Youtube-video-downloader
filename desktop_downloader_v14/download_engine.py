@@ -487,10 +487,10 @@ def _safe_filename(filename: str) -> str:
 
 def _video_format_selector(quality: str) -> str:
     presets = {
-        "balanced": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-        "small": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
-        "compatible": "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]/best",
-        "fast": "best[height<=720]/best",
+        "balanced": "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+        "small": "bestvideo[height<=720]+bestaudio/best[height<=720]",
+        "compatible": "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]",
+        "fast": "best[height<=720]",
     }
     if quality in presets:
         return presets[quality]
