@@ -100,14 +100,17 @@ def convert_image(path: str | Path, target_format: str, quality: int = 90) -> Pa
 
 
 def resize_image(path: str | Path, max_width: int, max_height: int) -> Path:
-    from PIL import Image
+    from PIL import Image, ImageOps
 
     if max_width <= 0 or max_height <= 0:
         raise ValueError("Width and height must be greater than zero.")
     source = Path(path)
     target = source.with_name(f"{source.stem}_resized{source.suffix}")
     try:
-        with Image.open(source) as image:
+        with Image.open(source) as opened:
+            # Normalize EXIF orientation before sizing; otherwise a rotated
+            # portrait image can exceed the requested displayed dimensions.
+            image = ImageOps.exif_transpose(opened)
             image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
             if source.suffix.lower() in {".jpg", ".jpeg"} and image.mode not in {"RGB", "L"}:
                 image = image.convert("RGB")
