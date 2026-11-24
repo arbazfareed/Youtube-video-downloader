@@ -245,8 +245,16 @@ credentials directly in a shared script:
 
 - **Proxy:** Enter an `http://`, `https://`, `socks5://`, or `socks5h://` proxy
   URL in the Proxy box. Comma-separated proxies rotate across direct-download
-  retries and supported-site attempts. SOCKS proxies work through the included
-  Requests SOCKS extra. Torrent downloads do not use this proxy field.
+  retries and supported-site attempts. For automatic geo-restriction retries,
+  label regional exits once in the saved proxy pool, for example
+  `US=http://us-proxy.example:8080,GB=socks5h://gb-proxy.example:1080`.
+  When yt-dlp reports allowed country codes, matching labelled proxies are tried
+  first without a per-video prompt; remaining proxies are fallback candidates.
+  Country labels describe your proxy provider's exit region and are not verified
+  by the app. yt-dlp's built-in XFF hint is also used, but a hint alone does not
+  change your real IP. A working exit in an allowed country may be required.
+  SOCKS proxies work through the included Requests SOCKS extra. Torrent downloads
+  do not use this proxy field.
 - **Browser cookies:** Choose Chrome, Firefox, Edge, or Brave to reuse that
   browser's cookies for a download. Cookies are accessed locally, only when
   explicitly selected. The browser may need to be closed if its cookie database

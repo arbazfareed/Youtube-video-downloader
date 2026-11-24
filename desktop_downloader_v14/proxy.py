@@ -1,16 +1,30 @@
 from __future__ import annotations
 
+import re
 import threading
+from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 
-def parse_proxy_list(value: str | None) -> tuple[str, ...]:
+@dataclass(frozen=True)
+class ProxyEntry:
+    country: str | None
+    url: str
+
+
+def parse_proxy_entries(value: str | None) -> tuple[ProxyEntry, ...]:
     if not value or not value.strip():
         return ()
 
-    proxies = []
+    entries = []
     for candidate in value.split(","):
-        proxy = candidate.strip()
+        raw = candidate.strip()
+        country = None
+        proxy = raw
+        label, separator, remainder = raw.partition("=")
+        if separator and re.fullmatch(r"[A-Za-z]{2}", label.strip()):
+            country = label.strip().upper()
+            proxy = remainder.strip()
         try:
             parsed = urlsplit(proxy)
             valid_port = parsed.port is None or 1 <= parsed.port <= 65535
@@ -28,13 +42,19 @@ def parse_proxy_list(value: str | None) -> tuple[str, ...]:
                 "Proxy entries must use http://, https://, socks5://, or socks5h:// "
                 "and include a host and optional port."
             )
-        proxies.append(proxy)
-    return tuple(proxies)
+        entries.append(ProxyEntry(country, proxy))
+    return tuple(entries)
+
+
+def parse_proxy_list(value: str | None) -> tuple[str, ...]:
+    """Return proxy URLs, preserving the legacy public API."""
+    return tuple(entry.url for entry in parse_proxy_entries(value))
 
 
 class ProxyRotator:
     def __init__(self, value: str | None = None) -> None:
-        self._proxies = parse_proxy_list(value)
+        self._entries = parse_proxy_entries(value)
+        self._proxies = tuple(entry.url for entry in self._entries)
         self._index = 0
         self._lock = threading.Lock()
 
@@ -45,6 +65,25 @@ class ProxyRotator:
     @property
     def count(self) -> int:
         return len(self._proxies)
+
+    def ordered_urls(self, allowed_countries: tuple[str, ...] | list[str] = ()) -> list[str]:
+        """Rotate the pool and put country-tagged allowed exits first."""
+        if not self._entries:
+            return []
+        allowed = {country.upper() for country in allowed_countries}
+        with self._lock:
+            start = self._index
+            self._index = (self._index + 1) % len(self._entries)
+            rotated = list(self._entries[start:]) + list(self._entries[:start])
+        if not allowed:
+            return [entry.url for entry in rotated]
+        preferred = [entry.url for entry in rotated if entry.country in allowed]
+        unlabelled = [entry.url for entry in rotated if entry.country is None]
+        other_regions = [
+            entry.url for entry in rotated
+            if entry.country is not None and entry.country not in allowed
+        ]
+        return preferred + unlabelled + other_regions
 
     def next_requests_proxy(self) -> dict[str, str] | None:
         if not self._proxies:

@@ -1519,7 +1519,7 @@ class UiMixin:
             row=0, column=1, sticky="ew", padx=10, pady=7
         )
         ttk.Label(
-            connection, text="HTTP or SOCKS5 address. Separate retry addresses with commas.",
+            connection, text="HTTP or SOCKS5 address; comma-separate proxies. For geo retry, label exits once: US=http://proxy:8080,GB=socks5h://proxy:1080.",
             wraplength=540,
         ).grid(row=1, column=1, sticky="w", padx=10, pady=(0, 10))
         ttk.Label(connection, text=self._t("Browser cookies")).grid(

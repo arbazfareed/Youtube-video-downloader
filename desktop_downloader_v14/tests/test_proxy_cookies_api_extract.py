@@ -421,3 +421,72 @@ class ApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AutomaticGeoProxyTests(unittest.TestCase):
+    def test_country_labeled_proxy_pool_prioritizes_allowed_country(self):
+        rotator = ProxyRotator(
+            "US=http://us-proxy.test:8080,GB=socks5h://gb-proxy.test:1080,"
+            "http://fallback.test:8080"
+        )
+        self.assertEqual(
+            parse_proxy_list(
+                "US=http://us-proxy.test:8080,GB=socks5h://gb-proxy.test:1080"
+            ),
+            ("http://us-proxy.test:8080", "socks5h://gb-proxy.test:1080"),
+        )
+        self.assertEqual(
+            rotator.ordered_urls(("GB",)),
+            [
+                "socks5h://gb-proxy.test:1080",
+                "http://fallback.test:8080",
+                "http://us-proxy.test:8080",
+            ],
+        )
+
+    def test_geo_error_countries_are_found_through_wrapped_exceptions(self):
+        geo_error_type = type("GeoRestrictedError", (Exception,), {})
+        geo_error = geo_error_type("region blocked")
+        geo_error.countries = ["gb", "US", "invalid", "GB"]
+        try:
+            raise RuntimeError("yt-dlp download wrapper") from geo_error
+        except RuntimeError as wrapped:
+            self.assertEqual(
+                download_engine._geo_restriction_countries(wrapped),
+                ("GB", "US"),
+            )
+
+    def test_download_silently_retries_matching_proxy_after_geo_error(self):
+        geo_error_type = type("GeoRestrictedError", (Exception,), {})
+        geo_error = geo_error_type("region blocked")
+        geo_error.countries = ["GB"]
+        used_proxies = []
+
+        def fake_download(*args, **kwargs):
+            used_proxies.append(args[11])
+            if len(used_proxies) == 1:
+                raise RuntimeError("wrapped extractor error") from geo_error
+            return "saved.mp4"
+
+        with patch.object(download_engine, "_download_with_ytdlp", side_effect=fake_download):
+            result = download_engine.download_url(
+                "https://example.test/watch/geo",
+                Path("."),
+                "supported site",
+                "video",
+                "1080p",
+                "single video",
+                threading.Event(),
+                lambda *_args: None,
+                proxy=(
+                    "US=http://us-proxy.test:8080,"
+                    "GB=http://gb-proxy.test:8080"
+                ),
+                geo_bypass_country="US",
+            )
+
+        self.assertEqual(result, "saved.mp4")
+        self.assertEqual(
+            used_proxies,
+            ["http://us-proxy.test:8080", "http://gb-proxy.test:8080"],
+        )
