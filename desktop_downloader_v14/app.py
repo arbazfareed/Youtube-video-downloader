@@ -133,6 +133,9 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         ) == "1"
         self.proxy_list = tk.StringVar(value="")
         self.browser_cookies = tk.StringVar(value="None")
+        self.geo_bypass_country = tk.StringVar(
+            value=self.history.get_setting("geo_bypass_country", "")
+        )
         self.retry_attempts = tk.StringVar(
             value=self.history.get_setting("retry_attempts", "10")
         )

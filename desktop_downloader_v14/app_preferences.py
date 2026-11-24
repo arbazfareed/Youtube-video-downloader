@@ -50,6 +50,11 @@ class PreferencesMixin:
             "check_updates", "1" if self.check_updates.get() else "0"
         )
 
+    def _save_geo_bypass_country(self, *_args: object) -> None:
+        country = self.geo_bypass_country.get().strip().upper()
+        self.geo_bypass_country.set(country)
+        self.history.set_setting("geo_bypass_country", country)
+
     def _save_media_preferences(self, *_args: object) -> None:
         if hasattr(self, "audio_languages"):
             self.history.set_setting("audio_languages", self.audio_languages.get())

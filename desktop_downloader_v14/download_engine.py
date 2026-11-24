@@ -1807,7 +1807,11 @@ def _download_with_ytdlp(
     download_subtitles: bool = False,
     subtitle_languages: str = "en,hi",
     playlist_items: str = "",
+    geo_bypass_country: str = "",
 ) -> str:
+    geo_bypass_country = geo_bypass_country.strip().upper()
+    if geo_bypass_country and not re.fullmatch(r"[A-Z]{2}", geo_bypass_country):
+        raise ValueError("Geo-bypass country must be a two-letter ISO country code, such as US or GB.")
     ffmpeg_directory = _ffmpeg_directory()
     if mode == "mp3 audio" and ffmpeg_directory is None:
         raise RuntimeError(
@@ -1944,6 +1948,11 @@ def _download_with_ytdlp(
                 )
 
         options["logger"] = PlaylistLogger()
+    # yt-dlp uses this country code for its X-Forwarded-For geo-bypass hint.
+    # It does not change the real network exit region; use a regional proxy if needed.
+    options["geo_bypass"] = True
+    if geo_bypass_country:
+        options["geo_bypass_country"] = geo_bypass_country
     if custom_headers:
         options["http_headers"] = dict(custom_headers)
     if proxy:
@@ -2087,7 +2096,11 @@ def download_url(
     download_subtitles: bool = False,
     subtitle_languages: str = "en,hi",
     playlist_items: str = "",
+    geo_bypass_country: str = "",
 ) -> str:
+    geo_bypass_country = geo_bypass_country.strip().upper()
+    if geo_bypass_country and not re.fullmatch(r"[A-Z]{2}", geo_bypass_country):
+        raise ValueError("Geo-bypass country must be a two-letter ISO country code, such as US or GB.")
     from playlist_selection import normalize_playlist_items
 
     playlist_items = normalize_playlist_items(playlist_items)
@@ -2186,6 +2199,7 @@ def download_url(
                             download_subtitles=download_subtitles,
                             subtitle_languages=subtitle_languages,
                             playlist_items=playlist_items,
+                            geo_bypass_country=geo_bypass_country,
                         )
                 else:
                     result = ""
@@ -2212,6 +2226,7 @@ def download_url(
                                     download_subtitles=download_subtitles,
                                     subtitle_languages=subtitle_languages,
                             playlist_items=playlist_items,
+                            geo_bypass_country=geo_bypass_country,
                                 )
                                 break
                             except DownloadCancelled:

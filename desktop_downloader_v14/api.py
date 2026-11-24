@@ -75,6 +75,7 @@ class JobRequest(BaseModel):
     cap: int | None = Field(default=None, gt=0)
     proxy: str = ""
     cookies: str = "none"
+    geo_bypass_country: str = Field(default="", max_length=2)
     headers: dict[str, str] = Field(default_factory=dict)
     retry_attempts: int = Field(default=10, ge=1, le=20)
     retry_base_delay: float = Field(default=1.0, ge=0, le=60)
@@ -158,6 +159,7 @@ def _run_job(job: ApiJob) -> None:
             request.proxy,
             request.cookies,
             custom_headers=request.headers,
+            geo_bypass_country=request.geo_bypass_country,
             retry_policy=RetryPolicy(
                 request.retry_attempts,
                 request.retry_base_delay,
@@ -268,6 +270,9 @@ def _validate_request(request: JobRequest) -> None:
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
     try:
+        request.geo_bypass_country = request.geo_bypass_country.strip().upper()
+        if request.geo_bypass_country and not re.fullmatch(r"[A-Z]{2}", request.geo_bypass_country):
+            raise ValueError("Geo-bypass country must be a two-letter ISO country code, such as US or GB.")
         request.headers = parse_custom_headers(request.headers)
         RetryPolicy(
             request.retry_attempts,

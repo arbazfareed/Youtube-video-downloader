@@ -1530,11 +1530,25 @@ class UiMixin:
             values=("None", "Chrome", "Firefox", "Edge", "Brave"),
             state="readonly", width=18,
         ).grid(row=2, column=1, sticky="w", padx=10, pady=7)
+        ttk.Label(connection, text="Geo-bypass country code (optional)").grid(
+            row=3, column=0, sticky="w", pady=7
+        )
+        ttk.Entry(connection, textvariable=self.geo_bypass_country, width=10).grid(
+            row=3, column=1, sticky="w", padx=10, pady=7
+        )
+        self.geo_bypass_country.trace_add(
+            "write", lambda *_: self._save_geo_bypass_country()
+        )
+        ttk.Label(
+            connection,
+            text="Two-letter ISO code (for example US or GB). This sends yt-dlp's geo hint; a regional proxy may still be needed.",
+            wraplength=540,
+        ).grid(row=4, column=1, sticky="w", padx=10, pady=(0, 8))
         ttk.Label(connection, text=self._t("Custom HTTP headers")).grid(
-            row=3, column=0, sticky="nw", pady=7
+            row=5, column=0, sticky="nw", pady=7
         )
         header_frame = ttk.Frame(connection)
-        header_frame.grid(row=3, column=1, sticky="ew", padx=10, pady=7)
+        header_frame.grid(row=5, column=1, sticky="ew", padx=10, pady=7)
         header_frame.columnconfigure(0, weight=1)
         self.custom_headers_text = tk.Text(
             header_frame, height=4, wrap="none", undo=True,
@@ -1549,12 +1563,12 @@ class UiMixin:
             connection,
             text="One Name: value header per line. Headers may be sent to redirected hosts.",
             wraplength=540,
-        ).grid(row=4, column=1, sticky="w", padx=10, pady=(0, 8))
+        ).grid(row=6, column=1, sticky="w", padx=10, pady=(0, 8))
         ttk.Label(connection, text=self._t("Retry attempts")).grid(
-            row=5, column=0, sticky="w", pady=7
+            row=7, column=0, sticky="w", pady=7
         )
         retry_controls = ttk.Frame(connection)
-        retry_controls.grid(row=5, column=1, sticky="ew", padx=10, pady=7)
+        retry_controls.grid(row=7, column=1, sticky="ew", padx=10, pady=7)
         ttk.Spinbox(
             retry_controls, from_=1, to=20, textvariable=self.retry_attempts, width=6,
         ).pack(side="left")
@@ -1572,7 +1586,7 @@ class UiMixin:
             connection,
             text="Exponential backoff; attempts 1-20, base delay 0-60 seconds, maximum at most 300.",
             wraplength=540,
-        ).grid(row=6, column=1, sticky="w", padx=10, pady=(0, 8))
+        ).grid(row=8, column=1, sticky="w", padx=10, pady=(0, 8))
 
         automation = ttk.Frame(notebook, padding=16)
         automation.columnconfigure(1, weight=1)
