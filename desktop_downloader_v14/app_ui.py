@@ -298,6 +298,9 @@ class UiMixin:
         add_buttons = ttk.Frame(add_card, style="Card.TFrame")
         add_buttons.grid(row=0, column=2, sticky="e", padx=(10, 0), pady=(0, 8))
         ttk.Button(
+            add_buttons, text=self._t("Inspect link"), command=self.inspect_link,
+        ).pack(side="left", padx=(0, 6))
+        ttk.Button(
             add_buttons, text=self._t("Add download"), command=self.add_download,
             style="Accent.TButton",
         ).pack(side="left")

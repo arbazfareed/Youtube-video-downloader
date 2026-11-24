@@ -80,6 +80,15 @@ class DownloadsMixin:
         if selected:
             self.destination.set(selected)
 
+    def inspect_link(self) -> None:
+        from link_compatibility import analyze_link, format_analysis
+
+        result = analyze_link(self.url_entry.get())
+        if not result.valid:
+            messagebox.showwarning("Link check", result.message, parent=self.root)
+            return
+        messagebox.showinfo("Link compatibility", format_analysis(result), parent=self.root)
+
     def add_download(self) -> None:
         url = self.url_entry.get().strip()
         mode = getattr(self, "mode", None)
