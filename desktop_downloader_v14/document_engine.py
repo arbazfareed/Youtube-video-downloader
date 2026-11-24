@@ -67,6 +67,22 @@ def _validate_conversion(
     return source.resolve(), destination.resolve()
 
 
+def _publish_conversion_output(
+    temporary_output: Path,
+    destination: Path,
+    overwrite: bool,
+) -> None:
+    """Publish a completed conversion without clobbering a racing file."""
+    if overwrite:
+        os.replace(temporary_output, destination)
+        return
+
+    # A hard link publishes atomically and refuses an existing destination.
+    # Both paths are in the destination filesystem (staging is created there).
+    os.link(temporary_output, destination)
+    temporary_output.unlink()
+
+
 def convert_docx_to_pdf(
     source: Path,
     output: Path | None = None,
@@ -115,7 +131,7 @@ def convert_docx_to_pdf(
                 if detail:
                     message += f"\n{detail}"
                 raise RuntimeError(message)
-            temporary_output.replace(destination)
+            _publish_conversion_output(temporary_output, destination, overwrite)
     except subprocess.TimeoutExpired as error:
         raise RuntimeError(
             f"LibreOffice did not finish converting {source.name} within five minutes."
