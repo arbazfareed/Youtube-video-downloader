@@ -1045,7 +1045,7 @@ def _delta_sync_existing_file(
                 )
 
         _check_cancelled(cancel_event)
-        _replace_with_retry(partial, target, cancel_event, resume_event)
+        target = _replace_with_retry(partial, target, cancel_event, resume_event)
         progress("Download complete", 100.0, str(target))
         return str(target)
     except Exception as error:
@@ -1110,17 +1110,27 @@ def _replace_with_retry(
     destination: Path,
     cancel_event: threading.Event,
     resume_event: threading.Event | None = None,
-) -> None:
+) -> Path:
+    """Publish a completed download without ever replacing an existing file."""
     for attempt in range(5):
         try:
-            source.replace(destination)
-            return
+            # source and destination live in the same directory/filesystem.
+            # Creating the destination link is atomic and fails if it exists.
+            os.link(source, destination)
+            source.unlink()
+            return destination
+        except FileExistsError:
+            # A different process won the filename after our earlier check.
+            # Re-select while respecting other in-process reservations, then
+            # retry the atomic publication against that new name.
+            destination = _final_target(destination)
         except PermissionError:
             if attempt == 4:
                 raise
             _wait_until_resumed(cancel_event, resume_event)
             if cancel_event.wait(min(0.1 * (2**attempt), 1.0)):
                 raise DownloadCancelled("Download cancelled during file assembly.")
+    raise RuntimeError("Could not publish the completed download safely.")
 
 
 def _parallel_metadata_path(target: Path) -> Path:
@@ -1302,7 +1312,8 @@ def _parallel_range_download(
 
         final_target = _final_target(target)
         target = final_target
-        _replace_with_retry(partial, final_target, cancel_event, resume_event)
+        final_target = _replace_with_retry(partial, final_target, cancel_event, resume_event)
+        target = final_target
         for segment in segments:
             _parallel_segment_path(segment_target, segment["index"]).unlink(missing_ok=True)
         metadata_path.unlink(missing_ok=True)
@@ -1574,9 +1585,10 @@ def _download_direct(
                         if match and int(match.group(1)) == existing:
                             target = _final_target(target)
                             reserved_target = target
-                            _replace_with_retry(
+                            target = _replace_with_retry(
                                 partial, target, cancel_event, resume_event
                             )
+                            reserved_target = target
                             target = _convert_to_mp3_if_needed(target, mode)
                             progress("Download complete", 100.0, str(target))
                             return str(target)
