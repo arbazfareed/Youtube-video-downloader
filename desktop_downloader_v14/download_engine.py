@@ -1499,7 +1499,7 @@ def _download_direct(
                 bandwidth_limiter,
                 proxy_rotator,
                 cookie_jar,
-                dict(session.headers),
+                dict(getattr(session, "headers", None) or custom_headers or {}),
             )
             return str(_convert_to_mp3_if_needed(Path(downloaded_result), mode))
 
