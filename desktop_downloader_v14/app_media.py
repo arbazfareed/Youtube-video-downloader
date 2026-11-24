@@ -3222,6 +3222,19 @@ class MediaMixin:
             except tk.TclError:
                 pass
         self._in_app_playback_after = None
+
+        # Stop is different from Pause: discard a queued audio-track change so
+        # it cannot be replayed unexpectedly by the next Play action.
+        switch = getattr(self, "_in_app_audio_switch", None)
+        if isinstance(switch, dict):
+            switch_after = switch.get("after")
+            if switch_after is not None:
+                try:
+                    self.root.after_cancel(switch_after)
+                except tk.TclError:
+                    pass
+        self._in_app_audio_switch = None
+
         player = getattr(self, "_in_app_player", None)
         if player is not None:
             player.stop()
