@@ -2074,6 +2074,8 @@ class MediaMixin:
         return f"{title[:max_length - 3]}..."
 
     def _poll_in_app_playback(self) -> None:
+        # Clear the timer ID after its callback fires; replay can restart polling.
+        self._in_app_playback_after = None
         player = getattr(self, "_in_app_player", None)
         window = getattr(self, "_in_app_player_window", None)
         if player is None or window is None:
@@ -2435,6 +2437,11 @@ class MediaMixin:
             label = self._t("Pause")
             status = self._t("Playback started")
             self._set_in_app_launcher_buttons(True)
+            # Playback may have ended and stopped the polling loop.
+            if getattr(self, "_in_app_playback_after", None) is None:
+                self._in_app_playback_after = self.root.after(
+                    250, self._poll_in_app_playback
+                )
             switch = getattr(self, "_in_app_audio_switch", None)
             if isinstance(switch, dict) and switch.get("target") is not None:
                 self._choose_in_app_audio_track(switch["target"])
