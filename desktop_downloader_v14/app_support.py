@@ -85,7 +85,7 @@ VIDEO_MEDIA_EXTENSIONS = {
 AUDIO_MEDIA_EXTENSIONS = {
     ".aac", ".flac", ".m4a", ".mp3", ".ogg", ".wav",
 }
-FINISHED_STATUSES = {"Complete", "Failed", "Cancelled", "Interrupted"}
+FINISHED_STATUSES = {"Complete", "Partial", "Failed", "Cancelled", "Interrupted"}
 MEDIA_EXTENSIONS = {
     ".aac", ".avi", ".flac", ".gif", ".jpeg", ".jpg", ".m4a", ".mkv",
     ".mov", ".mp3", ".mp4", ".mpeg", ".mpg", ".ogg", ".png", ".wav",
