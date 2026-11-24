@@ -1573,8 +1573,7 @@ def _download_direct(
                         match = re.fullmatch(r"bytes \*/(\d+)", content_range, re.IGNORECASE)
                         if match and int(match.group(1)) == existing:
                             target = _final_target(target)
-                    reserved_target = target
-                        reserved_target = target
+                            reserved_target = target
                             _replace_with_retry(
                                 partial, target, cancel_event, resume_event
                             )
