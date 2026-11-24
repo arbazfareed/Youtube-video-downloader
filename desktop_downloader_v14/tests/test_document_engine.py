@@ -81,6 +81,39 @@ class DocumentEngineTests(unittest.TestCase):
             self.assertEqual(output.read_bytes(), b"keep existing")
 
 
+    def test_pdf_to_docx_does_not_clobber_output_created_during_conversion(self):
+        import sys
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.pdf"
+            source.write_bytes(b"pdf input")
+            destination = root / "custom.docx"
+
+            class FakeConverter:
+                def __init__(self, _source):
+                    pass
+
+                def convert(self, output_path):
+                    Path(output_path).write_bytes(b"converted docx")
+
+                def close(self):
+                    pass
+
+            fake_pdf2docx = SimpleNamespace(Converter=FakeConverter)
+
+            def competing_writer(_temporary, final_path):
+                Path(final_path).write_bytes(b"created by competing process")
+                raise FileExistsError(final_path)
+
+            with patch.dict(sys.modules, {"pdf2docx": fake_pdf2docx}):
+                with patch("document_engine.os.link", side_effect=competing_writer):
+                    with self.assertRaisesRegex(RuntimeError, "FileExistsError"):
+                        convert_pdf_to_docx(source, destination, overwrite=False)
+
+            self.assertEqual(destination.read_bytes(), b"created by competing process")
+            self.assertEqual(list(root.glob(".smart-downloader-docx-*")), [])
+
     def test_conversion_publish_no_overwrite_is_race_safe(self):
         from document_engine import _publish_conversion_output
 
