@@ -8,6 +8,21 @@ import keyring
 
 
 _SERVICE = "SmartDownloader.Cloud"
+_REQUIRED_CREDENTIALS = {
+    "s3": {"access_key", "secret_key", "bucket", "region"},
+    "google drive": {"client_config"},
+    "dropbox": {"access_token", "refresh_token", "app_key", "app_secret"},
+}
+
+
+def _missing_credentials(credentials: object, provider: str) -> set[str]:
+    if not isinstance(credentials, dict):
+        return _REQUIRED_CREDENTIALS.get(provider, set())
+    required = _REQUIRED_CREDENTIALS.get(provider, set())
+    return {
+        name for name in required
+        if not isinstance(credentials.get(name), str) or not credentials[name].strip()
+    } | (required - credentials.keys())
 
 
 def _set_secret(key: str, value: str) -> None:
@@ -27,38 +42,47 @@ def _get_secret(key: str) -> str | None:
 def save_credentials(provider: str, credentials: dict[str, str]) -> None:
     normalized = provider.strip().lower()
     normalized = {"amazon s3": "s3"}.get(normalized, normalized)
-    required = {
-        "s3": {"access_key", "secret_key", "bucket", "region"},
-        "google drive": {"client_config"},
-        "dropbox": {"access_token", "refresh_token", "app_key", "app_secret"},
-    }.get(normalized)
-    if required is None:
+    if normalized not in _REQUIRED_CREDENTIALS:
         raise ValueError("Choose Amazon S3, Google Drive, or Dropbox.")
-    missing = required - credentials.keys()
+    missing = _missing_credentials(credentials, normalized)
     if missing:
-        raise ValueError(f"Missing cloud account settings: {', '.join(sorted(missing))}.")
+        raise ValueError(
+            f"Missing or empty cloud account settings: {', '.join(sorted(missing))}."
+        )
     _set_secret(normalized, json.dumps(credentials))
 
 
 def is_configured(provider: str) -> bool:
     normalized = provider.strip().lower()
     normalized = {"amazon s3": "s3"}.get(normalized, normalized)
+    if normalized not in _REQUIRED_CREDENTIALS:
+        return False
     value = _get_secret(normalized)
     if not value:
         return False
-    credentials = json.loads(value)
-    return isinstance(credentials, dict)
+    try:
+        credentials = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return False
+    return not _missing_credentials(credentials, normalized)
 
 
 def _credentials(provider: str) -> dict[str, str]:
-    value = _get_secret(provider)
+    normalized = {"amazon s3": "s3"}.get(provider.strip().lower(), provider.strip().lower())
+    value = _get_secret(normalized)
     if not value:
         raise RuntimeError(f"Configure {provider} under Cloud setup before uploading.")
-    result = json.loads(value)
-    if not isinstance(result, dict):
-        raise RuntimeError(f"Saved {provider} credentials are invalid. Configure them again.")
+    try:
+        result = json.loads(value)
+    except (TypeError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"Saved {provider} credentials are invalid. Configure them again.") from error
+    missing = _missing_credentials(result, normalized)
+    if missing:
+        raise RuntimeError(
+            f"Saved {provider} credentials are incomplete ({', '.join(sorted(missing))}). "
+            "Configure them again."
+        )
     return result
-
 
 def _remote_path(prefix: str, relative_path: str) -> str:
     parts = [part for part in prefix.replace("\\", "/").split("/") if part]
