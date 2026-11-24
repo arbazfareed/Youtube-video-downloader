@@ -19,6 +19,10 @@ class EventsMixin:
     def _job_finished(self, job_id: str, future: Future[str]) -> None:
         try:
             result = future.result()
+            from media_health import inspect_download
+            healthy, health_message = inspect_download(result)
+            if not healthy:
+                raise RuntimeError(f"Download output failed its health check: {health_message}")
             options = self.download_options.get(job_id, {})
             expected = options.get("expected_checksum", "")
             if expected:
