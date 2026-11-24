@@ -205,6 +205,7 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.mixin._in_app_duration = _FakeTkVar("")
         self.mixin._in_app_current_time = _FakeTkVar("")
         self.mixin._in_app_position_var = _FakeTkVar(0)
+        self.mixin._in_app_seeking = False
         self.mixin._in_app_playback_button = MagicMock()
         self.mixin._in_app_player_status = _FakeTkVar("")
         self.mixin._in_app_ab_loop = {"A": None, "B": None}
