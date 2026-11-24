@@ -203,6 +203,49 @@ class RequestOptionTests(unittest.TestCase):
             [100, 20],
         )
 
+    def test_bandwidth_limiter_counts_first_bytes_of_new_playlist_item(self):
+        limiter = Mock()
+        limiter.acquire.return_value = True
+
+        with TemporaryDirectory() as folder, patch(
+            "download_engine.yt_dlp.YoutubeDL"
+        ) as youtube_dl:
+            downloader = youtube_dl.return_value.__enter__.return_value
+
+            def emit_progress(*_args, **_kwargs):
+                hook = youtube_dl.call_args.args[0]["progress_hooks"][0]
+                hook({
+                    "status": "downloading",
+                    "downloaded_bytes": 100,
+                    "info_dict": {"id": "first", "playlist_index": 1},
+                })
+                # No zero-byte event is guaranteed between playlist items.
+                # The second item's first report can exceed the first item's
+                # final count, but all 150 bytes belong to the new item.
+                hook({
+                    "status": "downloading",
+                    "downloaded_bytes": 150,
+                    "info_dict": {"id": "second", "playlist_index": 2},
+                })
+                return {"_filename": "playlist.mp4"}
+
+            downloader.extract_info.side_effect = emit_progress
+            _download_with_ytdlp(
+                "https://example.org/playlist",
+                Path(folder),
+                "video",
+                "best",
+                "entire playlist",
+                threading.Event(),
+                lambda *_args: None,
+                bandwidth_limiter=limiter,
+            )
+
+        self.assertEqual(
+            [call.args[0] for call in limiter.acquire.call_args_list],
+            [100, 150],
+        )
+
     def test_supported_site_download_passes_headers_and_retry_policy_to_ytdlp(self):
         policy = RetryPolicy(attempts=3, base_delay=0.5, max_delay=2)
         with TemporaryDirectory() as folder, patch(
