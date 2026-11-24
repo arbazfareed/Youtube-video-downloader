@@ -1543,7 +1543,7 @@ class UiMixin:
             connection,
             text="Two-letter ISO code (for example US or GB). This sends yt-dlp's geo hint; a regional proxy may still be needed.",
             wraplength=540,
-        ).grid(row=8, column=1, sticky="w", padx=10, pady=(0, 8))
+        ).grid(row=4, column=1, sticky="w", padx=10, pady=(0, 8))
         ttk.Label(connection, text=self._t("Custom HTTP headers")).grid(
             row=5, column=0, sticky="nw", pady=7
         )
@@ -1563,7 +1563,7 @@ class UiMixin:
             connection,
             text="One Name: value header per line. Headers may be sent to redirected hosts.",
             wraplength=540,
-        ).grid(row=4, column=1, sticky="w", padx=10, pady=(0, 8))
+        ).grid(row=6, column=1, sticky="w", padx=10, pady=(0, 8))
         ttk.Label(connection, text=self._t("Retry attempts")).grid(
             row=7, column=0, sticky="w", pady=7
         )
@@ -1586,7 +1586,7 @@ class UiMixin:
             connection,
             text="Exponential backoff; attempts 1-20, base delay 0-60 seconds, maximum at most 300.",
             wraplength=540,
-        ).grid(row=6, column=1, sticky="w", padx=10, pady=(0, 8))
+        ).grid(row=8, column=1, sticky="w", padx=10, pady=(0, 8))
 
         automation = ttk.Frame(notebook, padding=16)
         automation.columnconfigure(1, weight=1)
