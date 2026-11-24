@@ -1549,7 +1549,7 @@ class DownloadEngineTests(unittest.TestCase):
         range_headers = []
 
         def ranged_get(_url, headers, **_kwargs):
-            range_headers.append(headers)
+            range_headers.append(dict(headers))
             requested = headers["Range"].removeprefix("bytes=").split("-")
             start, end = map(int, requested)
             return _RangeResponse(data[start:end + 1], start, end, len(data))
@@ -1568,9 +1568,12 @@ class DownloadEngineTests(unittest.TestCase):
                 threading.Event(),
                 lambda _status, _percent, _details: None,
                 speed_mode="fast",
+                custom_headers={"X-Auth-Test": "present", "Referer": "https://example.org/page"},
             )
 
             self.assertEqual(Path(result).read_bytes(), data)
+            self.assertTrue(all(header.get("X-Auth-Test") == "present" for header in range_headers))
+            self.assertTrue(all(header.get("Referer") == "https://example.org/page" for header in range_headers))
             self.assertEqual(Path(result).name, "archive.bin")
             self.assertEqual(len(range_headers), 6, repr(range_headers))
             self.assertTrue(all(header.get("If-Range") == '"stable"' for header in range_headers))
