@@ -24,6 +24,7 @@ class DirectDownloadFinalizationTests(unittest.TestCase):
             session = Mock()
             session.headers = {}
             session.get.return_value = MagicMock()
+            session.get.return_value = MagicMock()
             session.get.return_value.__enter__.return_value = response
             converted = Path(folder) / "video.mp3"
             with (
