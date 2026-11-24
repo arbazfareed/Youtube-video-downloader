@@ -553,6 +553,45 @@ class TestNewV14Features(unittest.TestCase):
         self.assertIsNone(extract_video_thumbnail(Path("non_existent_file_12345.mp4")))
 
 
+    def test_concurrent_thumbnail_requests_publish_only_complete_cache_file(self) -> None:
+        from app_support import extract_video_thumbnail
+        import subprocess
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "same-video.mp4"
+            source.write_bytes(b"video")
+            ffmpeg_directory = root / "ffmpeg"
+            ffmpeg_directory.mkdir()
+            (ffmpeg_directory / "ffmpeg").write_bytes(b"fake ffmpeg")
+            destination = root / "shared-cache.png"
+            render_barrier = Barrier(2)
+
+            def render_private_output(command, **_kwargs):
+                output = Path(command[-1])
+                output.write_bytes(b"complete thumbnail from one renderer")
+                # Force both independent renders to finish before either
+                # attempts atomic publication of the shared cache filename.
+                render_barrier.wait(timeout=5)
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with patch("app_support.subprocess.run", side_effect=render_private_output):
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    results = list(executor.map(
+                        lambda _index: extract_video_thumbnail(
+                            source, destination=destination,
+                            ffmpeg_directory=ffmpeg_directory,
+                        ),
+                        range(2),
+                    ))
+
+            self.assertEqual(results, [destination, destination])
+            self.assertEqual(destination.read_bytes(), b"complete thumbnail from one renderer")
+            self.assertEqual(list(root.glob(".shared-cache.thumbnail-*")), [])
+
+
 if __name__ == "__main__":
     unittest.main()
 
