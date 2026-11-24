@@ -247,6 +247,35 @@ def _clean_terminal_text(value: object) -> str:
     )
 
 
+def _geo_restriction_countries(error: BaseException) -> tuple[str, ...]:
+    """Find yt-dlp's GeoRestrictedError through DownloadError wrappers."""
+    pending: list[BaseException] = [error]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if type(current).__name__ == "GeoRestrictedError":
+            raw_countries = getattr(current, "countries", None)
+            if isinstance(raw_countries, (list, tuple, set)):
+                countries = tuple(sorted({
+                    country.strip().upper()
+                    for country in raw_countries
+                    if isinstance(country, str) and re.fullmatch(r"[A-Za-z]{2}", country.strip())
+                }))
+                if countries:
+                    return countries
+        for attribute in ("__cause__", "__context__", "cause"):
+            nested = getattr(current, attribute, None)
+            if isinstance(nested, BaseException):
+                pending.append(nested)
+        exc_info = getattr(current, "exc_info", None)
+        if isinstance(exc_info, tuple):
+            pending.extend(item for item in exc_info if isinstance(item, BaseException))
+    return ()
+
+
 def _is_transient_network_error(error: Exception) -> bool:
     message = _clean_terminal_text(error).casefold()
     return any(phrase in message for phrase in TRANSIENT_NETWORK_ERRORS)
@@ -2202,9 +2231,17 @@ def download_url(
                             geo_bypass_country=geo_bypass_country,
                         )
                 else:
-                    result = ""
                     try:
-                        for attempt in range(max(proxy_rotator.count, 1)):
+                        result = ""
+                        proxy_candidates = proxy_rotator.ordered_urls()
+                        if not proxy_candidates:
+                            # yt-dlp still gets one attempt and can perform its own
+                            # extractor-provided XFF country fallback without a proxy.
+                            proxy_candidates = [None]
+                        attempted_proxies: set[str | None] = set()
+                        while proxy_candidates:
+                            active_proxy = proxy_candidates.pop(0)
+                            attempted_proxies.add(active_proxy)
                             try:
                                 result = _download_with_ytdlp(
                                     url,
@@ -2218,22 +2255,45 @@ def download_url(
                                     resume_event,
                                     max_speed,
                                     bandwidth_limiter,
-                                    proxy_rotator.next_url(),
+                                    active_proxy,
                                     browser_cookies,
                                     custom_headers=custom_headers,
                                     retry_policy=retry_policy,
                                     audio_languages=audio_languages,
                                     download_subtitles=download_subtitles,
                                     subtitle_languages=subtitle_languages,
-                            playlist_items=playlist_items,
-                            geo_bypass_country=geo_bypass_country,
+                                    playlist_items=playlist_items,
+                                    geo_bypass_country=geo_bypass_country,
                                 )
                                 break
                             except DownloadCancelled:
                                 raise
-                            except Exception:
-                                if attempt + 1 >= max(proxy_rotator.count, 1):
+                            except Exception as attempt_error:
+                                allowed_countries = _geo_restriction_countries(attempt_error)
+                                if allowed_countries:
+                                    prioritized = proxy_rotator.ordered_urls(allowed_countries)
+                                    remaining = [
+                                        candidate for candidate in prioritized
+                                        if candidate not in attempted_proxies
+                                    ]
+                                    remaining.extend(
+                                        candidate for candidate in proxy_candidates
+                                        if candidate not in attempted_proxies
+                                        and candidate not in remaining
+                                    )
+                                    proxy_candidates = remaining
+                                    if proxy_candidates:
+                                        report(
+                                            "Automatic geo-restriction retry",
+                                            None,
+                                            "yt-dlp reported allowed countries "
+                                            f"{', '.join(allowed_countries)}; "
+                                            "trying a matching proxy automatically "
+                                            f"(attempt {len(attempted_proxies) + 1}).",
+                                        )
+                                if not proxy_candidates:
                                     raise
+    
                     except DownloadCancelled:
                         raise
                     except Exception as error:
