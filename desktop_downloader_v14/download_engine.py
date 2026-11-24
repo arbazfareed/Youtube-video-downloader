@@ -1718,7 +1718,7 @@ def _download_direct(
                         )
                     _check_cancelled(cancel_event)
                     target = _final_target(target)
-                    _replace_with_retry(partial, target, cancel_event, resume_event)
+                    target = _replace_with_retry(partial, target, cancel_event, resume_event)
                     target = _convert_to_mp3_if_needed(target, mode)
                     progress("Download complete", 100.0, str(target))
                     return str(target)
