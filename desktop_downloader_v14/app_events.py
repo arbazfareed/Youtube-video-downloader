@@ -260,6 +260,9 @@ class EventsMixin:
                                 self.jobs.set(job_id, "location", str(staging))
                         if status == "Failed":
                             detail = self._friendly_download_error(detail)
+                            from recovery_advisor import recovery_advice
+                            _retryable, recovery = recovery_advice(detail)
+                            detail = f"{detail}\\n\\nRecovery suggestion: {recovery}"
                             display_detail = detail
                         self.overall_progress.stop()
                         self.overall_progress.configure(mode="determinate", value=0)
