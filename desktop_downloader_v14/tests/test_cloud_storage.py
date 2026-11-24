@@ -26,6 +26,29 @@ class CloudStorageTests(unittest.TestCase):
             )
         self.assertEqual(set_secret.call_args.args[0], "s3")
 
+    def test_save_credentials_rejects_blank_required_values(self):
+        with patch.object(cloud_storage, "_set_secret") as set_secret:
+            with self.assertRaisesRegex(ValueError, "empty"):
+                cloud_storage.save_credentials(
+                    "Amazon S3",
+                    {"access_key": "key", "secret_key": " ", "bucket": "bucket", "region": "region"},
+                )
+        set_secret.assert_not_called()
+
+    def test_is_configured_rejects_missing_blank_or_malformed_saved_credentials(self):
+        with patch.object(cloud_storage, "_get_secret", return_value='{"access_key":"key"}'):
+            self.assertFalse(cloud_storage.is_configured("s3"))
+        with patch.object(cloud_storage, "_get_secret", return_value='{"access_key":"key","secret_key":"secret","bucket":"bucket","region":" "}'):
+            self.assertFalse(cloud_storage.is_configured("s3"))
+        with patch.object(cloud_storage, "_get_secret", return_value="{not-json"):
+            self.assertFalse(cloud_storage.is_configured("s3"))
+
+    def test_upload_credentials_reject_legacy_empty_secret(self):
+        saved = '{"access_key":"key","secret_key":"","bucket":"bucket","region":"region"}'
+        with patch.object(cloud_storage, "_get_secret", return_value=saved):
+            with self.assertRaisesRegex(RuntimeError, "incomplete"):
+                cloud_storage._credentials("s3")
+
     def test_remote_folder_rejects_traversal(self):
         with self.assertRaisesRegex(ValueError, "cannot contain"):
             cloud_storage._remote_path("../outside", "file.bin")
