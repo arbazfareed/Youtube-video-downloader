@@ -1091,5 +1091,33 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         player.set_rate.assert_called_once_with(1.5)
         self.assertEqual(self.mixin._in_app_last_playback_rate, "1.5x")
 
+    def test_volume_native_exception_restores_last_applied_value(self):
+        player = MagicMock()
+        player.audio_set_volume.side_effect = RuntimeError("VLC volume setter failed")
+        self.mixin._in_app_player = player
+        self.mixin._in_app_volume_var = _FakeTkVar(80)
+        self.mixin._in_app_volume_label = _FakeTkVar("")
+        self.mixin._in_app_last_volume = 45
+        self.mixin._in_app_player_status = _FakeTkVar("")
+
+        self.mixin._set_in_app_volume("80")
+
+        player.audio_set_volume.assert_called_once_with(80)
+        self.assertEqual(self.mixin._in_app_volume_var.get(), 45)
+        self.assertEqual(self.mixin._in_app_volume_label.get(), "45%")
+        self.assertEqual(self.mixin._in_app_player_status.get(), "Volume change failed; try again")
+
+    def test_volume_native_query_exception_does_not_escape_keyboard_adjustment(self):
+        player = MagicMock()
+        player.audio_get_volume.side_effect = RuntimeError("VLC volume query failed")
+        self.mixin._in_app_player = player
+        self.mixin._in_app_player_status = _FakeTkVar("")
+
+        self.mixin._adjust_in_app_volume(5)
+
+        player.audio_get_volume.assert_called_once_with()
+        player.audio_set_volume.assert_not_called()
+        self.assertEqual(self.mixin._in_app_player_status.get(), "Volume information temporarily unavailable")
+
 if __name__ == "__main__":
     unittest.main()

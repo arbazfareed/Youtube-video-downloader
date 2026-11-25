@@ -1241,7 +1241,16 @@ class MediaMixin:
         if player is None:
             return
         volume = getattr(self, "_in_app_volume_var", None)
-        current = volume.get() if volume is not None else player.audio_get_volume()
+        if volume is not None:
+            current = volume.get()
+        else:
+            try:
+                current = player.audio_get_volume()
+            except Exception:
+                self._set_in_app_player_status(
+                    self._t("Volume information temporarily unavailable")
+                )
+                return
         self._set_in_app_volume(str(max(0, min(100, round(float(current)) + delta))))
 
     def _set_video_preview_timeline_hover(self, active: bool) -> None:
@@ -2869,14 +2878,30 @@ class MediaMixin:
     def _set_in_app_volume(self, value: str) -> None:
         player = getattr(self, "_in_app_player", None)
         volume = max(0, min(100, round(float(value))))
-        volume_label = getattr(self, "_in_app_volume_label", None)
-        if volume_label is not None:
-            volume_label.set(f"{volume}%")
         volume_var = getattr(self, "_in_app_volume_var", None)
         if volume_var is not None and round(float(value)) != volume:
             volume_var.set(volume)
         if player is not None:
-            player.audio_set_volume(volume)
+            try:
+                result = player.audio_set_volume(volume)
+            except Exception:
+                result = -1
+            if result == -1:
+                previous = getattr(self, "_in_app_last_volume", None)
+                if previous is not None:
+                    if volume_var is not None:
+                        volume_var.set(previous)
+                    volume_label = getattr(self, "_in_app_volume_label", None)
+                    if volume_label is not None:
+                        volume_label.set(f"{previous}%")
+                self._set_in_app_player_status(
+                    self._t("Volume change failed; try again")
+                )
+                return
+        self._in_app_last_volume = volume
+        volume_label = getattr(self, "_in_app_volume_label", None)
+        if volume_label is not None:
+            volume_label.set(f"{volume}%")
 
     def _apply_vlc_audio_track(
         self,
