@@ -2123,7 +2123,15 @@ class MediaMixin:
                         parent=window,
                     )
                     return
-                player.set_time(ab_loop["A"])
+                if player.set_time(ab_loop["A"]) == -1:
+                    ab_loop["A"] = None
+                    ab_loop["B"] = None
+                    loop_button = getattr(self, "_in_app_ab_loop_button", None)
+                    if loop_button is not None:
+                        loop_button.configure(text="A-B", foreground="#FFFFFF")
+                    self._set_in_app_player_status(
+                        self._t("A-B loop restart seek failed; loop cleared")
+                    )
                 self._in_app_playback_after = self.root.after(250, self._poll_in_app_playback)
                 return
             self._in_app_playback_button.configure(text="▶")
