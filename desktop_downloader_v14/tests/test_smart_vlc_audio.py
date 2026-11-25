@@ -832,5 +832,48 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.mixin._start_in_app_controls_fade.assert_not_called()
 
 
+    def test_video_preview_poll_retries_after_native_status_exception(self):
+        from types import SimpleNamespace
+
+        player = MagicMock()
+        player.get_state.side_effect = RuntimeError("temporary VLC status error")
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_vlc = SimpleNamespace(
+            State=SimpleNamespace(Error=object(), Playing=object(), Paused=object())
+        )
+        self.mixin._schedule_video_preview_poll = MediaMixin._schedule_video_preview_poll.__get__(
+            self.mixin, MediaMixin
+        )
+
+        self.mixin._poll_video_preview()
+
+        self.assertIsNone(self.mixin._preview_playback_after)
+        self.assertEqual(len(self.mixin.root.timers), 1)
+        retry_id = self.mixin.root.timers.copy().popitem()[0]
+        self.assertEqual(self.mixin._preview_playback_after, retry_id)
+
+        # The transient failure clears; the next callback updates and schedules
+        # the following poll, proving the preview loop remains alive.
+        player.get_state.side_effect = None
+        player.get_state.return_value = self.mixin._preview_vlc.State.Playing
+        player.get_length.return_value = 60000
+        player.get_time.return_value = 15000
+        player.is_seekable.return_value = True
+        self.mixin.preview_video_placeholder = MagicMock()
+        self.mixin.preview_player_duration = _FakeTkVar("")
+        self.mixin.preview_player_current_time = _FakeTkVar("")
+        self.mixin.preview_player_position = _FakeTkVar(0)
+        self.mixin._preview_seeking = False
+        self.mixin._preview_audio_refresh_ticks = 1
+        self.mixin._draw_video_preview_timeline = MagicMock()
+
+        self.mixin.root.timers[retry_id]()
+
+        self.assertEqual(self.mixin.preview_player_current_time.get(), "00:15")
+        self.assertEqual(self.mixin.preview_player_position.get(), 25)
+        self.assertIsNotNone(self.mixin._preview_playback_after)
+        self.assertIn(self.mixin._preview_playback_after, self.mixin.root.timers)
+
+
 if __name__ == "__main__":
     unittest.main()
