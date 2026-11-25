@@ -2087,8 +2087,17 @@ class MediaMixin:
         ab_loop = getattr(self, "_in_app_ab_loop", None)
         if ab_loop and ab_loop.get("A") is not None and ab_loop.get("B") is not None:
             if current_time >= ab_loop["B"]:
-                player.set_time(ab_loop["A"])
-                current_time = ab_loop["A"]
+                if player.set_time(ab_loop["A"]) == -1:
+                    ab_loop["A"] = None
+                    ab_loop["B"] = None
+                    loop_button = getattr(self, "_in_app_ab_loop_button", None)
+                    if loop_button is not None:
+                        loop_button.configure(text="A-B", foreground="#FFFFFF")
+                    self._set_in_app_player_status(
+                        self._t("A-B loop seek failed; loop cleared")
+                    )
+                else:
+                    current_time = ab_loop["A"]
         self._in_app_duration_ms = duration
         self._in_app_duration.set(self._format_in_app_time(duration))
         self._in_app_current_time.set(self._format_in_app_time(current_time))
@@ -2556,10 +2565,18 @@ class MediaMixin:
 
             if btn:
                 btn.configure(text="🔁 A-B", foreground="#22c55e")
+            if player.set_time(loop["A"]) == -1:
+                loop["A"] = None
+                loop["B"] = None
+                if btn:
+                    btn.configure(text="A-B", foreground="#FFFFFF")
+                self._set_in_app_player_status(
+                    self._t("Could not seek to loop point; A-B loop cleared")
+                )
+                return
             self._set_in_app_player_status(
                 f"Looping A-B ({self._format_in_app_time(loop['A'])} - {self._format_in_app_time(loop['B'])})"
             )
-            player.set_time(loop["A"])
         else:
             loop["A"] = None
             loop["B"] = None
