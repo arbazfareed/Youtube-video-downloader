@@ -1430,24 +1430,42 @@ class MediaMixin:
             )
             return
         player = getattr(self, "_preview_vlc_player", None)
-        if player is None or player.set_rate(float(selected.removesuffix("x"))) != -1:
+        if player is None:
             return
-        current_rate = player.get_rate()
-        variable.set(
-            next(
-                (
-                    option
-                    for option in _IN_APP_PLAYBACK_RATES
-                    if float(option.removesuffix("x")) == current_rate
-                ),
-                f"{current_rate:g}x",
-            )
-        )
-        messagebox.showerror(
-            self._t("Playback speed unavailable"),
-            self._t("VLC could not change the playback speed."),
-            parent=self.root,
-        )
+
+        try:
+            result = player.set_rate(float(selected.removesuffix("x")))
+        except Exception:
+            result = -1
+        if result == -1:
+            current_rate = None
+            try:
+                current_rate = float(player.get_rate())
+            except Exception:
+                # Restore the last confirmed rate if VLC's getter also fails.
+                pass
+            restored_rate = getattr(self, "_preview_last_playback_rate", "1.0x")
+            if current_rate is not None:
+                restored_rate = next(
+                    (
+                        option
+                        for option in _IN_APP_PLAYBACK_RATES
+                        if float(option.removesuffix("x")) == current_rate
+                    ),
+                    f"{current_rate:g}x",
+                )
+            if restored_rate not in _IN_APP_PLAYBACK_RATES:
+                restored_rate = "1.0x"
+            variable.set(restored_rate)
+            status = getattr(self, "preview_video_status", None)
+            if status is not None:
+                status.set(self._t("Preview playback speed change failed; try again"))
+            return
+
+        self._preview_last_playback_rate = selected
+        status = getattr(self, "preview_video_status", None)
+        if status is not None:
+            status.set("")
 
     def _choose_video_preview_audio_track(self, track_id: int) -> None:
         player = getattr(self, "_preview_vlc_player", None)

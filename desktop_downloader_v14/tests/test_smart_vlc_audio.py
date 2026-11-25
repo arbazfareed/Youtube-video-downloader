@@ -1051,6 +1051,53 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         label.configure.assert_called_once_with(text="100%")
         self.assertEqual(self.mixin.preview_video_status.get(), "")
 
+    def test_video_preview_rate_native_exception_restores_last_rate_when_getter_fails(self):
+        player = MagicMock()
+        player.set_rate.side_effect = RuntimeError("VLC preview rate setter failed")
+        player.get_rate.side_effect = RuntimeError("VLC preview rate getter failed")
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_playback_rate = _FakeTkVar("1.5x")
+        self.mixin._preview_last_playback_rate = "1.0x"
+        self.mixin.preview_video_status = _FakeTkVar("")
+
+        self.mixin._set_video_preview_playback_rate()
+
+        player.set_rate.assert_called_once_with(1.5)
+        player.get_rate.assert_called_once_with()
+        self.assertEqual(self.mixin._preview_playback_rate.get(), "1.0x")
+        self.assertEqual(
+            self.mixin.preview_video_status.get(),
+            "Preview playback speed change failed; try again",
+        )
+
+    def test_video_preview_rate_rejected_result_restores_reported_rate(self):
+        player = MagicMock()
+        player.set_rate.return_value = -1
+        player.get_rate.return_value = 2.0
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_playback_rate = _FakeTkVar("1.5x")
+        self.mixin.preview_video_status = _FakeTkVar("")
+
+        self.mixin._set_video_preview_playback_rate()
+
+        self.assertEqual(self.mixin._preview_playback_rate.get(), "2.0x")
+        self.assertEqual(
+            self.mixin.preview_video_status.get(),
+            "Preview playback speed change failed; try again",
+        )
+
+    def test_video_preview_rate_success_remembers_selected_rate(self):
+        player = MagicMock()
+        player.set_rate.return_value = 0
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_playback_rate = _FakeTkVar("1.5x")
+        self.mixin.preview_video_status = _FakeTkVar("previous error")
+
+        self.mixin._set_video_preview_playback_rate()
+
+        self.assertEqual(self.mixin._preview_last_playback_rate, "1.5x")
+        self.assertEqual(self.mixin.preview_video_status.get(), "")
+
     def test_video_preview_audio_refresh_preserves_cache_on_track_query_error(self):
         player = MagicMock()
         player.audio_get_track_description.side_effect = RuntimeError("VLC audio list error")
