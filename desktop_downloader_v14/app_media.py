@@ -1873,6 +1873,9 @@ class MediaMixin:
         )
         top_controls.pack(fill="both", expand=True)
         top_controls.columnconfigure(1, weight=1)
+        # Keep the title visually centered after removing the duplicate top
+        # settings button; the single settings entry remains in the bottom bar.
+        top_controls.columnconfigure(2, minsize=40)
         self._in_app_top_controls_overlay = top_controls
         self._in_app_top_back_button = tk.Button(
             top_controls,
@@ -1899,24 +1902,6 @@ class MediaMixin:
             anchor="center",
         )
         self._in_app_top_title_label.grid(row=0, column=1, sticky="ew")
-        self._in_app_top_settings_button = tk.Button(
-            top_controls,
-            text="⚙",
-            command=lambda: self._show_in_app_settings_menu(
-                self._in_app_top_settings_button
-            ),
-            width=3,
-            cursor="hand2",
-            font=("Segoe UI Symbol", 14),
-            background="#000000",
-            foreground="#FFFFFF",
-            activebackground="#202020",
-            activeforeground="#FFFFFF",
-            relief="flat",
-            borderwidth=0,
-            highlightthickness=0,
-        )
-        self._in_app_top_settings_button.grid(row=0, column=2, sticky="e")
         controls_overlay = tk.Frame(
             controls_window,
             background="#000000",
