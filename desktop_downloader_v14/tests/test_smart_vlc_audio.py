@@ -1315,6 +1315,45 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.assertEqual(self.mixin._in_app_player_status.get(), "Subtitle information temporarily unavailable")
         player.video_set_spu.assert_not_called()
 
+    def test_subtitle_off_always_forces_vlc_track_disabled(self):
+        player = MagicMock()
+        # VLC can report no active track while subtitle rendering is still
+        # visible; choosing Off must still send the native disable command.
+        player.video_get_spu.return_value = -1
+        player.video_set_spu.return_value = 0
+        self.mixin._in_app_player = player
+        self.mixin._in_app_subtitle_track = _FakeTkVar("English")
+        self.mixin._in_app_cc_button = MagicMock()
+        self.mixin._in_app_player_status = _FakeTkVar("")
+        self.mixin._show_in_app_controls = MagicMock()
+
+        self.mixin._disable_in_app_subtitles()
+
+        player.video_set_spu.assert_called_once_with(-1)
+        player.video_get_spu.assert_called_once()
+        self.assertEqual(self.mixin._in_app_subtitle_track.get(), "Off")
+        self.mixin._in_app_cc_button.configure.assert_called_once_with(
+            foreground="#FFFFFF"
+        )
+
+    def test_subtitle_off_reports_if_vlc_keeps_track_active(self):
+        player = MagicMock()
+        player.video_set_spu.return_value = 0
+        player.video_get_spu.return_value = 2
+        self.mixin._in_app_player = player
+        self.mixin._in_app_subtitle_track = _FakeTkVar("English")
+        self.mixin._in_app_player_status = _FakeTkVar("")
+        self.mixin._show_in_app_controls = MagicMock()
+
+        self.mixin._disable_in_app_subtitles()
+
+        player.video_set_spu.assert_called_once_with(-1)
+        self.assertEqual(self.mixin._in_app_subtitle_track.get(), "English")
+        self.assertEqual(
+            self.mixin._in_app_player_status.get(),
+            "Subtitle toggle failed; try again",
+        )
+
     def test_subtitle_refresh_exception_preserves_cached_tracks(self):
         player = MagicMock()
         player.video_get_spu_description.side_effect = RuntimeError("temporary VLC subtitle query error")
