@@ -16,6 +16,17 @@ from app_support import (
 )
 
 class EventsMixin:
+    def _set_completed_download_feedback(self, status: str, result: str) -> None:
+        setter = getattr(self, "_set_link_feedback", None)
+        if not callable(setter):
+            return
+        filename = Path(result.replace("\\", "/")).name or "Downloaded media"
+        setter(
+            f"{status}: {filename}\n"
+            "Saved in download history. Select this completed row and choose "
+            "Play selected audio/video or Smart VLC to play it."
+        )
+
     def _job_finished(self, job_id: str, future: Future[str]) -> None:
         try:
             result = future.result()
@@ -280,6 +291,7 @@ class EventsMixin:
                                 "with Browser cookies if sign-in is required."
                             )
                         self.progress_summary.set(summary)
+                        self._set_completed_download_feedback(status, detail)
                     elif status in {"Failed", "Cancelled"}:
                         getattr(self, "_playlist_warnings", {}).pop(job_id, None)
                         if status == "Failed" and detail.startswith("Cloud upload failed;"):
