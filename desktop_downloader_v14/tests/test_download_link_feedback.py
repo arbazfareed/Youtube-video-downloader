@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 from app_downloads import DownloadsMixin
 from app_ui import UiMixin
+from app_events import EventsMixin
 
 
 class DownloadLinkFeedbackTests(unittest.TestCase):
@@ -41,6 +42,18 @@ class DownloadLinkFeedbackTests(unittest.TestCase):
         self.assertIn("not a download failure", feedback)
         self.assertIn("does not start, stop, or block downloads", feedback)
         self.assertIn("Add download", feedback)
+
+    def test_completed_download_feedback_names_file_and_explains_history_playback(self):
+        feedback = []
+        app = SimpleNamespace(_set_link_feedback=feedback.append)
+
+        EventsMixin._set_completed_download_feedback(
+            app, "Complete", r"C:\Videos\TikTok clip.mp4"
+        )
+
+        self.assertIn("Complete: TikTok clip.mp4", feedback[0])
+        self.assertIn("Saved in download history", feedback[0])
+        self.assertIn("Play selected audio/video or Smart VLC", feedback[0])
 
     def test_invalid_link_check_is_inline_and_does_not_interrupt_other_jobs(self):
         app = SimpleNamespace(
