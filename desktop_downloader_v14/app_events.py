@@ -20,9 +20,9 @@ class EventsMixin:
         setter = getattr(self, "_set_link_feedback", None)
         if not callable(setter):
             return
-        filename = Path(result.replace("\\\\", "/")).name or "Downloaded media"
+        filename = Path(result.replace("\\", "/")).name or "Downloaded media"
         setter(
-            f"{status}: {filename}\\n"
+            f"{status}: {filename}\n"
             "Saved in download history. Select this completed row and choose "
             "Play selected audio/video or Smart VLC to play it."
         )
