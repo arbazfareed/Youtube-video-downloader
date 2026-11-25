@@ -26,6 +26,7 @@ class DownloadLinkFeedbackTests(unittest.TestCase):
             link_feedback_var=SimpleNamespace(set=Mock()),
             _t=lambda text: text,
             root=Mock(),
+            _set_link_feedback=lambda message: app.link_feedback_var.set(message),
         )
         result = SimpleNamespace(valid=True)
         with patch("link_compatibility.analyze_link", return_value=result), \
