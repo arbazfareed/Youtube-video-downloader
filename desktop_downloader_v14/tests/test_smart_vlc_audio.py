@@ -1004,6 +1004,44 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.mixin._start_in_app_controls_fade.assert_not_called()
 
 
+    def test_video_preview_audio_refresh_preserves_cache_on_track_query_error(self):
+        player = MagicMock()
+        player.audio_get_track_description.side_effect = RuntimeError("VLC audio list error")
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_audio_track = _FakeTkVar("French")
+        self.mixin._preview_audio_tracks = {"French": 2}
+        self.mixin.preview_video_status = _FakeTkVar("")
+
+        self.mixin._refresh_video_preview_audio_tracks()
+
+        self.assertEqual(self.mixin._preview_audio_tracks, {"French": 2})
+        self.assertEqual(self.mixin._preview_audio_track.get(), "French")
+        self.assertEqual(
+            self.mixin.preview_video_status.get(),
+            "Audio track information temporarily unavailable",
+        )
+
+    def test_video_preview_audio_refresh_active_track_query_error_preserves_ui(self):
+        player = MagicMock()
+        player.audio_get_track_description.return_value = [(1, b"Track One")]
+        player.audio_get_track.side_effect = RuntimeError("VLC active audio query error")
+        selector = MagicMock()
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_audio_track = _FakeTkVar("Old selection")
+        self.mixin._preview_audio_tracks = {"Old selection": 8}
+        self.mixin.preview_audio_selector = selector
+        self.mixin.preview_video_status = _FakeTkVar("")
+
+        self.mixin._refresh_video_preview_audio_tracks()
+
+        self.assertEqual(self.mixin._preview_audio_tracks, {"Old selection": 8})
+        self.assertEqual(self.mixin._preview_audio_track.get(), "Old selection")
+        selector.configure.assert_not_called()
+        self.assertEqual(
+            self.mixin.preview_video_status.get(),
+            "Audio track information temporarily unavailable",
+        )
+
     def test_video_preview_subtitle_refresh_preserves_cache_on_native_query_error(self):
         player = MagicMock()
         player.video_get_spu_description.side_effect = RuntimeError("VLC subtitle list error")
