@@ -3414,10 +3414,25 @@ class MediaMixin:
 
         player = getattr(self, "_in_app_player", None)
         if player is not None:
-            # Restore the selector to VLC's actual active track. The pending
-            # target may have been displayed optimistically but never applied.
-            self._refresh_in_app_audio_tracks(force=True)
-            player.stop()
+            # Restore the selector to VLC's actual active track. A transient
+            # track-query error must not prevent the Stop command itself.
+            try:
+                self._refresh_in_app_audio_tracks(force=True)
+            except Exception:
+                pass
+            try:
+                player.stop()
+            except Exception:
+                # Native VLC can raise while transitioning. Keep the controls
+                # honest and resume polling so the user can retry Stop.
+                self._in_app_playback_after = self.root.after(
+                    250, self._poll_in_app_playback
+                )
+                self._set_in_app_player_status(
+                    self._t("Could not stop playback")
+                )
+                self._show_in_app_controls()
+                return
         self._set_in_app_launcher_buttons(False)
         playback_button = getattr(self, "_in_app_playback_button", None)
         if playback_button is not None:

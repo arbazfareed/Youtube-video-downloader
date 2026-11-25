@@ -551,6 +551,49 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.assertIsNone(self.mixin._in_app_playback_after)
 
 
+    def test_stop_native_exception_preserves_ui_and_restarts_polling(self):
+        player = _FakePlayer(is_playing=True)
+        player.stop = MagicMock(side_effect=RuntimeError("VLC stop failed"))
+        self.mixin._in_app_player = player
+        self.mixin._refresh_in_app_audio_tracks = MagicMock()
+        self.mixin._set_in_app_launcher_buttons = MagicMock()
+        self.mixin._in_app_playback_button = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+        self.mixin._show_in_app_controls = MagicMock()
+        old_timer = self.mixin.root.after(250, self.mixin._poll_in_app_playback)
+        self.mixin._in_app_playback_after = old_timer
+
+        self.mixin._stop_in_app_player()
+
+        player.stop.assert_called_once()
+        self.assertNotIn(old_timer, self.mixin.root.timers)
+        self.assertIsNotNone(self.mixin._in_app_playback_after)
+        self.assertIn(self.mixin._in_app_playback_after, self.mixin.root.timers)
+        self.mixin._set_in_app_launcher_buttons.assert_not_called()
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Could not stop playback"
+        )
+        self.mixin._show_in_app_controls.assert_called_once()
+
+
+    def test_stop_still_calls_native_stop_if_track_refresh_raises(self):
+        player = _FakePlayer(is_playing=True)
+        player.stop = MagicMock()
+        self.mixin._in_app_player = player
+        self.mixin._refresh_in_app_audio_tracks = MagicMock(
+            side_effect=RuntimeError("VLC track query failed")
+        )
+        self.mixin._set_in_app_launcher_buttons = MagicMock()
+        self.mixin._in_app_playback_button = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+        self.mixin._show_in_app_controls = MagicMock()
+
+        self.mixin._stop_in_app_player()
+
+        player.stop.assert_called_once()
+        self.mixin._set_in_app_launcher_buttons.assert_called_once_with(False)
+
+
     def test_stop_restores_audio_selector_to_active_track(self):
         player = _FakePlayer(active_track=1, is_playing=True)
         player.stop = MagicMock()
