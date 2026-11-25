@@ -1198,5 +1198,36 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         )
 
 
+    def test_keyboard_seek_native_query_exception_is_recoverable(self):
+        player = MagicMock()
+        player.is_seekable.return_value = True
+        player.get_time.side_effect = RuntimeError("VLC seek query failed")
+        self.mixin._in_app_player = player
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        self.mixin._nudge_in_app_player_seek(5)
+
+        player.set_time.assert_not_called()
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Seek temporarily unavailable; try again"
+        )
+
+    def test_keyboard_seek_native_set_failure_reports_status(self):
+        player = MagicMock()
+        player.is_seekable.return_value = True
+        player.get_time.return_value = 15000
+        player.get_length.return_value = 60000
+        player.set_time.return_value = -1
+        self.mixin._in_app_player = player
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        self.mixin._nudge_in_app_player_seek(5)
+
+        player.set_time.assert_called_once_with(20000)
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Seek failed; try again"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1147,14 +1147,25 @@ class MediaMixin:
 
     def _nudge_video_preview_seek(self, seconds: int) -> None:
         player = getattr(self, "_preview_vlc_player", None)
-        if player is None or not player.is_seekable():
+        if player is None:
             return
-        current_time = max(0, player.get_time())
-        duration = max(0, player.get_length())
-        target_time = max(0, current_time + seconds * 1000)
-        if duration > 0:
-            target_time = min(target_time, duration)
-        player.set_time(target_time)
+        try:
+            if not player.is_seekable():
+                return
+            current_time = max(0, player.get_time())
+            duration = max(0, player.get_length())
+            target_time = max(0, current_time + seconds * 1000)
+            if duration > 0:
+                target_time = min(target_time, duration)
+            result = player.set_time(target_time)
+            if result == -1:
+                self._set_in_app_player_status(
+                    self._t("Seek failed; try again")
+                )
+        except Exception:
+            self._set_in_app_player_status(
+                self._t("Seek temporarily unavailable; try again")
+            )
 
     def _adjust_video_preview_volume(self, delta: int) -> None:
         volume = max(
@@ -1227,14 +1238,25 @@ class MediaMixin:
 
     def _nudge_in_app_player_seek(self, seconds: int) -> None:
         player = getattr(self, "_in_app_player", None)
-        if player is None or not player.is_seekable():
+        if player is None:
             return
-        current_time = max(0, player.get_time())
-        duration = max(0, player.get_length())
-        target_time = max(0, current_time + seconds * 1000)
-        if duration > 0:
-            target_time = min(target_time, duration)
-        player.set_time(target_time)
+        try:
+            if not player.is_seekable():
+                return
+            current_time = max(0, player.get_time())
+            duration = max(0, player.get_length())
+            target_time = max(0, current_time + seconds * 1000)
+            if duration > 0:
+                target_time = min(target_time, duration)
+            result = player.set_time(target_time)
+            if result == -1:
+                self._set_in_app_player_status(
+                    self._t("Seek failed; try again")
+                )
+        except Exception:
+            self._set_in_app_player_status(
+                self._t("Seek temporarily unavailable; try again")
+            )
 
     def _adjust_in_app_volume(self, delta: int) -> None:
         player = getattr(self, "_in_app_player", None)
