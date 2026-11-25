@@ -1168,5 +1168,35 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         )
 
 
+    def test_video_surface_tk_failure_is_recoverable(self):
+        player = MagicMock()
+        surface = MagicMock()
+        surface.update.side_effect = RuntimeError("Tk surface not ready")
+        self.mixin._in_app_player = player
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        self.mixin._set_in_app_video_target(surface)
+
+        player.set_hwnd.assert_not_called()
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Video surface unavailable; playback can be retried"
+        )
+
+    def test_video_surface_native_binding_failure_is_recoverable(self):
+        player = MagicMock()
+        player.set_hwnd.side_effect = RuntimeError("VLC native window error")
+        surface = MagicMock()
+        self.mixin._in_app_player = player
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        with patch("app_media.sys.platform", "win32"):
+            self.mixin._set_in_app_video_target(surface)
+
+        player.set_hwnd.assert_called_once_with(surface.winfo_id())
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Video surface unavailable; playback can be retried"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
