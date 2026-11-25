@@ -1061,5 +1061,35 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.assertEqual(self.mixin._in_app_player_status.get(), "Subtitle information temporarily unavailable")
 
 
+
+    def test_playback_rate_native_exception_restores_last_known_rate(self):
+        player = MagicMock()
+        player.set_rate.side_effect = RuntimeError("VLC rate setter failed")
+        player.get_rate.side_effect = RuntimeError("VLC rate query failed")
+        self.mixin._in_app_player = player
+        self.mixin._in_app_playback_rate = _FakeTkVar("1.5x")
+        self.mixin._in_app_last_playback_rate = "1.0x"
+        self.mixin._in_app_player_status = _FakeTkVar("")
+        self.mixin._show_in_app_controls = MagicMock()
+
+        self.mixin._set_in_app_playback_rate()
+
+        player.set_rate.assert_called_once_with(1.5)
+        player.get_rate.assert_called_once_with()
+        self.assertEqual(self.mixin._in_app_playback_rate.get(), "1.0x")
+        self.assertEqual(self.mixin._in_app_player_status.get(), "Playback speed change failed; try again")
+
+    def test_playback_rate_success_remembers_selected_rate(self):
+        player = MagicMock()
+        player.set_rate.return_value = 0
+        self.mixin._in_app_player = player
+        self.mixin._in_app_playback_rate = _FakeTkVar("1.5x")
+        self.mixin._show_in_app_controls = MagicMock()
+
+        self.mixin._set_in_app_playback_rate()
+
+        player.set_rate.assert_called_once_with(1.5)
+        self.assertEqual(self.mixin._in_app_last_playback_rate, "1.5x")
+
 if __name__ == "__main__":
     unittest.main()
