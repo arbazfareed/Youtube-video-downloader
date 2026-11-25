@@ -266,6 +266,49 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         )
         show_error.assert_called_once()
 
+    def test_ab_loop_restart_seek_failure_clears_loop_and_continues_polling(self):
+        from types import SimpleNamespace
+
+        ended, playing, error = object(), object(), object()
+        player = _FakePlayer(is_playing=False)
+        player.get_state = lambda: ended
+        player.get_length = lambda: 60000
+        player.set_time = MagicMock(return_value=-1)
+        player.play = MagicMock(return_value=0)
+        self.mixin._in_app_player = player
+        self.mixin._in_app_player_window = MagicMock()
+        self.mixin._in_app_vlc = SimpleNamespace(
+            State=SimpleNamespace(Ended=ended, Playing=playing, Error=error)
+        )
+        self.mixin._in_app_duration = _FakeTkVar("")
+        self.mixin._in_app_current_time = _FakeTkVar("")
+        self.mixin._in_app_position_var = _FakeTkVar(0)
+        self.mixin._in_app_seeking = False
+        self.mixin._in_app_playback_button = MagicMock()
+        self.mixin._in_app_player_status = _FakeTkVar("")
+        self.mixin._in_app_ab_loop = {"A": 10000, "B": 20000}
+        self.mixin._in_app_ab_loop_button = MagicMock()
+        self.mixin._draw_in_app_timeline = MagicMock()
+        self.mixin._refresh_in_app_audio_tracks = MagicMock()
+        self.mixin._refresh_in_app_subtitle_tracks = MagicMock()
+        self.mixin._show_in_app_controls = MagicMock()
+        self.mixin._set_in_app_launcher_buttons = MagicMock()
+
+        self.mixin._poll_in_app_playback()
+
+        player.play.assert_called_once()
+        player.set_time.assert_called_once_with(10000)
+        self.assertEqual(self.mixin._in_app_ab_loop, {"A": None, "B": None})
+        self.mixin._in_app_ab_loop_button.configure.assert_called_once_with(
+            text="A-B", foreground="#FFFFFF"
+        )
+        self.assertEqual(
+            self.mixin._in_app_player_status.get(),
+            "A-B loop restart seek failed; loop cleared",
+        )
+        self.assertIsNotNone(self.mixin._in_app_playback_after)
+        self.assertIn(self.mixin._in_app_playback_after, self.mixin.root.timers)
+
     def test_stop_cancels_playback_poll_timer(self):
         player = _FakePlayer(is_playing=True)
         player.stop = MagicMock()
