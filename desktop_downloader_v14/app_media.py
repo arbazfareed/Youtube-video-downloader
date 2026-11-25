@@ -1357,26 +1357,32 @@ class MediaMixin:
         variable = getattr(self, "_preview_subtitle_track", None)
         if player is None or variable is None:
             return
-        tracks = {}
-        for track_id, description in player.video_get_spu_description() or []:
-            track_id = int(track_id)
-            if track_id < 0:
-                continue
-            label = (
-                description.decode("utf-8", errors="replace")
-                if isinstance(description, bytes)
-                else str(description)
-            ) or self._t("Subtitles")
-            if label.strip().lower() in {"disable", "off", "none"}:
-                continue
-            if label in tracks:
-                label = f"{label} ({track_id})"
-            tracks[label] = track_id
+        try:
+            tracks = {}
+            for track_id, description in player.video_get_spu_description() or []:
+                track_id = int(track_id)
+                if track_id < 0:
+                    continue
+                label = (
+                    description.decode("utf-8", errors="replace")
+                    if isinstance(description, bytes)
+                    else str(description)
+                ) or self._t("Subtitles")
+                if label.strip().lower() in {"disable", "off", "none"}:
+                    continue
+                if label in tracks:
+                    label = f"{label} ({track_id})"
+                tracks[label] = track_id
+            active = player.video_get_spu()
+        except Exception:
+            status = getattr(self, "preview_video_status", None)
+            if status is not None:
+                status.set(self._t("Subtitle information temporarily unavailable"))
+            return
         self._preview_subtitle_tracks = tracks
         if not tracks:
             variable.set(self._t("Off"))
             return
-        active = player.video_get_spu()
         variable.set(
             next(
                 (label for label, track_id in tracks.items() if track_id == active),
@@ -1448,25 +1454,38 @@ class MediaMixin:
         if label == self._t("Off"):
             self._disable_video_preview_subtitles()
             return
-        track_id = self._preview_subtitle_tracks.get(label)
-        if track_id is not None and player.video_set_spu(track_id) == -1:
+        track_id = getattr(self, "_preview_subtitle_tracks", {}).get(label)
+        if track_id is None:
+            return
+        try:
+            result = player.video_set_spu(track_id)
+            if result == -1:
+                raise RuntimeError("VLC rejected subtitle selection")
+        except Exception:
             messagebox.showerror(
                 self._t("Subtitle track unavailable"),
                 self._t("VLC could not select this subtitle track."),
                 parent=self.root,
             )
+            self._refresh_video_preview_subtitle_tracks()
+            return
         self._refresh_video_preview_subtitle_tracks()
 
     def _disable_video_preview_subtitles(self) -> None:
         player = getattr(self, "_preview_vlc_player", None)
         if player is None:
             return
-        if player.video_set_spu(-1) == -1:
+        try:
+            result = player.video_set_spu(-1)
+            if result == -1:
+                raise RuntimeError("VLC rejected subtitle disable")
+        except Exception:
             messagebox.showerror(
                 self._t("Subtitle track unavailable"),
                 self._t("VLC could not change subtitle visibility."),
                 parent=self.root,
             )
+            self._refresh_video_preview_subtitle_tracks()
             return
         self._preview_subtitle_track.set(self._t("Off"))
 
@@ -1475,14 +1494,22 @@ class MediaMixin:
         if player is None:
             return
         self._refresh_video_preview_subtitle_tracks()
-        if not self._preview_subtitle_tracks:
+        tracks = getattr(self, "_preview_subtitle_tracks", {})
+        if not tracks:
             return
-        if player.video_get_spu() >= 0:
+        try:
+            active = player.video_get_spu()
+        except Exception:
+            status = getattr(self, "preview_video_status", None)
+            if status is not None:
+                status.set(self._t("Subtitle information temporarily unavailable"))
+            return
+        if active >= 0:
             self._disable_video_preview_subtitles()
             return
         selected = self._preview_subtitle_track.get()
-        if selected not in self._preview_subtitle_tracks:
-            selected = next(iter(self._preview_subtitle_tracks))
+        if selected not in tracks:
+            selected = next(iter(tracks))
         self._preview_subtitle_track.set(selected)
         self._set_video_preview_subtitle_track()
 
