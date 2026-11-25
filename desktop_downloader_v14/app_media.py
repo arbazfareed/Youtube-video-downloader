@@ -3040,8 +3040,6 @@ class MediaMixin:
         player = getattr(self, "_in_app_player", None)
         volume = max(0, min(100, round(float(value))))
         volume_var = getattr(self, "_in_app_volume_var", None)
-        if volume_var is not None and round(float(value)) != volume:
-            volume_var.set(volume)
         if player is not None:
             try:
                 result = player.audio_set_volume(volume)
@@ -3060,6 +3058,10 @@ class MediaMixin:
                 )
                 return
         self._in_app_last_volume = volume
+        # Keep the slider variable synchronized after every accepted command.
+        # Arrow-key changes otherwise read the stale slider value on the next key.
+        if volume_var is not None:
+            volume_var.set(volume)
         volume_label = getattr(self, "_in_app_volume_label", None)
         if volume_label is not None:
             volume_label.set(f"{volume}%")
