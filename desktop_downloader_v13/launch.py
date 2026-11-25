@@ -72,7 +72,9 @@ def _smoke_test_app(app_class) -> None:
     app = None
     try:
         app = app_class(root)
-        root.update()
+        # Drain geometry and drawing work without dispatching delayed callbacks.
+        # The packaged headless smoke test must not start timers/background UI work.
+        root.update_idletasks()
         if root.title() != "Smart Downloader" or not root.winfo_viewable():
             raise RuntimeError("The Smart Downloader window did not become visible.")
     finally:
