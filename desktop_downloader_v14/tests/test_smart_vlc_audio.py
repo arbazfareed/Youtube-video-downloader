@@ -1083,13 +1083,13 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         player = MagicMock()
         player.set_rate.return_value = 0
         self.mixin._in_app_player = player
-        self.mixin._in_app_playback_rate = _FakeTkVar("1.25x")
+        self.mixin._in_app_playback_rate = _FakeTkVar("1.5x")
         self.mixin._show_in_app_controls = MagicMock()
 
         self.mixin._set_in_app_playback_rate()
 
-        player.set_rate.assert_called_once_with(1.25)
-        self.assertEqual(self.mixin._in_app_last_playback_rate, "1.25x")
+        player.set_rate.assert_called_once_with(1.5)
+        self.assertEqual(self.mixin._in_app_last_playback_rate, "1.5x")
 
 if __name__ == "__main__":
     unittest.main()
