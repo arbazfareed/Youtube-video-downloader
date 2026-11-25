@@ -77,8 +77,11 @@ class PackagedSmokeTestTests(unittest.TestCase):
                 self.visible = visible
                 self.destroyed = False
 
+            def update_idletasks(self):
+                self.idle_updates = getattr(self, "idle_updates", 0) + 1
+
             def update(self):
-                return None
+                raise AssertionError("smoke test must not dispatch pending callbacks")
 
             def title(self):
                 return "Smart Downloader"
