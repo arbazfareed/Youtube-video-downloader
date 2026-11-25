@@ -3353,14 +3353,16 @@ class MediaMixin:
             return
         self._show_in_app_controls()
         try:
+            # Always send the disable command. Do not trust a possibly stale
+            # active-track query to decide whether subtitles need disabling.
+            # VLC uses SPU id -1 to turn subtitle rendering off.
+            result = player.video_set_spu(-1)
+            if result == -1:
+                raise RuntimeError("VLC rejected subtitle disable")
             active_track = player.video_get_spu()
-            if active_track >= 0:
-                result = player.video_set_spu(-1)
-            else:
-                result = 0
+            if active_track is not None and active_track >= 0:
+                raise RuntimeError("VLC subtitle track remained active")
         except Exception:
-            result = -1
-        if result == -1:
             self._set_in_app_player_status(
                 self._t("Subtitle toggle failed; try again")
             )
