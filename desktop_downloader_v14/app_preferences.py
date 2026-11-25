@@ -162,9 +162,12 @@ class PreferencesMixin:
                 self._ytdlp_update_active = False
                 self._capture_diagnostic("ytdlp update", error)
                 self.progress_summary.set(f"yt-dlp update failed: {error}")
+                # Python deletes the `as error` name when this block ends, so the
+                # deferred callback must capture the text now, not the variable.
+                failure_text = f"Could not update yt-dlp:\n{error}"
                 self.root.after(0, lambda: messagebox.showerror(
                     "yt-dlp update failed",
-                    f"Could not update yt-dlp:\n{error}",
+                    failure_text,
                     parent=parent,
                 ))
 

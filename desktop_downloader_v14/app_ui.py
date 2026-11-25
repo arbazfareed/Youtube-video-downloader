@@ -487,9 +487,13 @@ class UiMixin:
 
                     dialog.after(0, update_ui)
                 except Exception as error:
+                    # `error` is deleted when this block ends; capture the text so
+                    # the deferred callback can still re-enable the Search button.
+                    failure_text = f"Search failed: {error}"
+
                     def report_err():
                         search_btn.configure(state="normal")
-                        search_status_var.set(f"Search failed: {error}")
+                        search_status_var.set(failure_text)
                     dialog.after(0, report_err)
 
             self.executor.submit(background_search)
