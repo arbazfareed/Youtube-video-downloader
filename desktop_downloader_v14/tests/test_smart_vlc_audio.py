@@ -875,5 +875,26 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.assertIn(self.mixin._preview_playback_after, self.mixin.root.timers)
 
 
+
+    def test_video_preview_seek_exception_releases_drag_state(self):
+        player = MagicMock()
+        player.get_length.return_value = 60000
+        player.is_seekable.return_value = True
+        player.set_time.side_effect = RuntimeError("temporary VLC seek error")
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_seeking = True
+        self.mixin._preview_duration_ms = 60000
+        self.mixin.preview_player_position = _FakeTkVar(40)
+        self.mixin.preview_player_timeline = MagicMock()
+        self.mixin._draw_video_preview_timeline = MagicMock()
+
+        self.mixin._seek_video_preview()
+
+        player.set_time.assert_called_once_with(24000)
+        self.assertFalse(self.mixin._preview_seeking)
+        self.mixin._draw_video_preview_timeline.assert_called_once()
+
+
+
 if __name__ == "__main__":
     unittest.main()
