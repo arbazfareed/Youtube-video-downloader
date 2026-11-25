@@ -3403,26 +3403,50 @@ class MediaMixin:
             self._exit_in_app_fullscreen()
             return "break"
 
-        window.attributes("-fullscreen", True)
-        window.lift()
+        try:
+            window.attributes("-fullscreen", True)
+        except Exception:
+            self._set_in_app_player_status(
+                self._t("Could not enter full screen; try again")
+            )
+            return "break"
+
         self._in_app_fullscreen = True
-        self._in_app_fullscreen_button.configure(text="⛶")
-        self._show_in_app_controls()
-        window.after(150, self._refresh_in_app_video_target)
+        try:
+            window.lift()
+            self._in_app_fullscreen_button.configure(text="⛶")
+            self._show_in_app_controls()
+            window.after(150, self._refresh_in_app_video_target)
+        except Exception:
+            # The fullscreen state was accepted by Tk; a delayed refresh or
+            # overlay update must not make the keyboard callback fail.
+            pass
         return "break"
 
     def _exit_in_app_fullscreen(self, _event=None) -> str:
         if not getattr(self, "_in_app_fullscreen", False):
             return "break"
         window = getattr(self, "_in_app_player_window", None)
-        self._in_app_fullscreen = False
         if window is not None:
-            window.attributes("-fullscreen", False)
-            window.after(150, self._refresh_in_app_video_target)
-            self._show_in_app_controls()
-        button = getattr(self, "_in_app_fullscreen_button", None)
-        if button is not None:
-            button.configure(text="⛶")
+            try:
+                window.attributes("-fullscreen", False)
+            except Exception:
+                self._set_in_app_player_status(
+                    self._t("Could not exit full screen; try again")
+                )
+                return "break"
+
+        self._in_app_fullscreen = False
+        try:
+            if window is not None:
+                window.after(150, self._refresh_in_app_video_target)
+                self._show_in_app_controls()
+            button = getattr(self, "_in_app_fullscreen_button", None)
+            if button is not None:
+                button.configure(text="⛶")
+        except Exception:
+            # The window is already back in windowed mode.
+            pass
         return "break"
 
     def _refresh_in_app_video_target(self) -> None:
