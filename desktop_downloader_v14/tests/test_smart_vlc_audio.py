@@ -1513,5 +1513,42 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         )
 
 
+    def test_preview_cleanup_releases_resources_after_native_stop_error(self):
+        player = MagicMock()
+        player.stop.side_effect = RuntimeError("VLC stop failed")
+        instance = MagicMock()
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_vlc_instance = instance
+        self.mixin._preview_vlc = MagicMock()
+        self.mixin.preview_video_status = _FakeTkVar("")
+        self.mixin.preview_player_play_button = MagicMock()
+
+        self.mixin._stop_video_preview()
+
+        player.release.assert_called_once_with()
+        instance.release.assert_called_once_with()
+        self.assertIsNone(self.mixin._preview_vlc_player)
+        self.assertIsNone(self.mixin._preview_vlc_instance)
+        self.assertIsNone(self.mixin._preview_vlc)
+        self.assertIn("cleanup encountered", self.mixin.preview_video_status.get())
+        self.mixin.preview_player_play_button.configure.assert_called_once_with(
+            text="▶"
+        )
+
+    def test_preview_cleanup_continues_when_player_release_raises(self):
+        player = MagicMock()
+        player.release.side_effect = RuntimeError("VLC player release failed")
+        instance = MagicMock()
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_vlc_instance = instance
+
+        self.mixin._stop_video_preview()
+
+        instance.release.assert_called_once_with()
+        self.assertIsNone(self.mixin._preview_vlc_player)
+        self.assertIsNone(self.mixin._preview_vlc_instance)
+
+
+
 if __name__ == "__main__":
     unittest.main()
