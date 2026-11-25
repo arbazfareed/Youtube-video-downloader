@@ -2081,9 +2081,20 @@ class MediaMixin:
         if player is None or window is None:
             return
         vlc = self._in_app_vlc
-        state = player.get_state()
-        duration = max(0, player.get_length())
-        current_time = max(0, player.get_time())
+        try:
+            state = player.get_state()
+            duration = max(0, player.get_length())
+            current_time = max(0, player.get_time())
+        except Exception:
+            # Native VLC status queries can fail transiently. Keep the
+            # monitoring loop alive instead of letting Tk abandon this timer.
+            self._set_in_app_player_status(
+                self._t("Playback status temporarily unavailable")
+            )
+            self._in_app_playback_after = self.root.after(
+                500, self._poll_in_app_playback
+            )
+            return
         ab_loop = getattr(self, "_in_app_ab_loop", None)
         if ab_loop and ab_loop.get("A") is not None and ab_loop.get("B") is not None:
             if current_time >= ab_loop["B"]:
