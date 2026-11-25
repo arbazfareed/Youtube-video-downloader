@@ -3080,11 +3080,29 @@ class MediaMixin:
         # Update the UI selection immediately so the user gets instant visual confirmation
         refresh(force=False)
 
-        # Issue the track switch to VLC once initially
+        def fail_switch() -> None:
+            state["target"] = None
+            state["after"] = None
+            refresh(force=True)
+            self._set_in_app_player_status(
+                self._t("Audio track switch failed; VLC rejected the selected track.")
+            )
+            messagebox.showerror(
+                self._t("Audio track unavailable"),
+                self._t("VLC could not select this audio track."),
+                parent=error_parent,
+            )
+
+        # libVLC returns -1 when the selected stream cannot be activated.
+        # Do not silently treat that as a pending asynchronous switch.
         try:
-            player.audio_set_track(target_id)
+            result = player.audio_set_track(target_id)
         except Exception:
-            pass
+            fail_switch()
+            return
+        if result == -1:
+            fail_switch()
+            return
 
         def step(remaining: int) -> None:
             if getattr(self, state_attribute, None) is not state:
@@ -3113,7 +3131,7 @@ class MediaMixin:
                 pass
             if not is_playing:
                 # When player is paused, VLC queues track changes until resumed.
-                # Maintain the pending target without surfacing a false error.
+                # Keep the requested track pending; resume retries the switch.
                 refresh(force=False)
                 if remaining > _AUDIO_SWITCH_MAX_ATTEMPTS - 2:
                     state["after"] = self.root.after(
@@ -3125,10 +3143,13 @@ class MediaMixin:
                 return
 
             try:
-                player.audio_set_track(target)
+                result = player.audio_set_track(target)
             except Exception:
-                pass
-
+                fail_switch()
+                return
+            if result == -1:
+                fail_switch()
+                return
 
             try:
                 active = player.audio_get_track()
@@ -3146,14 +3167,7 @@ class MediaMixin:
                     lambda: step(remaining - 1),
                 )
                 return
-            state["target"] = None
-            state["after"] = None
-            refresh(force=True)
-            messagebox.showerror(
-                self._t("Audio track unavailable"),
-                self._t("VLC could not select this audio track."),
-                parent=error_parent,
-            )
+            fail_switch()
 
         state["after"] = self.root.after(
             _AUDIO_SWITCH_VERIFY_DELAY_MS,
