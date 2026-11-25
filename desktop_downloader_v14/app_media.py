@@ -2136,8 +2136,19 @@ class MediaMixin:
             getattr(self, "_in_app_audio_refresh_ticks", 0) + 1
         )
         if self._in_app_audio_refresh_ticks % 4 == 0:
-            self._refresh_in_app_audio_tracks()
-            self._refresh_in_app_subtitle_tracks()
+            try:
+                self._refresh_in_app_audio_tracks()
+                self._refresh_in_app_subtitle_tracks()
+            except Exception:
+                # VLC track enumeration can fail transiently while a stream
+                # changes state. Keep playback polling alive and retry shortly.
+                self._set_in_app_player_status(
+                    self._t("Playback track information temporarily unavailable")
+                )
+                self._in_app_playback_after = self.root.after(
+                    500, self._poll_in_app_playback
+                )
+                return
         if state == vlc.State.Ended:
             if ab_loop and ab_loop.get("A") is not None and ab_loop.get("B") is not None:
                 try:
