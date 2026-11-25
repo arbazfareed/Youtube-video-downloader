@@ -232,7 +232,7 @@ jobs:
           if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v13" -or "${{ matrix.app-directory }}" -eq "desktop_downloader_v14") {
             $vlcDestination = Join-Path $packageDirectory "VLC"
             New-Item -ItemType Directory -Path $vlcDestination | Out-Null
-            Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP "SmartDownloader13-VLC") -Force |
+            Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP "${{ matrix.executable }}-VLC") -Force |
               Copy-Item -Destination $vlcDestination -Recurse
             $setupLines += @(
               "Smart VLC includes the VideoLAN VLC 3.0.23 runtime and license files in the VLC folder."
@@ -243,7 +243,8 @@ jobs:
           $setupLines | Set-Content -Path $setupPath -Encoding utf8
           $packageZip = Join-Path $env:RUNNER_TEMP "$packageName.zip"
           Compress-Archive -Path "$packageDirectory\*" -DestinationPath $packageZip
-          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v13") {
+          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v13" -or
+              "${{ matrix.app-directory }}" -eq "desktop_downloader_v14") {
             $vlcSmokeTest = Start-Process `
               -FilePath (Join-Path $packageDirectory "${{ matrix.executable }}.exe") `
               -ArgumentList "--vlc-smoke-test" -Wait -PassThru
