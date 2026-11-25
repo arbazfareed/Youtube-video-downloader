@@ -1305,19 +1305,26 @@ class MediaMixin:
         variable = getattr(self, "_preview_audio_track", None)
         if player is None or variable is None:
             return
-        tracks = {}
-        for track_id, description in player.audio_get_track_description() or []:
-            track_id = int(track_id)
-            if track_id < 0:
-                continue
-            label = (
-                description.decode("utf-8", errors="replace")
-                if isinstance(description, bytes)
-                else str(description)
-            ) or self._t("Audio track")
-            if label in tracks:
-                label = f"{label} ({track_id})"
-            tracks[label] = track_id
+        try:
+            tracks = {}
+            for track_id, description in player.audio_get_track_description() or []:
+                track_id = int(track_id)
+                if track_id < 0:
+                    continue
+                label = (
+                    description.decode("utf-8", errors="replace")
+                    if isinstance(description, bytes)
+                    else str(description)
+                ) or self._t("Audio track")
+                if label in tracks:
+                    label = f"{label} ({track_id})"
+                tracks[label] = track_id
+            active = player.audio_get_track()
+        except Exception:
+            status = getattr(self, "preview_video_status", None)
+            if status is not None:
+                status.set(self._t("Audio track information temporarily unavailable"))
+            return
         self._preview_audio_tracks = tracks
         selector = getattr(self, "preview_audio_selector", None)
         if not tracks:
@@ -1340,7 +1347,6 @@ class MediaMixin:
                         state="readonly" if len(tracks) > 1 else "disabled",
                     )
                 return
-        active = player.audio_get_track()
         selected_track = next(
             (label for label, track_id in tracks.items() if track_id == active),
             next(iter(tracks)),
