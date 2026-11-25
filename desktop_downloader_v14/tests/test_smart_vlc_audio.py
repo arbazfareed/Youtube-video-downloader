@@ -1119,5 +1119,54 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         player.audio_set_volume.assert_not_called()
         self.assertEqual(self.mixin._in_app_player_status.get(), "Volume information temporarily unavailable")
 
+    def test_fullscreen_native_failure_keeps_windowed_state(self):
+        window = MagicMock()
+        window.attributes.side_effect = RuntimeError("Tk native failure")
+        self.mixin._in_app_player_window = window
+        self.mixin._in_app_fullscreen = False
+        self.mixin._in_app_fullscreen_button = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        self.assertEqual(self.mixin._toggle_in_app_fullscreen(), "break")
+
+        self.assertFalse(self.mixin._in_app_fullscreen)
+        self.mixin._in_app_fullscreen_button.configure.assert_not_called()
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Could not enter full screen; try again"
+        )
+
+    def test_exit_fullscreen_native_failure_preserves_fullscreen_state(self):
+        window = MagicMock()
+        window.attributes.side_effect = RuntimeError("Tk native failure")
+        self.mixin._in_app_player_window = window
+        self.mixin._in_app_fullscreen = True
+        self.mixin._in_app_fullscreen_button = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        self.assertEqual(self.mixin._exit_in_app_fullscreen(), "break")
+
+        self.assertTrue(self.mixin._in_app_fullscreen)
+        self.mixin._in_app_fullscreen_button.configure.assert_not_called()
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Could not exit full screen; try again"
+        )
+
+    def test_fullscreen_success_updates_state_and_button(self):
+        window = MagicMock()
+        self.mixin._in_app_player_window = window
+        self.mixin._in_app_fullscreen = False
+        self.mixin._in_app_fullscreen_button = MagicMock()
+        self.mixin._show_in_app_controls = MagicMock()
+        self.mixin._refresh_in_app_video_target = MagicMock()
+
+        self.assertEqual(self.mixin._toggle_in_app_fullscreen(), "break")
+
+        self.assertTrue(self.mixin._in_app_fullscreen)
+        window.attributes.assert_called_once_with("-fullscreen", True)
+        self.mixin._in_app_fullscreen_button.configure.assert_called_once_with(
+            text="⛶"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
