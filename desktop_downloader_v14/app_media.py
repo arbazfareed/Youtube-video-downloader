@@ -2710,13 +2710,26 @@ class MediaMixin:
 
         loop = self._in_app_ab_loop
         btn = getattr(self, "_in_app_ab_loop_button", None)
-        current_time = max(0, player.get_time())
 
-        # A-B looping requires seeking. Avoid showing an active loop when
-        # VLC reports that the current stream cannot seek.
-        if (loop["A"] is None or loop["B"] is None) and not player.is_seekable():
+        # Clearing an established loop does not require querying VLC.
+        if loop["A"] is not None and loop["B"] is not None:
+            loop["A"] = None
+            loop["B"] = None
+            if btn:
+                btn.configure(text="A-B", foreground="#FFFFFF")
+            self._set_in_app_player_status("A-B loop cleared")
+            return
+
+        try:
+            if not player.is_seekable():
+                self._set_in_app_player_status(
+                    "A-B loop is unavailable for non-seekable media."
+                )
+                return
+            current_time = max(0, player.get_time())
+        except Exception:
             self._set_in_app_player_status(
-                "A-B loop is unavailable for non-seekable media."
+                "Could not read playback position; A-B loop unchanged"
             )
             return
 
@@ -2724,46 +2737,57 @@ class MediaMixin:
             loop["A"] = current_time
             loop["B"] = None
             if btn:
-                btn.configure(text=f"A:[{self._format_in_app_time(current_time)}]", foreground="#3b82f6")
-            self._set_in_app_player_status(f"Loop point A set at {self._format_in_app_time(current_time)}")
-        elif loop["B"] is None:
+                btn.configure(
+                    text=f"A:[{self._format_in_app_time(current_time)}]",
+                    foreground="#3b82f6",
+                )
+            self._set_in_app_player_status(
+                f"Loop point A set at {self._format_in_app_time(current_time)}"
+            )
+            return
+
+        try:
             duration = max(0, player.get_length())
-            if current_time <= loop["A"]:
-                loop["B"] = loop["A"] + 2000
-            else:
-                loop["B"] = current_time
+        except Exception:
+            self._set_in_app_player_status(
+                "Could not read media duration; A-B loop unchanged"
+            )
+            return
 
-            # Keep the B marker inside the media duration. If A is already
-            # at the end, there is no valid interval to loop.
-            if duration > 0:
-                loop["B"] = min(loop["B"], duration)
-                if loop["B"] <= loop["A"]:
-                    loop["B"] = None
-                    self._set_in_app_player_status(
-                        "Loop point B must be after A; move A earlier."
-                    )
-                    return
+        if current_time <= loop["A"]:
+            next_b = loop["A"] + 2000
+        else:
+            next_b = current_time
 
-            if btn:
-                btn.configure(text="🔁 A-B", foreground="#22c55e")
-            if player.set_time(loop["A"]) == -1:
-                loop["A"] = None
-                loop["B"] = None
-                if btn:
-                    btn.configure(text="A-B", foreground="#FFFFFF")
+        # Keep the B marker inside the media duration. If A is already
+        # at the end, there is no valid interval to loop.
+        if duration > 0:
+            next_b = min(next_b, duration)
+            if next_b <= loop["A"]:
                 self._set_in_app_player_status(
-                    self._t("Could not seek to loop point; A-B loop cleared")
+                    "Loop point B must be after A; move A earlier."
                 )
                 return
-            self._set_in_app_player_status(
-                f"Looping A-B ({self._format_in_app_time(loop['A'])} - {self._format_in_app_time(loop['B'])})"
-            )
-        else:
+
+        loop["B"] = next_b
+        if btn:
+            btn.configure(text="🔁 A-B", foreground="#22c55e")
+        try:
+            seek_result = player.set_time(loop["A"])
+        except Exception:
+            seek_result = -1
+        if seek_result == -1:
             loop["A"] = None
             loop["B"] = None
             if btn:
                 btn.configure(text="A-B", foreground="#FFFFFF")
-            self._set_in_app_player_status("A-B loop cleared")
+            self._set_in_app_player_status(
+                self._t("Could not seek to loop point; A-B loop cleared")
+            )
+            return
+        self._set_in_app_player_status(
+            f"Looping A-B ({self._format_in_app_time(loop['A'])} - {self._format_in_app_time(loop['B'])})"
+        )
 
     def _set_in_app_launcher_buttons(self, playing: bool) -> None:
         label = self._t("Pause in app") if playing else self._t("Play in app")

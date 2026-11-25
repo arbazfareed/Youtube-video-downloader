@@ -789,6 +789,46 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
 
 
 
+    def test_ab_loop_point_native_query_exceptions_are_recoverable(self):
+        cases = ("get_time", "is_seekable", "get_length")
+        for method in cases:
+            with self.subTest(method=method):
+                player = _FakePlayer(is_playing=True)
+                setattr(
+                    player,
+                    method,
+                    MagicMock(side_effect=RuntimeError("temporary VLC query error")),
+                )
+                self.mixin._in_app_player = player
+                self.mixin._in_app_player_window = MagicMock()
+                self.mixin._in_app_ab_loop = (
+                    {"A": 12000, "B": None}
+                    if method == "get_length"
+                    else {"A": None, "B": None}
+                )
+                button = MagicMock()
+                self.mixin._in_app_ab_loop_button = button
+                status = MagicMock()
+                self.mixin._set_in_app_player_status = status
+
+                self.mixin._toggle_in_app_ab_loop()
+
+                if method == "get_length":
+                    self.assertEqual(
+                        self.mixin._in_app_ab_loop, {"A": 12000, "B": None}
+                    )
+                    status.assert_called_once_with(
+                        "Could not read media duration; A-B loop unchanged"
+                    )
+                else:
+                    self.assertEqual(
+                        self.mixin._in_app_ab_loop, {"A": None, "B": None}
+                    )
+                    status.assert_called_once_with(
+                        "Could not read playback position; A-B loop unchanged"
+                    )
+                button.configure.assert_not_called()
+
     def test_ab_loop_rejects_non_seekable_media(self):
         player = _FakePlayer(is_playing=True)
         player.is_seekable = lambda: False
