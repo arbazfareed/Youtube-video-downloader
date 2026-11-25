@@ -2262,7 +2262,20 @@ class MediaMixin:
             duration = max(0, player.get_length())
             if duration > 0 and player.is_seekable():
                 position = max(0.0, min(100.0, float(self._in_app_position_var.get())))
-                player.set_time(round(duration * position / 100))
+                requested_time = round(duration * position / 100)
+                if player.set_time(requested_time) == -1:
+                    # VLC rejected the seek; restore the timeline to the actual
+                    # playback position instead of leaving a false preview.
+                    actual_time = max(0, player.get_time())
+                    self._in_app_position_var.set(
+                        min(100, actual_time * 100 / duration)
+                    )
+                    current_time = getattr(self, "_in_app_current_time", None)
+                    if current_time is not None:
+                        current_time.set(self._format_in_app_time(actual_time))
+                    self._set_in_app_player_status(
+                        self._t("Could not seek to selected position")
+                    )
         self._in_app_seeking = False
         self._in_app_control_interaction = False
         self._draw_in_app_timeline()
