@@ -847,10 +847,10 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
 
         self.mixin._poll_video_preview()
 
-        self.assertIsNone(self.mixin._preview_playback_after)
+        retry_id = self.mixin._preview_playback_after
+        self.assertIsNotNone(retry_id)
         self.assertEqual(len(self.mixin.root.timers), 1)
-        retry_id = self.mixin.root.timers.copy().popitem()[0]
-        self.assertEqual(self.mixin._preview_playback_after, retry_id)
+        self.assertIn(retry_id, self.mixin.root.timers)
 
         # The transient failure clears; the next callback updates and schedules
         # the following poll, proving the preview loop remains alive.
