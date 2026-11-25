@@ -887,16 +887,28 @@ class MediaMixin:
     def _toggle_video_preview(self) -> None:
         player = getattr(self, "_preview_vlc_player", None)
         if player is not None:
-            if player.is_playing():
-                player.pause()
-                self.preview_player_play_button.configure(text="▶")
-            else:
-                player.play()
-                self.preview_player_play_button.configure(text="Ⅱ")
-                self._schedule_video_preview_poll()
-                switch = getattr(self, "_preview_audio_switch", None)
-                if isinstance(switch, dict) and switch.get("target") is not None:
-                    self._choose_video_preview_audio_track(switch["target"])
+            status = getattr(self, "preview_video_status", None)
+            try:
+                playing = player.is_playing()
+                if playing:
+                    result = player.pause()
+                    if result == -1:
+                        raise RuntimeError("VLC could not pause preview")
+                    self.preview_player_play_button.configure(text="▶")
+                else:
+                    result = player.play()
+                    if result == -1:
+                        raise RuntimeError("VLC could not resume preview")
+                    self.preview_player_play_button.configure(text="Ⅱ")
+                    self._schedule_video_preview_poll()
+                    switch = getattr(self, "_preview_audio_switch", None)
+                    if isinstance(switch, dict) and switch.get("target") is not None:
+                        self._choose_video_preview_audio_track(switch["target"])
+                if status is not None:
+                    status.set("")
+            except Exception:
+                if status is not None:
+                    status.set(self._t("Preview playback command failed; try again"))
             return
 
         path = getattr(self, "_preview_media_path", None)
