@@ -188,6 +188,47 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
             self.mixin._end_in_app_control_interaction.assert_called_once()
 
 
+    def test_polling_recovers_after_transient_vlc_status_exception(self):
+        from types import SimpleNamespace
+
+        playing, ended, error = object(), object(), object()
+        player = _FakePlayer(is_playing=True)
+        player.get_state = MagicMock(side_effect=[RuntimeError("temporary VLC error"), playing])
+        player.get_length = lambda: 60000
+        player.get_time = lambda: 15000
+        player.is_seekable = lambda: True
+        self.mixin._in_app_player = player
+        self.mixin._in_app_player_window = MagicMock()
+        self.mixin._in_app_vlc = SimpleNamespace(
+            State=SimpleNamespace(Playing=playing, Ended=ended, Error=error)
+        )
+        self.mixin._in_app_duration = _FakeTkVar("")
+        self.mixin._in_app_current_time = _FakeTkVar("")
+        self.mixin._in_app_position_var = _FakeTkVar(0)
+        self.mixin._in_app_seeking = False
+        self.mixin._in_app_playback_button = MagicMock()
+        self.mixin._in_app_player_status = _FakeTkVar("")
+        self.mixin._draw_in_app_timeline = MagicMock()
+        self.mixin._refresh_in_app_audio_tracks = MagicMock()
+        self.mixin._refresh_in_app_subtitle_tracks = MagicMock()
+
+        self.mixin._poll_in_app_playback()
+
+        retry_id = self.mixin._in_app_playback_after
+        self.assertIsNotNone(retry_id)
+        self.assertIn(retry_id, self.mixin.root.timers)
+        self.assertEqual(
+            self.mixin._in_app_player_status.get(),
+            "Playback status temporarily unavailable",
+        )
+
+        self.mixin.root.timers[retry_id]()
+
+        self.assertIsNotNone(self.mixin._in_app_playback_after)
+        self.assertIn(self.mixin._in_app_playback_after, self.mixin.root.timers)
+        self.assertEqual(self.mixin._in_app_current_time.get(), "00:15")
+        self.assertEqual(self.mixin._in_app_duration.get(), "01:00")
+
     def test_replay_after_end_restarts_playback_polling(self):
         from types import SimpleNamespace
 
