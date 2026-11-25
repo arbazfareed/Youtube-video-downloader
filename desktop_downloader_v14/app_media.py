@@ -2773,22 +2773,35 @@ class MediaMixin:
                 parent=self._in_app_player_window,
             )
             return
-        if player.set_rate(rate) == -1:
-            current_rate = player.get_rate()
-            restored_rate = next(
-                (
-                    option
-                    for option in _IN_APP_PLAYBACK_RATES
-                    if float(option.removesuffix("x")) == current_rate
-                ),
-                f"{current_rate:g}x",
-            )
+        try:
+            result = player.set_rate(rate)
+        except Exception:
+            result = -1
+        if result == -1:
+            current_rate = None
+            try:
+                current_rate = float(player.get_rate())
+            except Exception:
+                # A failed native query must not escape the UI callback.
+                pass
+            restored_rate = getattr(self, "_in_app_last_playback_rate", None)
+            if current_rate is not None:
+                restored_rate = next(
+                    (
+                        option
+                        for option in _IN_APP_PLAYBACK_RATES
+                        if float(option.removesuffix("x")) == current_rate
+                    ),
+                    f"{current_rate:g}x",
+                )
+            if restored_rate not in _IN_APP_PLAYBACK_RATES:
+                restored_rate = "1.0x"
             rate_var.set(restored_rate)
-            messagebox.showerror(
-                self._t("Playback speed unavailable"),
-                self._t("VLC could not change the playback speed."),
-                parent=self._in_app_player_window,
+            self._set_in_app_player_status(
+                self._t("Playback speed change failed; try again")
             )
+            return
+        self._in_app_last_playback_rate = selected_rate
 
     def _set_in_app_player_status(self, text: str) -> None:
         self._in_app_player_status_text = text
