@@ -335,6 +335,34 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         )
         self.assertFalse(self.mixin._in_app_seeking)
 
+    def test_timeline_seek_exception_restores_position_and_cleans_drag_state(self):
+        player = _FakePlayer(is_playing=True)
+        player.get_length = lambda: 60000
+        player._time = 15000
+        player.set_time = MagicMock(side_effect=RuntimeError("VLC seek exception"))
+        self.mixin._in_app_player = player
+        self.mixin._in_app_seeking = True
+        self.mixin._in_app_control_interaction = True
+        self.mixin._in_app_position_var = _FakeTkVar(40)
+        self.mixin._in_app_current_time = _FakeTkVar("00:24")
+        self.mixin._in_app_timeline = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+        self.mixin._draw_in_app_timeline = MagicMock()
+        self.mixin._show_in_app_controls = MagicMock()
+
+        self.mixin._seek_in_app_player()
+
+        player.set_time.assert_called_once_with(24000)
+        self.assertEqual(self.mixin._in_app_position_var.get(), 25)
+        self.assertEqual(self.mixin._in_app_current_time.get(), "00:15")
+        self.assertFalse(self.mixin._in_app_seeking)
+        self.assertFalse(self.mixin._in_app_control_interaction)
+        self.mixin._draw_in_app_timeline.assert_called_once()
+        self.mixin._show_in_app_controls.assert_called_once()
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Could not seek to selected position"
+        )
+
     def test_stop_cancels_playback_poll_timer(self):
         player = _FakePlayer(is_playing=True)
         player.stop = MagicMock()
