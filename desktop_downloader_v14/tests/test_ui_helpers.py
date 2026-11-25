@@ -976,7 +976,7 @@ class MediaPlaybackTests(unittest.TestCase):
                         unittest.mock.call(
                             top_controls,
                             text=path.name,
-                            background="#000000",
+                            background="#101820",
                             foreground="#FFFFFF",
                             font=("Segoe UI", 11, "bold"),
                             anchor="center",
