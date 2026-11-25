@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import os
 import sys
 import threading
 import unittest
@@ -473,7 +474,7 @@ class TestNewV14Features(unittest.TestCase):
             os.utime(source, ns=(fixed_mtime_ns, fixed_mtime_ns))
             ffmpeg_directory = root / "ffmpeg"
             ffmpeg_directory.mkdir()
-            executable = ffmpeg_directory / "ffmpeg"
+            executable = ffmpeg_directory / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
             executable.write_bytes(b"fake ffmpeg")
 
             def render_thumbnail(command, **_kwargs):
@@ -501,7 +502,7 @@ class TestNewV14Features(unittest.TestCase):
             source.write_bytes(b"short clip")
             ffmpeg_directory = root / "ffmpeg"
             ffmpeg_directory.mkdir()
-            (ffmpeg_directory / "ffmpeg").write_bytes(b"fake ffmpeg")
+            (ffmpeg_directory / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")).write_bytes(b"fake ffmpeg")
 
             def fake_run(command, **_kwargs):
                 if "00:00:01" in command:
@@ -528,7 +529,7 @@ class TestNewV14Features(unittest.TestCase):
             source.write_bytes(b"video")
             ffmpeg_directory = root / "ffmpeg"
             ffmpeg_directory.mkdir()
-            (ffmpeg_directory / "ffmpeg").write_bytes(b"fake ffmpeg")
+            (ffmpeg_directory / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")).write_bytes(b"fake ffmpeg")
             destination = root / "broken.png"
 
             def write_partial_and_fail(command, **_kwargs):
@@ -567,7 +568,7 @@ class TestNewV14Features(unittest.TestCase):
             source.write_bytes(b"video")
             ffmpeg_directory = root / "ffmpeg"
             ffmpeg_directory.mkdir()
-            (ffmpeg_directory / "ffmpeg").write_bytes(b"fake ffmpeg")
+            (ffmpeg_directory / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")).write_bytes(b"fake ffmpeg")
             destination = root / "shared-cache.png"
             render_barrier = Barrier(2)
 
