@@ -1004,6 +1004,71 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.mixin._start_in_app_controls_fade.assert_not_called()
 
 
+    def test_video_preview_subtitle_refresh_preserves_cache_on_native_query_error(self):
+        player = MagicMock()
+        player.video_get_spu_description.side_effect = RuntimeError("VLC subtitle list error")
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_subtitle_track = _FakeTkVar("French")
+        self.mixin._preview_subtitle_tracks = {"French": 3}
+        self.mixin.preview_video_status = _FakeTkVar("")
+
+        self.mixin._refresh_video_preview_subtitle_tracks()
+
+        self.assertEqual(self.mixin._preview_subtitle_tracks, {"French": 3})
+        self.assertEqual(self.mixin._preview_subtitle_track.get(), "French")
+        self.assertEqual(
+            self.mixin.preview_video_status.get(),
+            "Subtitle information temporarily unavailable",
+        )
+
+    def test_video_preview_subtitle_selection_exception_is_recoverable(self):
+        player = MagicMock()
+        player.video_set_spu.side_effect = RuntimeError("VLC subtitle setter error")
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_subtitle_track = _FakeTkVar("English")
+        self.mixin._preview_subtitle_tracks = {"English": 4}
+        self.mixin.root = MagicMock()
+        self.mixin._refresh_video_preview_subtitle_tracks = MagicMock()
+
+        with patch("app_media.messagebox.showerror") as showerror:
+            self.mixin._set_video_preview_subtitle_track()
+
+        player.video_set_spu.assert_called_once_with(4)
+        showerror.assert_called_once()
+        self.mixin._refresh_video_preview_subtitle_tracks.assert_called_once()
+
+    def test_video_preview_subtitle_toggle_query_exception_does_not_escape(self):
+        player = MagicMock()
+        player.video_get_spu.side_effect = RuntimeError("VLC subtitle query error")
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_subtitle_track = _FakeTkVar("English")
+        self.mixin._preview_subtitle_tracks = {"English": 4}
+        self.mixin.preview_video_status = _FakeTkVar("")
+        self.mixin._refresh_video_preview_subtitle_tracks = MagicMock()
+
+        self.mixin._toggle_video_preview_subtitles()
+
+        player.video_set_spu.assert_not_called()
+        self.assertEqual(
+            self.mixin.preview_video_status.get(),
+            "Subtitle information temporarily unavailable",
+        )
+
+    def test_video_preview_subtitle_disable_exception_keeps_selection(self):
+        player = MagicMock()
+        player.video_set_spu.side_effect = RuntimeError("VLC subtitle disable error")
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_subtitle_track = _FakeTkVar("English")
+        self.mixin.root = MagicMock()
+        self.mixin._refresh_video_preview_subtitle_tracks = MagicMock()
+
+        with patch("app_media.messagebox.showerror") as showerror:
+            self.mixin._disable_video_preview_subtitles()
+
+        player.video_set_spu.assert_called_once_with(-1)
+        self.assertEqual(self.mixin._preview_subtitle_track.get(), "English")
+        showerror.assert_called_once()
+
     def test_video_preview_toggle_native_command_errors_are_recoverable(self):
         cases = (
             ("is_playing", RuntimeError("VLC status error")),
