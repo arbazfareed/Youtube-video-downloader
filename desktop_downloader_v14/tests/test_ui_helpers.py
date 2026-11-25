@@ -969,7 +969,7 @@ class MediaPlaybackTests(unittest.TestCase):
                             call.kwargs["text"]
                             for call in button_factory.call_args_list
                         ],
-                        ["←", "Ⅱ", "🎧 Audio", "CC", "📷", "A-B", "⚙", "⛶"],
+                        ["← Back", "＋ Open", "Ⅱ", "🎧 Audio", "CC", "📷", "A-B", "⚙", "⛶"],
                     )
                     string_var_factory.assert_any_call(value="1.0x")
                     self.assertIn(
