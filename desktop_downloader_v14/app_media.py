@@ -1774,6 +1774,36 @@ class MediaMixin:
         if getattr(self, "_in_app_player", None) is not None:
             self._toggle_in_app_fullscreen()
 
+    def _open_another_in_app_video(self) -> None:
+        """Replace the current media in Smart VLC without restarting the app."""
+        current_window = getattr(self, "_in_app_player_window", None)
+        chosen = filedialog.askopenfilename(
+            parent=current_window or self.root,
+            title=self._t("Open another video or audio file"),
+            filetypes=(
+                ("Playable media", "*.avi *.flac *.m4a *.mkv *.mov *.mp3 *.mp4 *.mpeg *.mpg *.ogg *.wav *.webm *.wmv *.aac"),
+                ("All files", "*.*"),
+            ),
+        )
+        if not chosen:
+            return
+        path = Path(chosen).expanduser()
+        if not path.is_file() or path.suffix.lower() not in PLAYABLE_MEDIA_EXTENSIONS:
+            messagebox.showinfo(
+                self._t("Unsupported media"),
+                self._t("Choose a supported audio or video file."),
+                parent=current_window or self.root,
+            )
+            return
+        try:
+            self._play_media_in_app(path)
+        except (AttributeError, ImportError, OSError, RuntimeError) as error:
+            messagebox.showerror(
+                self._t("Could not open media"),
+                f"{path.name}\n\n{error}",
+                parent=self.root,
+            )
+
     def _selected_media_path(self) -> Path | None:
         path = getattr(self, "_local_media_path", None)
         selected = self.jobs.selection()
@@ -1892,11 +1922,11 @@ class MediaMixin:
         self._in_app_top_controls_overlay = top_controls
         self._in_app_top_back_button = tk.Button(
             top_controls,
-            text="←",
-            command=self._exit_in_app_fullscreen,
-            width=3,
+            text="← Back",
+            command=self._close_in_app_player,
+            width=7,
             cursor="hand2",
-            font=("Segoe UI Symbol", 15),
+            font=("Segoe UI", 10, "bold"),
             background="#101820",
             foreground="#FFFFFF",
             activebackground="#263746",
@@ -1906,6 +1936,22 @@ class MediaMixin:
             highlightthickness=0,
         )
         self._in_app_top_back_button.grid(row=0, column=0, sticky="w")
+        self._in_app_open_video_button = tk.Button(
+            top_controls,
+            text="＋ Open",
+            command=self._open_another_in_app_video,
+            width=8,
+            cursor="hand2",
+            font=("Segoe UI", 10, "bold"),
+            background="#101820",
+            foreground="#FFFFFF",
+            activebackground="#263746",
+            activeforeground="#FFFFFF",
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=0,
+        )
+        self._in_app_open_video_button.grid(row=0, column=2, sticky="e")
         self._in_app_top_title_label = tk.Label(
             top_controls,
             text=self._in_app_media_title,
