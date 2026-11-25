@@ -284,6 +284,27 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.assertIsNone(self.mixin._in_app_playback_after)
 
 
+    def test_stop_restores_audio_selector_to_active_track(self):
+        player = _FakePlayer(active_track=1, is_playing=True)
+        player.stop = MagicMock()
+        self.mixin._in_app_player = player
+        self.mixin._in_app_audio_track = _FakeTkVar("Hindi")
+        self.mixin._show_in_app_controls = MagicMock()
+        self.mixin._set_in_app_launcher_buttons = MagicMock()
+        self.mixin._in_app_playback_button = MagicMock()
+        self.mixin._in_app_audio_switch = {"target": 2, "after": None}
+
+        # The selector shows the requested track while VLC still has Hindi active.
+        self.mixin._refresh_in_app_audio_tracks(force=False)
+        self.assertEqual(self.mixin._in_app_audio_track.get(), "English")
+
+        self.mixin._stop_in_app_player()
+
+        self.assertEqual(self.mixin._in_app_audio_track.get(), "Hindi")
+        self.assertIsNone(self.mixin._in_app_audio_switch)
+        player.stop.assert_called_once()
+
+
     def test_stop_cancels_pending_audio_switch_and_allows_new_selection(self):
         player = _FakePlayer(is_playing=True)
         player.stop = MagicMock()

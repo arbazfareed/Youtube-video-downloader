@@ -3247,6 +3247,9 @@ class MediaMixin:
 
         player = getattr(self, "_in_app_player", None)
         if player is not None:
+            # Restore the selector to VLC's actual active track. The pending
+            # target may have been displayed optimistically but never applied.
+            self._refresh_in_app_audio_tracks(force=True)
             player.stop()
         self._set_in_app_launcher_buttons(False)
         playback_button = getattr(self, "_in_app_playback_button", None)
