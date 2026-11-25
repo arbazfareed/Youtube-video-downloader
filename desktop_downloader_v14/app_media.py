@@ -2299,23 +2299,9 @@ class MediaMixin:
         if seekable and not self._in_app_seeking:
             self._in_app_position_var.set(min(100, current_time * 100 / duration))
         self._draw_in_app_timeline()
-        self._in_app_audio_refresh_ticks = (
-            getattr(self, "_in_app_audio_refresh_ticks", 0) + 1
-        )
-        if self._in_app_audio_refresh_ticks % 4 == 0:
-            try:
-                self._refresh_in_app_audio_tracks()
-                self._refresh_in_app_subtitle_tracks()
-            except Exception:
-                # VLC track enumeration can fail transiently while a stream
-                # changes state. Keep playback polling alive and retry shortly.
-                self._set_in_app_player_status(
-                    self._t("Playback track information temporarily unavailable")
-                )
-                self._in_app_playback_after = self.root.after(
-                    500, self._poll_in_app_playback
-                )
-                return
+        # Track enumeration invokes native VLC APIs and can block the Tk
+        # event loop on large files or slow decoders. Track lists are loaded
+        # when playback opens and refreshed on demand from the track menus.
         if state == vlc.State.Ended:
             if ab_loop and ab_loop.get("A") is not None and ab_loop.get("B") is not None:
                 try:
@@ -2349,7 +2335,7 @@ class MediaMixin:
                     self._set_in_app_player_status(
                         self._t("A-B loop restart seek failed; loop cleared")
                     )
-                self._in_app_playback_after = self.root.after(250, self._poll_in_app_playback)
+                self._in_app_playback_after = self.root.after(500, self._poll_in_app_playback)
                 return
             self._in_app_playback_button.configure(text="▶")
             self._set_in_app_launcher_buttons(False)
