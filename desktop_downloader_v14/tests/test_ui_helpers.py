@@ -1687,7 +1687,7 @@ class MediaPlaybackTests(unittest.TestCase):
         app._t = lambda text: text
         app._in_app_player_window = Mock()
         app._in_app_player = Mock()
-        app._in_app_player.video_get_spu.side_effect = [-1, 1, 1, 1]
+        app._in_app_player.video_get_spu.side_effect = [-1, 1, 1, -1]
         app._in_app_player.video_get_spu_description.return_value = [
             (1, "English"),
         ]
