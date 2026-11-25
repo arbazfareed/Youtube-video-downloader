@@ -2117,7 +2117,13 @@ class MediaMixin:
             self._refresh_in_app_subtitle_tracks()
         if state == vlc.State.Ended:
             if ab_loop and ab_loop.get("A") is not None and ab_loop.get("B") is not None:
-                if player.play() == -1:
+                try:
+                    restart_play_failed = player.play() == -1
+                except Exception:
+                    # A native VLC exception must follow the same cleanup path
+                    # as its documented -1 playback-start failure.
+                    restart_play_failed = True
+                if restart_play_failed:
                     self._in_app_playback_button.configure(text="▶")
                     self._set_in_app_launcher_buttons(False)
                     self._set_in_app_player_status(self._t("Could not restart playback"))
