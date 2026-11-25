@@ -369,6 +369,24 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
 
 
 
+    def test_ab_loop_rejects_non_seekable_media(self):
+        player = _FakePlayer(is_playing=True)
+        player.is_seekable = lambda: False
+        player.set_time = MagicMock()
+        self.mixin._in_app_player = player
+        self.mixin._in_app_player_window = MagicMock()
+        self.mixin._in_app_ab_loop = {"A": None, "B": None}
+        self.mixin._in_app_ab_loop_button = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        self.mixin._toggle_in_app_ab_loop()
+
+        self.assertEqual(self.mixin._in_app_ab_loop, {"A": None, "B": None})
+        player.set_time.assert_not_called()
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "A-B loop is unavailable for non-seekable media."
+        )
+
     def test_ab_loop_default_endpoint_is_clamped_to_media_duration(self):
         player = _FakePlayer(is_playing=True)
         player.get_length = lambda: 60000
