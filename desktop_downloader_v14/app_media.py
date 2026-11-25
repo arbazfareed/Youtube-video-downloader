@@ -2621,28 +2621,6 @@ class MediaMixin:
             if isinstance(switch, dict) and switch.get("target") is not None:
                 self._choose_in_app_audio_track(switch["target"])
         button = getattr(self, "_in_app_playback_button", None)
-                if button is not None:
-                    button.configure(text="▶")
-                self._set_in_app_player_status(self._t("Could not start playback"))
-                messagebox.showerror(
-                    self._t("Could not play media"),
-                    self._t("VLC could not start playback."),
-                    parent=getattr(self, "_in_app_player_window", None),
-                )
-                self._show_in_app_controls()
-                return
-            label = self._t("Pause")
-            status = self._t("Playback started")
-            self._set_in_app_launcher_buttons(True)
-            # Playback may have ended and stopped the polling loop.
-            if getattr(self, "_in_app_playback_after", None) is None:
-                self._in_app_playback_after = self.root.after(
-                    250, self._poll_in_app_playback
-                )
-            switch = getattr(self, "_in_app_audio_switch", None)
-            if isinstance(switch, dict) and switch.get("target") is not None:
-                self._choose_in_app_audio_track(switch["target"])
-        button = getattr(self, "_in_app_playback_button", None)
         if button is not None:
             button.configure(text="▶" if label == self._t("Play") else "Ⅱ")
         self._set_in_app_player_status(status)
