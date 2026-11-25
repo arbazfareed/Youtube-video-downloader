@@ -2117,7 +2117,19 @@ class MediaMixin:
         self._in_app_duration_ms = duration
         self._in_app_duration.set(self._format_in_app_time(duration))
         self._in_app_current_time.set(self._format_in_app_time(current_time))
-        if duration > 0 and player.is_seekable() and not self._in_app_seeking:
+        try:
+            seekable = duration > 0 and player.is_seekable()
+        except Exception:
+            # Some VLC backends can temporarily fail seekability queries.
+            # Preserve the current UI and retry instead of killing polling.
+            self._set_in_app_player_status(
+                self._t("Playback seek status temporarily unavailable")
+            )
+            self._in_app_playback_after = self.root.after(
+                500, self._poll_in_app_playback
+            )
+            return
+        if seekable and not self._in_app_seeking:
             self._in_app_position_var.set(min(100, current_time * 100 / duration))
         self._draw_in_app_timeline()
         self._in_app_audio_refresh_ticks = (
