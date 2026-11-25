@@ -3470,11 +3470,20 @@ class MediaMixin:
         self._in_app_audio_switch = None
         player = getattr(self, "_in_app_player", None)
         if player is not None:
-            player.stop()
-            player.release()
+            # Native VLC teardown may raise during a device/stream transition.
+            # Attempt each release independently so the Tk window and Python
+            # state are still cleaned up even when stop() fails.
+            for cleanup in (player.stop, player.release):
+                try:
+                    cleanup()
+                except Exception:
+                    pass
         instance = getattr(self, "_in_app_vlc_instance", None)
         if instance is not None:
-            instance.release()
+            try:
+                instance.release()
+            except Exception:
+                pass
         self._in_app_player = None
         self._in_app_vlc_instance = None
         self._in_app_player_window = None
