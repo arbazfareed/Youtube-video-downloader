@@ -3049,7 +3049,17 @@ class MediaMixin:
         if player is None or variable is None or button is None:
             return
 
-        descriptions = player.video_get_spu_description() or []
+        try:
+            descriptions = player.video_get_spu_description() or []
+            active_track = player.video_get_spu()
+        except Exception:
+            # Keep the last known subtitle choices when VLC's native query
+            # briefly fails; polling or the next user action can retry.
+            self._set_in_app_player_status(
+                self._t("Subtitle information temporarily unavailable")
+            )
+            return
+
         subtitle_tracks: dict[str, int] = {}
         for track_id, description in descriptions:
             track_id = int(track_id)
@@ -3074,7 +3084,6 @@ class MediaMixin:
             return
 
         button.grid()
-        active_track = player.video_get_spu()
         selected = next(
             (
                 label
@@ -3129,11 +3138,13 @@ class MediaMixin:
         )
         if track_id is None:
             return
-        if player.video_set_spu(track_id) == -1:
-            messagebox.showerror(
-                self._t("Subtitle track unavailable"),
-                self._t("VLC could not select this subtitle track."),
-                parent=self._in_app_player_window,
+        try:
+            result = player.video_set_spu(track_id)
+        except Exception:
+            result = -1
+        if result == -1:
+            self._set_in_app_player_status(
+                self._t("Subtitle selection failed; try again")
             )
             self._refresh_in_app_subtitle_tracks()
             return
@@ -3146,16 +3157,17 @@ class MediaMixin:
         if player is None or variable is None:
             return
         self._show_in_app_controls()
-        if player.video_get_spu() < 0:
-            variable.set(self._t("Off"))
-            if button is not None:
-                button.configure(foreground="#FFFFFF")
-            return
-        if player.video_set_spu(-1) == -1:
-            messagebox.showerror(
-                self._t("Subtitle track unavailable"),
-                self._t("VLC could not change subtitle visibility."),
-                parent=self._in_app_player_window,
+        try:
+            active_track = player.video_get_spu()
+            if active_track >= 0:
+                result = player.video_set_spu(-1)
+            else:
+                result = 0
+        except Exception:
+            result = -1
+        if result == -1:
+            self._set_in_app_player_status(
+                self._t("Subtitle toggle failed; try again")
             )
             return
         variable.set(self._t("Off"))
@@ -3169,7 +3181,14 @@ class MediaMixin:
         if player is None or variable is None or not tracks:
             return
         self._show_in_app_controls()
-        if player.video_get_spu() >= 0:
+        try:
+            active_track = player.video_get_spu()
+        except Exception:
+            self._set_in_app_player_status(
+                self._t("Subtitle information temporarily unavailable")
+            )
+            return
+        if active_track >= 0:
             self._disable_in_app_subtitles()
             return
         selected = variable.get()
