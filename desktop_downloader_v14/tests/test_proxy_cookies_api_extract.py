@@ -447,7 +447,7 @@ class ApiTests(unittest.TestCase):
 
 
 class ApiCancellationRegressionTests(unittest.TestCase):
-def test_api_cancellation_after_download_prevents_postprocessing(self):
+    def test_api_cancellation_after_download_prevents_postprocessing(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "download.bin"
             output.write_bytes(b"downloaded")
