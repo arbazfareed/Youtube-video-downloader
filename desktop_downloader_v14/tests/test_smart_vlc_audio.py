@@ -1550,5 +1550,38 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
 
 
 
+    def test_preview_fullscreen_is_cancelled_when_native_pause_raises(self):
+        player = MagicMock()
+        player.is_playing.return_value = True
+        player.pause.side_effect = RuntimeError("VLC pause failed")
+        self.mixin._preview_media_path = Path("sample.mp4")
+        self.mixin._preview_vlc_player = player
+        self.mixin.preview_video_status = _FakeTkVar("")
+        self.mixin.preview_player_play_button = MagicMock()
+        self.mixin._play_media_in_app = MagicMock()
+
+        self.mixin._open_preview_fullscreen()
+
+        self.mixin._play_media_in_app.assert_not_called()
+        self.assertIn("could not pause", self.mixin.preview_video_status.get())
+        self.mixin.preview_player_play_button.configure.assert_not_called()
+
+    def test_preview_fullscreen_is_cancelled_when_native_pause_rejected(self):
+        player = MagicMock()
+        player.is_playing.return_value = True
+        player.pause.return_value = -1
+        self.mixin._preview_media_path = Path("sample.mp4")
+        self.mixin._preview_vlc_player = player
+        self.mixin.preview_video_status = _FakeTkVar("")
+        self.mixin.preview_player_play_button = MagicMock()
+        self.mixin._play_media_in_app = MagicMock()
+
+        self.mixin._open_preview_fullscreen()
+
+        self.mixin._play_media_in_app.assert_not_called()
+        self.assertIn("could not pause", self.mixin.preview_video_status.get())
+
+
+
 if __name__ == "__main__":
     unittest.main()

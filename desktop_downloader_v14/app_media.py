@@ -1733,9 +1733,24 @@ class MediaMixin:
         if path is None:
             return
         preview_player = getattr(self, "_preview_vlc_player", None)
-        if preview_player is not None and preview_player.is_playing():
-            preview_player.pause()
-            self.preview_player_play_button.configure(text="▶")
+        if preview_player is not None:
+            status = getattr(self, "preview_video_status", None)
+            try:
+                if preview_player.is_playing():
+                    pause_result = preview_player.pause()
+                    if pause_result == -1:
+                        raise RuntimeError("VLC could not pause dashboard preview")
+                    button = getattr(self, "preview_player_play_button", None)
+                    if button is not None:
+                        button.configure(text="▶")
+            except Exception:
+                # Avoid launching a second player while the dashboard preview
+                # may still be playing; let the user retry the transition.
+                if status is not None:
+                    status.set(self._t("Preview could not pause; fullscreen was not opened"))
+                return
+            if status is not None:
+                status.set("")
         selected = getattr(self, "jobs", None)
         selection = selected.selection() if selected is not None else ()
         if selection and self._selected_output_path() == path:
