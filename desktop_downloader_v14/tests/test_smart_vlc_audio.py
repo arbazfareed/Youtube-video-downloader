@@ -457,7 +457,7 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.mixin._toggle_in_app_ab_loop()
 
         self.assertEqual(self.mixin._in_app_ab_loop, {"A": None, "B": None})
-        button.configure.assert_called_once_with(text="A-B", foreground="#FFFFFF")
+        self.assertEqual(button.configure.call_args, call(text="A-B", foreground="#FFFFFF"))
         self.mixin._set_in_app_player_status.assert_called_once_with(
             "Could not seek to loop point; A-B loop cleared"
         )
