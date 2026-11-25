@@ -25,9 +25,6 @@ class HistoryUrlNormalizationTests(unittest.TestCase):
         )
 
 
-if __name__ == "__main__":
-    unittest.main()
-
     def test_normalizes_empty_http_path_to_root(self):
         self.assertEqual(
             normalize_url("https://EXAMPLE.com#fragment"),
@@ -37,4 +34,7 @@ if __name__ == "__main__":
             normalize_url("http://example.com:80"),
             "http://example.com/",
         )
+
+if __name__ == "__main__":
+    unittest.main()
 
