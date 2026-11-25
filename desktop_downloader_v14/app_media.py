@@ -2522,6 +2522,14 @@ class MediaMixin:
         btn = getattr(self, "_in_app_ab_loop_button", None)
         current_time = max(0, player.get_time())
 
+        # A-B looping requires seeking. Avoid showing an active loop when
+        # VLC reports that the current stream cannot seek.
+        if (loop["A"] is None or loop["B"] is None) and not player.is_seekable():
+            self._set_in_app_player_status(
+                "A-B loop is unavailable for non-seekable media."
+            )
+            return
+
         if loop["A"] is None:
             loop["A"] = current_time
             loop["B"] = None
