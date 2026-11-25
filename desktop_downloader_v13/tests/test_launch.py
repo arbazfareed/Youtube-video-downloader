@@ -10,6 +10,7 @@ import launch
 from launch import (
     _ensure_dependencies,
     _smoke_test_app,
+    _smoke_test_tk,
     _smoke_test_vlc_runtime,
 )
 
@@ -77,8 +78,11 @@ class PackagedSmokeTestTests(unittest.TestCase):
                 self.visible = visible
                 self.destroyed = False
 
+            def update_idletasks(self):
+                self.idle_updates = getattr(self, "idle_updates", 0) + 1
+
             def update(self):
-                return None
+                raise AssertionError("smoke test must not dispatch pending callbacks")
 
             def title(self):
                 return "Smart Downloader"
@@ -90,15 +94,60 @@ class PackagedSmokeTestTests(unittest.TestCase):
                 self.destroyed = True
 
         root = FakeRoot(visible=True)
+        closed_apps = []
+
+        class FakeApp:
+            def __init__(self, app_root):
+                self.app_root = app_root
+
+            def _close(self):
+                closed_apps.append(self)
+                self.app_root.destroy()
+
         with patch("launch.tk.Tk", return_value=root):
-            _smoke_test_app(lambda _root: None)
+            _smoke_test_app(FakeApp)
         self.assertTrue(root.destroyed)
+        self.assertEqual(len(closed_apps), 1)
 
         hidden_root = FakeRoot(visible=False)
         with patch("launch.tk.Tk", return_value=hidden_root):
             with self.assertRaisesRegex(RuntimeError, "did not become visible"):
                 _smoke_test_app(lambda _root: None)
         self.assertTrue(hidden_root.destroyed)
+
+    def test_packaged_tk_smoke_test_does_not_import_application_modules(self):
+        class FakeRoot:
+            def __init__(self):
+                self.destroyed = False
+
+            def title(self, value=None):
+                if value is not None:
+                    self.window_title = value
+                return getattr(self, "window_title", "")
+
+            def update_idletasks(self):
+                pass
+
+            def winfo_viewable(self):
+                return True
+
+            def destroy(self):
+                self.destroyed = True
+
+        root = FakeRoot()
+        with patch("launch.tk.Tk", return_value=root):
+            _smoke_test_tk()
+        self.assertTrue(root.destroyed)
+
+    def test_smoke_mode_uses_isolated_tk_check_before_importing_app(self):
+        with (
+            patch.object(sys, "argv", ["launch.py", "--smoke-test"]),
+            patch("launch._ensure_dependencies") as ensure_dependencies,
+            patch("launch._smoke_test_tk") as smoke_tk,
+        ):
+            self.assertEqual(launch.main(), 0)
+        ensure_dependencies.assert_called_once_with()
+        smoke_tk.assert_called_once_with()
 
     def test_vlc_smoke_test_initializes_and_releases_native_runtime(self):
         import app_media

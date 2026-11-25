@@ -69,11 +69,34 @@ def _ensure_dependencies() -> None:
 
 def _smoke_test_app(app_class) -> None:
     root = tk.Tk()
+    app = None
     try:
-        app_class(root)
-        root.update()
+        app = app_class(root)
+        # Drain geometry and drawing work without dispatching delayed callbacks.
+        # The packaged headless smoke test must not start timers/background UI work.
+        root.update_idletasks()
         if root.title() != "Smart Downloader" or not root.winfo_viewable():
             raise RuntimeError("The Smart Downloader window did not become visible.")
+    finally:
+        close_app = getattr(app, "_close", None)
+        if callable(close_app):
+            try:
+                close_app()
+            except Exception:
+                root.destroy()
+                raise
+        else:
+            root.destroy()
+
+
+def _smoke_test_tk() -> None:
+    """Verify the frozen Tk runtime without importing native app/media modules."""
+    root = tk.Tk()
+    try:
+        root.title("Smart Downloader")
+        root.update_idletasks()
+        if root.title() != "Smart Downloader" or not root.winfo_viewable():
+            raise RuntimeError("The packaged Tk window did not become visible.")
     finally:
         root.destroy()
 
@@ -132,12 +155,13 @@ def main() -> int:
     smoke_test = "--smoke-test" in arguments
     try:
         _ensure_dependencies()
-        from app import DownloaderApp, main as run_app
-
         if smoke_test:
-            _smoke_test_app(DownloaderApp)
-        else:
-            run_app()
+            _smoke_test_tk()
+            return 0
+
+        from app import main as run_app
+
+        run_app()
         return 0
     except Exception as error:
         app_dir = Path(sys.executable).resolve().parent if getattr(

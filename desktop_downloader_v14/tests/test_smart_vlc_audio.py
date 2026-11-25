@@ -272,7 +272,7 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.assertEqual(self.mixin._in_app_position_var.get(), 25)
         self.assertEqual(self.mixin._in_app_current_time.get(), "00:15")
 
-    def test_polling_recovers_after_track_refresh_exception(self):
+    def test_playback_poll_does_not_enumerate_native_tracks(self):
         from types import SimpleNamespace
 
         playing, ended, error = object(), object(), object()
@@ -294,31 +294,19 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.mixin._draw_in_app_timeline = MagicMock()
         self.mixin._in_app_audio_refresh_ticks = 3
         self.mixin._refresh_in_app_audio_tracks = MagicMock(
-            side_effect=[RuntimeError("temporary track query error"), None]
+            side_effect=AssertionError("track enumeration must not block playback polling")
         )
-        self.mixin._refresh_in_app_subtitle_tracks = MagicMock()
+        self.mixin._refresh_in_app_subtitle_tracks = MagicMock(
+            side_effect=AssertionError("track enumeration must not block playback polling")
+        )
 
         self.mixin._poll_in_app_playback()
 
-        retry_id = self.mixin._in_app_playback_after
-        self.assertIsNotNone(retry_id)
-        self.assertIn(retry_id, self.mixin.root.timers)
-        self.assertEqual(
-            self.mixin._in_app_player_status.get(),
-            "Playback track information temporarily unavailable",
-        )
+        self.mixin._refresh_in_app_audio_tracks.assert_not_called()
+        self.mixin._refresh_in_app_subtitle_tracks.assert_not_called()
         self.assertEqual(self.mixin._in_app_position_var.get(), 25)
-
-        # The polling interval is also the refresh cadence; make the next
-        # retry land on a refresh tick to verify the transient error recovers.
-        self.mixin._in_app_audio_refresh_ticks = 3
-        self.mixin.root.timers[retry_id]()
-
-        self.assertEqual(self.mixin._refresh_in_app_audio_tracks.call_count, 2)
-        self.mixin._refresh_in_app_subtitle_tracks.assert_called_once()
         self.assertIsNotNone(self.mixin._in_app_playback_after)
         self.assertIn(self.mixin._in_app_playback_after, self.mixin.root.timers)
-
     def test_replay_after_end_restarts_playback_polling(self):
         from types import SimpleNamespace
 

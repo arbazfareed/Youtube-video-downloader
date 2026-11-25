@@ -5,6 +5,13 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-windows.yml"
+      - "desktop_downloader_v13/**"
+      - "desktop_downloader_v14/**"
 
 permissions:
   contents: write
@@ -48,6 +55,12 @@ jobs:
             runner: ubuntu-22.04
             data-separator: ':'
             media-player-import: --hidden-import vlc
+          - app-directory: desktop_downloader_v14
+            executable: SmartDownloader14
+            platform: Windows
+            runner: windows-latest
+            data-separator: ';'
+            media-player-import: --hidden-import vlc
     defaults:
       run:
         working-directory: ${{ matrix.app-directory }}
@@ -68,7 +81,7 @@ jobs:
           python -m pip install --disable-pip-version-check -r requirements.txt
           python -m pip install --disable-pip-version-check pyinstaller
       - name: Download verified VLC runtime for portable Windows player
-        if: matrix.app-directory == 'desktop_downloader_v13' && matrix.platform == 'Windows'
+        if: (matrix.app-directory == 'desktop_downloader_v13' || matrix.app-directory == 'desktop_downloader_v14') && matrix.platform == 'Windows'
         shell: pwsh
         run: |
           $archive = Join-Path $env:RUNNER_TEMP "vlc-3.0.23-win64.zip"
@@ -82,7 +95,7 @@ jobs:
           $extractDirectory = Join-Path $env:RUNNER_TEMP "vlc-extracted"
           Expand-Archive -Path $archive -DestinationPath $extractDirectory
           $vlcSource = Join-Path $extractDirectory "vlc-3.0.23"
-          $vlcRuntime = Join-Path $env:RUNNER_TEMP "SmartDownloader13-VLC"
+          $vlcRuntime = Join-Path $env:RUNNER_TEMP "${{ matrix.executable }}-VLC"
           if (-not (Test-Path (Join-Path $vlcSource "libvlc.dll")) -or
               -not (Test-Path (Join-Path $vlcSource "plugins"))) {
             throw "The downloaded VLC archive is missing its runtime files."
@@ -104,7 +117,7 @@ jobs:
           --collect-submodules plugins
           launch.py
       - name: Verify packaged GUI initializes
-        if: matrix.platform == 'Windows' && (matrix.app-directory == 'desktop_downloader_v12' || matrix.app-directory == 'desktop_downloader_v13')
+        if: matrix.platform == 'Windows' && (matrix.app-directory == 'desktop_downloader_v12' || matrix.app-directory == 'desktop_downloader_v13' || matrix.app-directory == 'desktop_downloader_v14')
         shell: pwsh
         run: |
           $process = Start-Process `
@@ -123,7 +136,8 @@ jobs:
             throw "Packaged app GUI initialization failed with code $($process.ExitCode)."
           }
           if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v12" -or
-              "${{ matrix.app-directory }}" -eq "desktop_downloader_v13") {
+              "${{ matrix.app-directory }}" -eq "desktop_downloader_v13" -or
+              "${{ matrix.app-directory }}" -eq "desktop_downloader_v14") {
             $cliProcess = Start-Process `
               -FilePath "dist\${{ matrix.executable }}.exe" `
               -ArgumentList "--cli --help" -Wait -PassThru
@@ -216,10 +230,10 @@ jobs:
               "Add trusted Python plugin files to the included plugins folder."
             )
           }
-          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v13") {
+          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v13" -or "${{ matrix.app-directory }}" -eq "desktop_downloader_v14") {
             $vlcDestination = Join-Path $packageDirectory "VLC"
             New-Item -ItemType Directory -Path $vlcDestination | Out-Null
-            Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP "SmartDownloader13-VLC") -Force |
+            Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP "${{ matrix.executable }}-VLC") -Force |
               Copy-Item -Destination $vlcDestination -Recurse
             $setupLines += @(
               "Smart VLC includes the VideoLAN VLC 3.0.23 runtime and license files in the VLC folder."
@@ -230,7 +244,8 @@ jobs:
           $setupLines | Set-Content -Path $setupPath -Encoding utf8
           $packageZip = Join-Path $env:RUNNER_TEMP "$packageName.zip"
           Compress-Archive -Path "$packageDirectory\*" -DestinationPath $packageZip
-          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v13") {
+          if ("${{ matrix.app-directory }}" -eq "desktop_downloader_v13" -or
+              "${{ matrix.app-directory }}" -eq "desktop_downloader_v14") {
             $vlcSmokeTest = Start-Process `
               -FilePath (Join-Path $packageDirectory "${{ matrix.executable }}.exe") `
               -ArgumentList "--vlc-smoke-test" -Wait -PassThru
