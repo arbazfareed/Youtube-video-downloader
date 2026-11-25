@@ -2866,14 +2866,21 @@ class MediaMixin:
         player = getattr(self, "_in_app_player", None)
         if player is None:
             return
-        surface.update()
-        handle = surface.winfo_id()
-        if sys.platform == "win32":
-            player.set_hwnd(handle)
-        elif sys.platform == "darwin":
-            player.set_nsobject(handle)
-        else:
-            player.set_xwindow(handle)
+        try:
+            surface.update()
+            handle = surface.winfo_id()
+            if sys.platform == "win32":
+                player.set_hwnd(handle)
+            elif sys.platform == "darwin":
+                player.set_nsobject(handle)
+            else:
+                player.set_xwindow(handle)
+        except Exception:
+            # Tk surface operations and VLC's native window binding can fail
+            # transiently while the player window is being created/replaced.
+            self._set_in_app_player_status(
+                self._t("Video surface unavailable; playback can be retried")
+            )
 
     def _set_in_app_volume(self, value: str) -> None:
         player = getattr(self, "_in_app_player", None)
