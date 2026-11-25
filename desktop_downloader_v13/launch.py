@@ -69,14 +69,22 @@ def _ensure_dependencies() -> None:
 
 def _smoke_test_app(app_class) -> None:
     root = tk.Tk()
+    app = None
     try:
-        app_class(root)
+        app = app_class(root)
         root.update()
         if root.title() != "Smart Downloader" or not root.winfo_viewable():
             raise RuntimeError("The Smart Downloader window did not become visible.")
     finally:
-        root.destroy()
-
+        close_app = getattr(app, "_close", None)
+        if callable(close_app):
+            try:
+                close_app()
+            except Exception:
+                root.destroy()
+                raise
+        else:
+            root.destroy()
 
 def _smoke_test_vlc_runtime() -> int:
     from app_media import MediaMixin
