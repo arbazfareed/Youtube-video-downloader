@@ -376,6 +376,35 @@ class ApiTests(unittest.TestCase):
             "cancelling",
         )
 
+    def test_queued_job_paused_before_worker_starts_can_resume(self):
+        job = api.ApiJob(
+            "paused-before-worker",
+            api.JobRequest(url="https://example.test/file.bin"),
+        )
+        api._JOBS[job.id] = job
+        api.pause_job(job.id)
+        worker_started = threading.Event()
+        observed_status = []
+
+        def wait_for_resume(*_args, **kwargs):
+            observed_status.append(job.status)
+            worker_started.set()
+            if not job.resume_event.wait(2):
+                raise AssertionError("Paused API worker was never resumed")
+            return "saved.bin"
+
+        with patch.object(api, "download_url", side_effect=wait_for_resume):
+            worker = threading.Thread(target=api._run_job, args=(job,))
+            worker.start()
+            self.assertTrue(worker_started.wait(1))
+            self.assertEqual(observed_status, ["paused"])
+            self.assertEqual(job.status, "paused")
+            api.resume_job(job.id)
+            worker.join(2)
+
+        self.assertFalse(worker.is_alive(), "Resumed API worker should finish")
+        self.assertEqual(job.status, "completed")
+
     def test_mobile_handoff_is_job_scoped_and_expires(self):
         job = api.ApiJob("phone-job", api.JobRequest(url="https://example.test/video"))
         api._JOBS[job.id] = job

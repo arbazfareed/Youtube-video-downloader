@@ -141,7 +141,9 @@ def _check_job_cancelled(job: ApiJob) -> None:
 
 def _run_job(job: ApiJob) -> None:
     if not job.cancel_event.is_set():
-        job.status = "running"
+        # A queued job may have been paused before its worker starts.
+        # Preserve that state so the API resume endpoint remains usable.
+        job.status = "paused" if not job.resume_event.is_set() else "running"
 
     def report(state: str, percent: float | None, details: str) -> None:
         job.status = "paused" if not job.resume_event.is_set() else "running"
