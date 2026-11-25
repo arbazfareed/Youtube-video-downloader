@@ -90,9 +90,20 @@ class PackagedSmokeTestTests(unittest.TestCase):
                 self.destroyed = True
 
         root = FakeRoot(visible=True)
+        closed_apps = []
+
+        class FakeApp:
+            def __init__(self, app_root):
+                self.app_root = app_root
+
+            def _close(self):
+                closed_apps.append(self)
+                self.app_root.destroy()
+
         with patch("launch.tk.Tk", return_value=root):
-            _smoke_test_app(lambda _root: None)
+            _smoke_test_app(FakeApp)
         self.assertTrue(root.destroyed)
+        self.assertEqual(len(closed_apps), 1)
 
         hidden_root = FakeRoot(visible=False)
         with patch("launch.tk.Tk", return_value=hidden_root):
