@@ -479,6 +479,21 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.assertIsNotNone(self.mixin._in_app_playback_after)
         self.assertIn(self.mixin._in_app_playback_after, self.mixin.root.timers)
 
+    def test_timeline_drag_start_seekability_exception_is_recoverable(self):
+        player = MagicMock()
+        player.is_seekable.side_effect = RuntimeError("VLC seekability failed")
+        self.mixin._in_app_player = player
+        self.mixin._in_app_duration_ms = 60000
+        self.mixin._in_app_seeking = False
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        self.mixin._begin_in_app_seek()
+
+        self.assertFalse(self.mixin._in_app_seeking)
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Seek temporarily unavailable; try again"
+        )
+
     def test_timeline_seek_failure_restores_actual_position(self):
         player = _FakePlayer(is_playing=True)
         player.get_length = lambda: 60000
