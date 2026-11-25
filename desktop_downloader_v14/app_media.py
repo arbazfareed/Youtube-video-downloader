@@ -1815,6 +1815,10 @@ class MediaMixin:
         window.bind("<F11>", self._toggle_in_app_fullscreen, add="+")
         window.bind("<Escape>", self._exit_in_app_fullscreen, add="+")
         window.bind("<space>", self._toggle_in_app_playback_from_key, add="+")
+        # Bind media navigation/volume directly to the player toplevel too.
+        # bind_all alone can be bypassed by VLC/Tk focus and menu grabs.
+        for sequence in ("<Left>", "<Right>", "<Up>", "<Down>"):
+            window.bind(sequence, self._handle_playback_arrow_key, add="+")
         window.bind("<KeyPress>", self._show_in_app_controls, add="+")
         window.bind("<Motion>", self._show_in_app_controls, add="+")
         window.bind("<ButtonPress-1>", self._begin_in_app_control_interaction, add="+")
@@ -1839,6 +1843,11 @@ class MediaMixin:
         video_surface = tk.Frame(window, background="#101820")
         video_surface.grid(row=0, column=0, sticky="nsew")
         self._in_app_video_surface = video_surface
+        video_surface.bind("<Left>", self._handle_playback_arrow_key, add="+")
+        video_surface.bind("<Right>", self._handle_playback_arrow_key, add="+")
+        video_surface.bind("<Up>", self._handle_playback_arrow_key, add="+")
+        video_surface.bind("<Down>", self._handle_playback_arrow_key, add="+")
+        video_surface.focus_set()
         video_surface.bind("<Configure>", self._raise_in_app_controls_overlay, add="+")
         video_surface.bind("<Motion>", self._show_in_app_controls, add="+")
         video_surface.bind("<ButtonPress-1>", self._show_in_app_controls, add="+")
@@ -1852,6 +1861,8 @@ class MediaMixin:
         controls_window.bind("<F11>", self._toggle_in_app_fullscreen, add="+")
         controls_window.bind("<Escape>", self._exit_in_app_fullscreen, add="+")
         controls_window.bind("<space>", self._toggle_in_app_playback_from_key, add="+")
+        for sequence in ("<Left>", "<Right>", "<Up>", "<Down>"):
+            controls_window.bind(sequence, self._handle_playback_arrow_key, add="+")
         controls_window.bind("<KeyPress>", self._show_in_app_controls, add="+")
         self._in_app_controls_overlay_window = controls_window
         top_controls_window = tk.Toplevel(window)
@@ -1862,6 +1873,8 @@ class MediaMixin:
         top_controls_window.bind("<F11>", self._toggle_in_app_fullscreen, add="+")
         top_controls_window.bind("<Escape>", self._exit_in_app_fullscreen, add="+")
         top_controls_window.bind("<space>", self._toggle_in_app_playback_from_key, add="+")
+        for sequence in ("<Left>", "<Right>", "<Up>", "<Down>"):
+            top_controls_window.bind(sequence, self._handle_playback_arrow_key, add="+")
         top_controls_window.bind("<KeyPress>", self._show_in_app_controls, add="+")
         self._in_app_top_controls_overlay_window = top_controls_window
         top_controls = tk.Frame(
@@ -3027,8 +3040,6 @@ class MediaMixin:
         player = getattr(self, "_in_app_player", None)
         volume = max(0, min(100, round(float(value))))
         volume_var = getattr(self, "_in_app_volume_var", None)
-        if volume_var is not None and round(float(value)) != volume:
-            volume_var.set(volume)
         if player is not None:
             try:
                 result = player.audio_set_volume(volume)
@@ -3047,6 +3058,10 @@ class MediaMixin:
                 )
                 return
         self._in_app_last_volume = volume
+        # Keep the slider variable synchronized after every accepted command.
+        # Arrow-key changes otherwise read the stale slider value on the next key.
+        if volume_var is not None:
+            volume_var.set(volume)
         volume_label = getattr(self, "_in_app_volume_label", None)
         if volume_label is not None:
             volume_label.set(f"{volume}%")
@@ -3455,7 +3470,22 @@ class MediaMixin:
         )
         x = button.winfo_rootx()
         y = button.winfo_rooty() - menu.winfo_reqheight() - 4
-        menu.post(x, max(0, y))
+        try:
+            # tk_popup establishes the menu grab so clicks on track entries
+            # are delivered reliably over the translucent VLC control overlay.
+            menu.tk_popup(x, max(0, y))
+        finally:
+            try:
+                menu.grab_release()
+            except tk.TclError:
+                pass
+            try:
+                menu.destroy()
+            except tk.TclError:
+                pass
+            if getattr(self, "_in_app_settings_menu", None) is menu:
+                self._in_app_settings_menu = None
+            self._end_in_app_control_interaction()
 
     def _show_in_app_settings_menu(self, button=None) -> None:
         if button is None or not getattr(self, "_in_app_player_window", None):
