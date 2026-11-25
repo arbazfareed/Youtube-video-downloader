@@ -1004,6 +1004,38 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.mixin._start_in_app_controls_fade.assert_not_called()
 
 
+    def test_video_preview_toggle_native_command_errors_are_recoverable(self):
+        cases = (
+            ("is_playing", RuntimeError("VLC status error")),
+            ("pause", RuntimeError("VLC pause error")),
+            ("play", RuntimeError("VLC play error")),
+            ("play", -1),
+        )
+        for method, failure in cases:
+            with self.subTest(method=method, failure=failure):
+                player = MagicMock()
+                player.is_playing.return_value = method == "pause"
+                getattr(player, method).side_effect = (
+                    failure if isinstance(failure, Exception) else None
+                )
+                if failure == -1:
+                    player.play.return_value = -1
+                self.mixin._preview_vlc_player = player
+                button = MagicMock()
+                self.mixin.preview_player_play_button = button
+                status = _FakeTkVar("")
+                self.mixin.preview_video_status = status
+                self.mixin._schedule_video_preview_poll = MagicMock()
+                self.mixin._choose_video_preview_audio_track = MagicMock()
+
+                self.mixin._toggle_video_preview()
+
+                self.assertEqual(
+                    status.get(), "Preview playback command failed; try again"
+                )
+                button.configure.assert_not_called()
+                self.mixin._schedule_video_preview_poll.assert_not_called()
+
     def test_video_preview_poll_retries_after_native_status_exception(self):
         from types import SimpleNamespace
 
