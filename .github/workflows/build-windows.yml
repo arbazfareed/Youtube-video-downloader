@@ -10,6 +10,7 @@ on:
       - main
     paths:
       - ".github/workflows/build-windows.yml"
+      - "desktop_downloader_v13/**"
       - "desktop_downloader_v14/**"
 
 permissions:
