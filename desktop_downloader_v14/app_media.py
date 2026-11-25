@@ -1781,8 +1781,11 @@ class MediaMixin:
             parent=current_window or self.root,
             title=self._t("Open another video or audio file"),
             filetypes=(
-                ("Playable media", "*.avi *.flac *.m4a *.mkv *.mov *.mp3 *.mp4 *.mpeg *.mpg *.ogg *.wav *.webm *.wmv *.aac"),
-                ("All files", "*.*"),
+                (
+                    self._t("Playable media"),
+                    " ".join(f"*{extension}" for extension in sorted(PLAYABLE_MEDIA_EXTENSIONS)),
+                ),
+                (self._t("All files"), "*.*"),
             ),
         )
         if not chosen:
