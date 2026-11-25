@@ -80,14 +80,27 @@ class DownloadsMixin:
         if selected:
             self.destination.set(selected)
 
+    def _set_link_feedback(self, message: str) -> None:
+        feedback = getattr(self, "link_feedback_var", None)
+        if feedback is not None:
+            feedback.set(message)
+
     def inspect_link(self) -> None:
         from link_compatibility import analyze_link, format_analysis
 
         result = analyze_link(self.url_entry.get())
         if not result.valid:
-            messagebox.showwarning("Link check", result.message, parent=self.root)
+            self._set_link_feedback(
+                f"Link check: {result.message} "
+                "This is only a link-format check; it does not change existing downloads."
+            )
             return
-        messagebox.showinfo("Link compatibility", format_analysis(result), parent=self.root)
+        self._set_link_feedback(
+            "Compatibility check (local/offline only):\n"
+            f"{format_analysis(result)}\n\n"
+            "This is not a download failure or a live availability check. "
+            "It does not start, stop, or block downloads. Click Add download to queue this link."
+        )
 
     def open_playlist_selection_dialog(self) -> None:
         import tkinter as tk
@@ -330,6 +343,11 @@ class DownloadsMixin:
         self._apply_queue_filter()
         self._persist_job(job_id, status, "—", details)
         self.url_entry.delete(0, "end")
+        self._set_link_feedback(
+            f"Added to download history and queue: {url}\n"
+            f"Status: {status}. Watch this task's row for live progress; "
+            "select the completed task to play it in preview or Smart VLC."
+        )
         if start_at is None:
             self.overall_progress.configure(mode="indeterminate", value=0)
             self.overall_progress.start(12)
