@@ -805,5 +805,32 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.assertIsNotNone(self.mixin._in_app_playback_after)
 
 
+    def test_control_hide_schedule_survives_is_playing_exception(self):
+        player = _FakePlayer(is_playing=True)
+        player.is_playing = MagicMock(side_effect=RuntimeError("VLC status error"))
+        self.mixin._in_app_player = player
+        self.mixin._in_app_controls_after = None
+        self.mixin._cancel_in_app_controls_hide = MagicMock()
+
+        self.mixin._schedule_in_app_controls_hide()
+
+        self.assertIsNone(self.mixin._in_app_controls_after)
+        self.assertEqual(self.mixin.root.timers, {})
+
+    def test_control_hide_callback_restores_controls_after_is_playing_exception(self):
+        player = _FakePlayer(is_playing=True)
+        player.is_playing = MagicMock(side_effect=RuntimeError("VLC status error"))
+        self.mixin._in_app_player = player
+        self.mixin._in_app_controls_after = "expired-timer"
+        self.mixin._show_in_app_controls = MagicMock()
+        self.mixin._start_in_app_controls_fade = MagicMock()
+
+        self.mixin._hide_in_app_controls()
+
+        self.assertIsNone(self.mixin._in_app_controls_after)
+        self.mixin._show_in_app_controls.assert_called_once()
+        self.mixin._start_in_app_controls_fade.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
