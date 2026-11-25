@@ -105,6 +105,44 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.assertEqual(player.set_track_calls, [2])
         self.assertEqual(self.mixin._in_app_audio_track.get(), "English")
 
+    def test_audio_track_rejection_is_reported_and_selection_is_restored(self):
+        player = _FakePlayer(active_track=1)
+        player.audio_set_track = MagicMock(return_value=-1)
+        self.mixin._in_app_player = player
+        self.mixin._in_app_audio_track = _FakeTkVar("Hindi")
+        self.mixin._in_app_player_status = _FakeTkVar("")
+        self.mixin._show_in_app_controls = MagicMock()
+
+        with patch("app_media.messagebox.showerror") as show_error:
+            self.mixin._choose_in_app_audio_track(2)
+
+        player.audio_set_track.assert_called_once_with(2)
+        self.assertIsNone(self.mixin._in_app_audio_switch["target"])
+        self.assertEqual(self.mixin._in_app_audio_track.get(), "Hindi")
+        self.assertEqual(
+            self.mixin._in_app_player_status.get(),
+            "Audio track switch failed; VLC rejected the selected track.",
+        )
+        self.assertEqual(self.mixin.root.timers, {})
+        show_error.assert_called_once()
+
+    def test_audio_track_exception_is_reported_without_fake_pending_state(self):
+        player = _FakePlayer(active_track=1)
+        player.audio_set_track = MagicMock(side_effect=RuntimeError("VLC error"))
+        self.mixin._in_app_player = player
+        self.mixin._in_app_audio_track = _FakeTkVar("Hindi")
+        self.mixin._in_app_player_status = _FakeTkVar("")
+        self.mixin._show_in_app_controls = MagicMock()
+
+        with patch("app_media.messagebox.showerror") as show_error:
+            self.mixin._choose_in_app_audio_track(2)
+
+        player.audio_set_track.assert_called_once_with(2)
+        self.assertIsNone(self.mixin._in_app_audio_switch["target"])
+        self.assertEqual(self.mixin._in_app_audio_track.get(), "Hindi")
+        self.assertEqual(self.mixin.root.timers, {})
+        show_error.assert_called_once()
+
     def test_apply_vlc_audio_track_paused_state_does_not_spam(self):
         player = _FakePlayer(active_track=1, is_playing=False)
         self.mixin._in_app_player = player
