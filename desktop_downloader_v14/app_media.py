@@ -1836,7 +1836,7 @@ class MediaMixin:
         self._in_app_duration_ms = 0
         self._in_app_seeking = False
 
-        video_surface = tk.Frame(window, background="#000000")
+        video_surface = tk.Frame(window, background="#101820")
         video_surface.grid(row=0, column=0, sticky="nsew")
         self._in_app_video_surface = video_surface
         video_surface.bind("<Configure>", self._raise_in_app_controls_overlay, add="+")
@@ -1866,7 +1866,7 @@ class MediaMixin:
         self._in_app_top_controls_overlay_window = top_controls_window
         top_controls = tk.Frame(
             top_controls_window,
-            background="#000000",
+            background="#101820",
             padx=12,
             pady=5,
             highlightthickness=0,
@@ -1884,9 +1884,9 @@ class MediaMixin:
             width=3,
             cursor="hand2",
             font=("Segoe UI Symbol", 15),
-            background="#000000",
+            background="#101820",
             foreground="#FFFFFF",
-            activebackground="#202020",
+            activebackground="#263746",
             activeforeground="#FFFFFF",
             relief="flat",
             borderwidth=0,
@@ -1896,7 +1896,7 @@ class MediaMixin:
         self._in_app_top_title_label = tk.Label(
             top_controls,
             text=self._in_app_media_title,
-            background="#000000",
+            background="#101820",
             foreground="#FFFFFF",
             font=("Segoe UI", 11, "bold"),
             anchor="center",
@@ -1904,7 +1904,7 @@ class MediaMixin:
         self._in_app_top_title_label.grid(row=0, column=1, sticky="ew")
         controls_overlay = tk.Frame(
             controls_window,
-            background="#000000",
+            background="#101820",
             padx=8,
             pady=4,
             highlightthickness=0,
@@ -1949,7 +1949,7 @@ class MediaMixin:
             textvariable=self._in_app_current_time,
             width=6,
             anchor="e",
-            background="#000000",
+            background="#101820",
             foreground="#FFFFFF",
             font=("Segoe UI", 9),
         )
@@ -1957,7 +1957,7 @@ class MediaMixin:
         self._in_app_timeline = tk.Canvas(
             controls_overlay,
             height=20,
-            background="#000000",
+            background="#101820",
             highlightthickness=0,
             cursor="hand2",
         )
@@ -1976,7 +1976,7 @@ class MediaMixin:
             textvariable=self._in_app_duration,
             width=6,
             anchor="w",
-            background="#000000",
+            background="#101820",
             foreground="#D0D0D0",
             font=("Segoe UI", 9),
         )
@@ -2038,7 +2038,7 @@ class MediaMixin:
         volume_icon = tk.Label(
             controls_overlay,
             text="◖))",
-            background="#000000",
+            background="#101820",
             foreground="#FFFFFF",
             font=("Segoe UI", 9),
         )
@@ -2051,7 +2051,7 @@ class MediaMixin:
             textvariable=self._in_app_volume_label,
             width=4,
             anchor="e",
-            background="#000000",
+            background="#101820",
             foreground="#D0D0D0",
             font=("Segoe UI", 9),
         )
@@ -2067,7 +2067,7 @@ class MediaMixin:
             showvalue=False,
             sliderlength=10,
             troughcolor="#707070",
-            background="#000000",
+            background="#101820",
             foreground="#FFFFFF",
             activebackground="#FF3333",
             highlightthickness=0,
@@ -2527,8 +2527,8 @@ class MediaMixin:
             else:
                 top_window.withdraw()
         self._raise_in_app_controls_overlay()
-        if getattr(self, "_in_app_controls_opacity", 0.0) < 0.92:
-            self._start_in_app_controls_fade(0.92)
+        if getattr(self, "_in_app_controls_opacity", 0.0) < 0.78:
+            self._start_in_app_controls_fade(0.78)
         self._schedule_in_app_controls_hide()
 
     def _cancel_in_app_controls_hide(self) -> None:
@@ -2601,7 +2601,7 @@ class MediaMixin:
         ):
             return
         self._in_app_controls_after = self.root.after(
-            5000,
+            3500,
             self._hide_in_app_controls,
         )
 
