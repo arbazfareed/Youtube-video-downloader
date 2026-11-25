@@ -632,6 +632,50 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
             self.assertEqual(player.video_take_snapshot.call_count, 2)
 
 
+    def test_playback_start_exception_does_not_escape_or_claim_playing(self):
+        player = _FakePlayer(is_playing=False)
+        player.play = MagicMock(side_effect=RuntimeError("native VLC start error"))
+        self.mixin._in_app_player = player
+        self.mixin._in_app_playback_button = MagicMock()
+        self.mixin._set_in_app_launcher_buttons = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+        self.mixin._show_in_app_controls = MagicMock()
+
+        self.mixin._toggle_in_app_playback()
+
+        player.play.assert_called_once_with()
+        self.mixin._set_in_app_launcher_buttons.assert_not_called()
+        self.mixin._in_app_playback_button.configure.assert_not_called()
+        self.assertIsNone(self.mixin._in_app_playback_after)
+        self.assertEqual(self.mixin.root.timers, {})
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Playback command failed"
+        )
+        self.mixin._show_in_app_controls.assert_called_once()
+
+    def test_pause_exception_preserves_existing_playback_poll(self):
+        player = _FakePlayer(is_playing=True)
+        player.pause = MagicMock(side_effect=RuntimeError("native VLC pause error"))
+        self.mixin._in_app_player = player
+        self.mixin._in_app_playback_button = MagicMock()
+        self.mixin._set_in_app_launcher_buttons = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+        self.mixin._show_in_app_controls = MagicMock()
+        timer_id = self.mixin.root.after(250, self.mixin._poll_in_app_playback)
+        self.mixin._in_app_playback_after = timer_id
+
+        self.mixin._toggle_in_app_playback()
+
+        player.pause.assert_called_once_with()
+        self.mixin._set_in_app_launcher_buttons.assert_not_called()
+        self.mixin._in_app_playback_button.configure.assert_not_called()
+        self.assertEqual(self.mixin._in_app_playback_after, timer_id)
+        self.assertIn(timer_id, self.mixin.root.timers)
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Playback command failed"
+        )
+        self.mixin._show_in_app_controls.assert_called_once()
+
     def test_playback_start_failure_does_not_claim_playing_or_poll(self):
         player = _FakePlayer(is_playing=False)
         player.play = MagicMock(return_value=-1)
