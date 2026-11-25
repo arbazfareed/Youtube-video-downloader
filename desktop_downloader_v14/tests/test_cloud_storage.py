@@ -103,7 +103,7 @@ class CloudStorageTests(unittest.TestCase):
 
             self.assertEqual(results, ["inside.txt"])
             self.assertEqual(upload.call_count, 1)
-            self.assertEqual(upload.call_args.args[0], inside)
+            self.assertEqual(upload.call_args.args[0].resolve(), inside.resolve())
 
     def test_folder_upload_skips_incomplete_download_artifacts(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -122,7 +122,7 @@ class CloudStorageTests(unittest.TestCase):
 
             self.assertEqual(results, ["episode.mp4"])
             self.assertEqual(upload.call_count, 1)
-            self.assertEqual(upload.call_args.args[0], complete)
+            self.assertEqual(upload.call_args.args[0].resolve(), complete.resolve())
 
     def test_playlist_upload_source_includes_all_staged_files(self):
         with tempfile.TemporaryDirectory() as directory:
