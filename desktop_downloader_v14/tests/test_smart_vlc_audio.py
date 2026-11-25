@@ -551,6 +551,36 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.assertIsNone(self.mixin._in_app_playback_after)
 
 
+    def test_close_player_continues_cleanup_after_native_release_errors(self):
+        player = MagicMock()
+        player.stop.side_effect = RuntimeError("VLC stop failed")
+        player.release.side_effect = RuntimeError("VLC player release failed")
+        instance = MagicMock()
+        instance.release.side_effect = RuntimeError("VLC instance release failed")
+        window = MagicMock()
+        controls_window = MagicMock()
+        top_window = MagicMock()
+        self.mixin._in_app_player = player
+        self.mixin._in_app_vlc_instance = instance
+        self.mixin._in_app_player_window = window
+        self.mixin._in_app_controls_overlay_window = controls_window
+        self.mixin._in_app_top_controls_overlay_window = top_window
+        self.mixin._cleanup_in_app_settings_menu = MagicMock()
+        self.mixin._set_in_app_launcher_buttons = MagicMock()
+
+        self.mixin._close_in_app_player()
+
+        player.stop.assert_called_once()
+        player.release.assert_called_once()
+        instance.release.assert_called_once()
+        controls_window.destroy.assert_called_once()
+        top_window.destroy.assert_called_once()
+        window.destroy.assert_called_once()
+        self.assertIsNone(self.mixin._in_app_player)
+        self.assertIsNone(self.mixin._in_app_vlc_instance)
+        self.assertIsNone(self.mixin._in_app_player_window)
+
+
     def test_stop_native_exception_preserves_ui_and_restarts_polling(self):
         player = _FakePlayer(is_playing=True)
         player.stop = MagicMock(side_effect=RuntimeError("VLC stop failed"))
