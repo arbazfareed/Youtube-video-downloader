@@ -2148,6 +2148,7 @@ class MediaMixin:
         top_widgets = (
             self._in_app_top_back_button,
             self._in_app_top_title_label,
+            self._in_app_open_video_button,
         )
         for widget in top_widgets:
             widget.bind("<Enter>", self._show_in_app_controls, add="+")
