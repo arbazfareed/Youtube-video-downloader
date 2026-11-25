@@ -2340,7 +2340,15 @@ class MediaMixin:
 
     def _begin_in_app_seek(self, event=None) -> None:
         player = getattr(self, "_in_app_player", None)
-        if player is None or self._in_app_duration_ms <= 0 or not player.is_seekable():
+        if player is None or self._in_app_duration_ms <= 0:
+            return
+        try:
+            if not player.is_seekable():
+                return
+        except Exception:
+            self._set_in_app_player_status(
+                self._t("Seek temporarily unavailable; try again")
+            )
             return
         self._in_app_seeking = True
         self._in_app_control_interaction = True
