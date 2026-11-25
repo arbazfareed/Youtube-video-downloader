@@ -1292,13 +1292,34 @@ class MediaMixin:
         self._draw_video_preview_timeline()
 
     def _set_video_preview_volume(self, value: str) -> None:
-        volume = max(0, min(100, round(float(value))))
+        try:
+            volume = max(0, min(100, round(float(value))))
+        except (TypeError, ValueError, OverflowError):
+            status = getattr(self, "preview_video_status", None)
+            if status is not None:
+                status.set(self._t("Volume value is invalid"))
+            return
+
+        player = getattr(self, "_preview_vlc_player", None)
+        if player is not None:
+            try:
+                result = player.audio_set_volume(volume)
+                if result == -1:
+                    raise RuntimeError("VLC rejected preview volume")
+            except Exception:
+                status = getattr(self, "preview_video_status", None)
+                if status is not None:
+                    status.set(self._t("Preview volume change failed; try again"))
+                return
+
+        # Reflect the requested value only after VLC accepts it, so a failed
+        # native command cannot make the slider label claim the volume changed.
         label = getattr(self, "preview_player_volume_label", None)
         if label is not None:
             label.configure(text=f"{volume}%")
-        player = getattr(self, "_preview_vlc_player", None)
-        if player is not None:
-            player.audio_set_volume(volume)
+        status = getattr(self, "preview_video_status", None)
+        if status is not None:
+            status.set("")
 
     def _refresh_video_preview_audio_tracks(self, force: bool = False) -> None:
         player = getattr(self, "_preview_vlc_player", None)

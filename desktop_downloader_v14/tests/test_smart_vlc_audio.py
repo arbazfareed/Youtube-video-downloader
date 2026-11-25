@@ -1004,6 +1004,53 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         self.mixin._start_in_app_controls_fade.assert_not_called()
 
 
+    def test_video_preview_volume_native_exception_keeps_label_and_reports_status(self):
+        player = MagicMock()
+        player.audio_set_volume.side_effect = RuntimeError("VLC volume error")
+        self.mixin._preview_vlc_player = player
+        label = MagicMock()
+        self.mixin.preview_player_volume_label = label
+        self.mixin.preview_video_status = _FakeTkVar("")
+
+        self.mixin._set_video_preview_volume("73")
+
+        player.audio_set_volume.assert_called_once_with(73)
+        label.configure.assert_not_called()
+        self.assertEqual(
+            self.mixin.preview_video_status.get(),
+            "Preview volume change failed; try again",
+        )
+
+    def test_video_preview_volume_rejected_result_does_not_update_label(self):
+        player = MagicMock()
+        player.audio_set_volume.return_value = -1
+        self.mixin._preview_vlc_player = player
+        label = MagicMock()
+        self.mixin.preview_player_volume_label = label
+        self.mixin.preview_video_status = _FakeTkVar("")
+
+        self.mixin._set_video_preview_volume("88")
+
+        label.configure.assert_not_called()
+        self.assertEqual(
+            self.mixin.preview_video_status.get(),
+            "Preview volume change failed; try again",
+        )
+
+    def test_video_preview_volume_updates_label_after_success(self):
+        player = MagicMock()
+        player.audio_set_volume.return_value = 0
+        self.mixin._preview_vlc_player = player
+        label = MagicMock()
+        self.mixin.preview_player_volume_label = label
+        self.mixin.preview_video_status = _FakeTkVar("old error")
+
+        self.mixin._set_video_preview_volume("120")
+
+        player.audio_set_volume.assert_called_once_with(100)
+        label.configure.assert_called_once_with(text="100%")
+        self.assertEqual(self.mixin.preview_video_status.get(), "")
+
     def test_video_preview_audio_refresh_preserves_cache_on_track_query_error(self):
         player = MagicMock()
         player.audio_get_track_description.side_effect = RuntimeError("VLC audio list error")
