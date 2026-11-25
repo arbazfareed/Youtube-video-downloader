@@ -2773,9 +2773,11 @@ class MediaMixin:
                 parent=self._in_app_player_window,
             )
             return
+        native_exception = False
         try:
             result = player.set_rate(rate)
         except Exception:
+            native_exception = True
             result = -1
         if result == -1:
             current_rate = None
@@ -2797,9 +2799,16 @@ class MediaMixin:
             if restored_rate not in _IN_APP_PLAYBACK_RATES:
                 restored_rate = "1.0x"
             rate_var.set(restored_rate)
-            self._set_in_app_player_status(
-                self._t("Playback speed change failed; try again")
-            )
+            if native_exception:
+                self._set_in_app_player_status(
+                    self._t("Playback speed change failed; try again")
+                )
+            else:
+                messagebox.showerror(
+                    self._t("Playback speed unavailable"),
+                    self._t("VLC could not change the playback speed."),
+                    parent=getattr(self, "_in_app_player_window", None),
+                )
             return
         self._in_app_last_playback_rate = selected_rate
 
