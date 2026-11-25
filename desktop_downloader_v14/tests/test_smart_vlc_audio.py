@@ -427,7 +427,7 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
             self.mixin._poll_in_app_playback()
 
         player.play.assert_called_once()
-        self.assertIsNone(self.mixin._in_app_playback_after)
+        self.assertIsNone(getattr(self.mixin, "_in_app_playback_after", None))
         self.assertEqual(self.mixin.root.timers, {})
         self.mixin._in_app_playback_button.configure.assert_called_once_with(text="▶")
         self.mixin._set_in_app_launcher_buttons.assert_called_once_with(False)
