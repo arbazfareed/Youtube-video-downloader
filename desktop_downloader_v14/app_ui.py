@@ -16,6 +16,14 @@ class UiMixin:
     def _t(self, text: str) -> str:
         return translate(text, self.language.get())
 
+    def _update_link_preview(self, *_args) -> None:
+        value = self.url_text.get().strip()
+        self.link_preview_var.set(
+            f"{self._t('Link preview')}: {value}"
+            if value
+            else self._t("Paste or type a link here.")
+        )
+
     def _open_settings_shortcut(self, _event=None) -> str:
         self.open_download_settings()
         return "break"
@@ -292,8 +300,32 @@ class UiMixin:
         ttk.Label(add_card, text=self._t("Link"), style="Card.TLabel").grid(
             row=0, column=0, sticky="w", padx=(0, 10)
         )
-        self.url_entry = ttk.Entry(add_card)
+        self.url_text = tk.StringVar(value="")
+        self.link_preview_var = tk.StringVar(value=self._t("Paste or type a link here."))
+        self.link_feedback_var = tk.StringVar(value="")
+        self.url_entry = ttk.Entry(add_card, textvariable=self.url_text)
         self.url_entry.grid(row=0, column=1, sticky="ew", pady=(0, 8))
+        self.url_text.trace_add("write", self._update_link_preview)
+        self.link_preview_label = ttk.Label(
+            add_card,
+            textvariable=self.link_preview_var,
+            style="SidebarHint.TLabel",
+            wraplength=760,
+            justify="left",
+        )
+        self.link_preview_label.grid(
+            row=1, column=0, columnspan=3, sticky="ew", pady=(0, 6)
+        )
+        self.link_feedback_label = ttk.Label(
+            add_card,
+            textvariable=self.link_feedback_var,
+            style="SidebarHint.TLabel",
+            wraplength=760,
+            justify="left",
+        )
+        self.link_feedback_label.grid(
+            row=3, column=0, columnspan=3, sticky="ew", pady=(6, 0)
+        )
         self.url_entry.bind("<Return>", lambda _event: self.add_download())
         add_buttons = ttk.Frame(add_card, style="Card.TFrame")
         add_buttons.grid(row=0, column=2, sticky="e", padx=(10, 0), pady=(0, 8))
@@ -323,14 +355,14 @@ class UiMixin:
             side="left", padx=(6, 0)
         )
         ttk.Label(add_card, textvariable=self.destination_label, style="Card.TLabel").grid(
-            row=1, column=0, sticky="w", padx=(0, 10)
+            row=2, column=0, sticky="w", padx=(0, 10)
         )
         self.destination_entry = ttk.Entry(add_card, textvariable=self.destination)
-        self.destination_entry.grid(row=1, column=1, sticky="ew")
+        self.destination_entry.grid(row=2, column=1, sticky="ew")
         self.destination_browse_button = ttk.Button(
             add_card, text=self._t("Browse"), command=self._choose_folder,
         )
-        self.destination_browse_button.grid(row=1, column=2, padx=(10, 0))
+        self.destination_browse_button.grid(row=2, column=2, padx=(10, 0))
         self._build_remaining_ui(frame, inspector)
 
         footer = ttk.Frame(outer, padding=(16, 4))
