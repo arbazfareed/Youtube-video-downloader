@@ -444,10 +444,9 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.client.get("/mobile.js").status_code, 200)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
+class ApiCancellationRegressionTests(unittest.TestCase):
     def test_api_cancellation_after_download_prevents_postprocessing(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "download.bin"
@@ -564,3 +563,8 @@ class AutomaticGeoProxyTests(unittest.TestCase):
             used_proxies,
             ["http://us-proxy.test:8080", "http://gb-proxy.test:8080"],
         )
+
+
+
+if __name__ == "__main__":
+    unittest.main()
