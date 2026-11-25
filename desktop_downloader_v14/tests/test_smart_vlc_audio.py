@@ -1013,5 +1013,53 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
 
 
 
+    def test_subtitle_selection_native_exception_is_recoverable(self):
+        player = MagicMock()
+        player.video_set_spu.side_effect = RuntimeError("temporary VLC subtitle error")
+        self.mixin._in_app_player = player
+        self.mixin._in_app_subtitle_track = _FakeTkVar("English")
+        self.mixin._in_app_subtitle_tracks = {"English": 2}
+        self.mixin._in_app_player_status = _FakeTkVar("")
+        self.mixin._show_in_app_controls = MagicMock()
+        self.mixin._refresh_in_app_subtitle_tracks = MagicMock()
+
+        self.mixin._set_in_app_subtitle_track()
+
+        player.video_set_spu.assert_called_once_with(2)
+        self.assertEqual(self.mixin._in_app_player_status.get(), "Subtitle selection failed; try again")
+        self.mixin._refresh_in_app_subtitle_tracks.assert_called_once()
+
+    def test_subtitle_toggle_native_query_exception_does_not_escape(self):
+        player = MagicMock()
+        player.video_get_spu.side_effect = RuntimeError("temporary VLC query error")
+        self.mixin._in_app_player = player
+        self.mixin._in_app_subtitle_track = _FakeTkVar("English")
+        self.mixin._in_app_subtitle_tracks = {"English": 2}
+        self.mixin._in_app_player_status = _FakeTkVar("")
+        self.mixin._show_in_app_controls = MagicMock()
+
+        self.mixin._toggle_in_app_subtitles()
+
+        self.assertEqual(self.mixin._in_app_player_status.get(), "Subtitle information temporarily unavailable")
+        player.video_set_spu.assert_not_called()
+
+    def test_subtitle_refresh_exception_preserves_cached_tracks(self):
+        player = MagicMock()
+        player.video_get_spu_description.side_effect = RuntimeError("temporary VLC subtitle query error")
+        self.mixin._in_app_player = player
+        self.mixin._in_app_subtitle_track = _FakeTkVar("English")
+        self.mixin._in_app_cc_button = MagicMock()
+        self.mixin._in_app_subtitle_tracks = {"English": 2}
+        self.mixin._in_app_subtitle_tracks_loaded = True
+        self.mixin._in_app_player_status = _FakeTkVar("")
+
+        self.mixin._refresh_in_app_subtitle_tracks()
+
+        self.assertEqual(self.mixin._in_app_subtitle_tracks, {"English": 2})
+        self.assertTrue(self.mixin._in_app_subtitle_tracks_loaded)
+        self.assertEqual(self.mixin._in_app_subtitle_track.get(), "English")
+        self.assertEqual(self.mixin._in_app_player_status.get(), "Subtitle information temporarily unavailable")
+
+
 if __name__ == "__main__":
     unittest.main()
