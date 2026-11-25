@@ -1150,6 +1150,12 @@ class DownloadEngineTests(unittest.TestCase):
         self.assertTrue(_is_direct_file_url("https://example.org/files/video.mp4?download=1"))
         self.assertTrue(_is_direct_file_url("https://example.org/archive.zip"))
 
+    def test_common_archive_package_and_document_links_are_direct_files(self):
+        for name in ("tool.bin", "src.tgz", "pkg.deb", "lib.whl", "data.tar.xz",
+                     "book.epub", "disk.img", "data.json", "backup.zst"):
+            with self.subTest(name=name):
+                self.assertTrue(_is_direct_file_url(f"https://example.org/files/{name}?dl=1"))
+
     def test_does_not_treat_site_pages_as_direct_files(self):
         self.assertFalse(_is_direct_file_url("https://www.youtube.com/watch?v=example"))
         self.assertFalse(_is_direct_file_url("https://example.org/download?id=12"))

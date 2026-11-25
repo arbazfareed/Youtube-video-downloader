@@ -38,6 +38,13 @@ DIRECT_FILE_EXTENSIONS = {
     ".mkv", ".mov", ".mp3", ".mp4", ".mpeg", ".mpg", ".msi", ".ods", ".odt",
     ".ogg", ".opus", ".pdf", ".png", ".ppt", ".pptx", ".rar", ".tar", ".ts",
     ".txt", ".wav", ".webm", ".webp", ".wmv", ".xls", ".xlsx", ".zip",
+    # Archives, packages and disk images. Without these, yt-dlp's generic
+    # extractor accepted the binary and saved it as "<name>.unknown_video".
+    ".bin", ".bz2", ".deb", ".img", ".jar", ".pkg", ".rpm", ".tgz", ".whl",
+    ".xz", ".zst",
+    # Documents, data and common image/audio formats.
+    ".bmp", ".epub", ".json", ".mobi", ".rtf", ".svg", ".tif", ".tiff",
+    ".wma", ".xml",
 }
 FFMPEG_LANGUAGE_TAGS = {
     "ar": "ara",
