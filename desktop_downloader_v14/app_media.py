@@ -2576,15 +2576,27 @@ class MediaMixin:
         player = getattr(self, "_in_app_player", None)
         if player is None:
             return
-        if player.is_playing():
-            player.pause()
+        try:
+            playing = player.is_playing()
+            if playing:
+                player.pause()
+            else:
+                play_result = player.play()
+        except Exception:
+            # python-vlc can raise while the native player is transitioning.
+            # Preserve button/timer state and let the polling loop retry.
+            self._set_in_app_player_status(self._t("Playback command failed"))
+            self._show_in_app_controls()
+            return
+
+        if playing:
             label = self._t("Play")
             status = self._t("Playback paused")
             self._set_in_app_launcher_buttons(False)
         else:
             # VLC reports an immediate start failure with -1. Do not update
             # controls or schedule polling as though playback had begun.
-            if player.play() == -1:
+            if play_result == -1:
                 self._set_in_app_launcher_buttons(False)
                 button = getattr(self, "_in_app_playback_button", None)
                 if button is not None:
