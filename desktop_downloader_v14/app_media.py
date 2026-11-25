@@ -2440,9 +2440,16 @@ class MediaMixin:
     def _schedule_in_app_controls_hide(self) -> None:
         self._cancel_in_app_controls_hide()
         player = getattr(self, "_in_app_player", None)
+        if player is None:
+            return
+        try:
+            playing = player.is_playing()
+        except Exception:
+            # Native VLC status queries can raise while a stream changes state.
+            # Leave controls visible; a later interaction can schedule hiding.
+            return
         if (
-            player is None
-            or not player.is_playing()
+            not playing
             or self._in_app_seeking
             or self._in_app_control_interaction
             or getattr(self, "_in_app_timeline_hover", False)
@@ -2456,7 +2463,17 @@ class MediaMixin:
     def _hide_in_app_controls(self) -> None:
         self._in_app_controls_after = None
         player = getattr(self, "_in_app_player", None)
-        if player is None or not player.is_playing():
+        if player is None:
+            self._show_in_app_controls()
+            return
+        try:
+            playing = player.is_playing()
+        except Exception:
+            # Do not let a transient VLC exception escape a Tk timer callback
+            # and leave the playback controls hidden or the UI unresponsive.
+            self._show_in_app_controls()
+            return
+        if not playing:
             self._show_in_app_controls()
             return
         if (
