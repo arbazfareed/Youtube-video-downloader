@@ -1648,5 +1648,54 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
 
 
 
+    def test_smart_vlc_arrow_up_and_down_adjust_volume_when_player_has_focus(self):
+        player = _FakePlayer(active_track=1)
+        player.audio_set_volume = MagicMock(return_value=0)
+        self.mixin._in_app_player = player
+        self.mixin._in_app_player_window = MagicMock()
+        self.mixin._in_app_volume_var = _FakeTkVar(50)
+        self.mixin._in_app_volume_label = _FakeTkVar("")
+        self.mixin._in_app_last_volume = 50
+        self.mixin._show_in_app_controls = MagicMock()
+        event = MagicMock()
+        event.widget.winfo_toplevel.return_value = self.mixin._in_app_player_window
+
+        event.keysym = "Up"
+        self.assertEqual(self.mixin._handle_playback_arrow_key(event), "break")
+        player.audio_set_volume.assert_called_with(55)
+        event.keysym = "Down"
+        self.assertEqual(self.mixin._handle_playback_arrow_key(event), "break")
+        player.audio_set_volume.assert_called_with(50)
+        self.assertEqual(player.audio_set_volume.call_args_list, [call(55), call(50)])
+
+    def test_audio_button_menu_uses_popup_grab_and_track_selection_callback(self):
+        self.mixin._in_app_player_window = MagicMock()
+        self.mixin._in_app_audio_tracks = {"Hindi": 1, "English": 2}
+        self.mixin._in_app_audio_track = _FakeTkVar("Hindi")
+        self.mixin._refresh_in_app_audio_tracks = MagicMock()
+        self.mixin._begin_in_app_control_interaction = MagicMock()
+        self.mixin._end_in_app_control_interaction = MagicMock()
+        self.mixin._choose_in_app_audio_track = MagicMock()
+        button = MagicMock()
+        button.winfo_rootx.return_value = 120
+        button.winfo_rooty.return_value = 220
+
+        with patch("app_media.tk.Menu") as menu_cls:
+            menu = menu_cls.return_value
+            menu.winfo_reqheight.return_value = 80
+            callbacks = []
+            menu.add_radiobutton.side_effect = lambda **kwargs: callbacks.append(kwargs["command"])
+            self.mixin._show_in_app_audio_menu(button)
+
+            menu.tk_popup.assert_called_once_with(120, 136)
+            self.assertEqual(len(callbacks), 2)
+            callbacks[1]()
+            self.mixin._choose_in_app_audio_track.assert_called_once_with(2)
+            menu.grab_release.assert_called_once()
+            menu.destroy.assert_called_once()
+        self.assertIsNone(self.mixin._in_app_settings_menu)
+        self.mixin._end_in_app_control_interaction.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
