@@ -309,6 +309,9 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
         )
         self.assertEqual(self.mixin._in_app_position_var.get(), 25)
 
+        # The polling interval is also the refresh cadence; make the next
+        # retry land on a refresh tick to verify the transient error recovers.
+        self.mixin._in_app_audio_refresh_ticks = 3
         self.mixin.root.timers[retry_id]()
 
         self.assertEqual(self.mixin._refresh_in_app_audio_tracks.call_count, 2)
