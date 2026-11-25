@@ -997,41 +997,49 @@ class MediaMixin:
         player = getattr(self, "_preview_vlc_player", None)
         if player is None:
             return
-        vlc = getattr(self, "_preview_vlc", None)
-        state = player.get_state()
-        if vlc is not None and state == vlc.State.Error:
-            self._stop_video_preview()
-            placeholder = getattr(self, "preview_video_placeholder", None)
-            if placeholder is not None:
-                placeholder.configure(
-                    text=self._t(
-                        "VLC could not play this video. Try another file or use "
-                        "Open in system player."
-                    ),
-                )
-                placeholder.place(relx=0.5, rely=0.5, anchor="center")
-            return
-        if vlc is not None and state in {vlc.State.Playing, vlc.State.Paused}:
-            self.preview_video_placeholder.place_forget()
-        duration = max(0, player.get_length())
-        current_time = max(0, player.get_time())
-        self._preview_duration_ms = duration
-        self.preview_player_duration.set(self._format_in_app_time(duration))
-        self.preview_player_current_time.set(
-            self._format_in_app_time(current_time)
-        )
-        if duration > 0 and player.is_seekable() and not self._preview_seeking:
-            self.preview_player_position.set(
-                min(100, current_time * 100 / duration)
+        try:
+            vlc = getattr(self, "_preview_vlc", None)
+            state = player.get_state()
+            if vlc is not None and state == vlc.State.Error:
+                self._stop_video_preview()
+                placeholder = getattr(self, "preview_video_placeholder", None)
+                if placeholder is not None:
+                    placeholder.configure(
+                        text=self._t(
+                            "VLC could not play this video. Try another file or use "
+                            "Open in system player."
+                        ),
+                    )
+                    placeholder.place(relx=0.5, rely=0.5, anchor="center")
+                return
+            if vlc is not None and state in {vlc.State.Playing, vlc.State.Paused}:
+                self.preview_video_placeholder.place_forget()
+            duration = max(0, player.get_length())
+            current_time = max(0, player.get_time())
+            self._preview_duration_ms = duration
+            self.preview_player_duration.set(self._format_in_app_time(duration))
+            self.preview_player_current_time.set(
+                self._format_in_app_time(current_time)
             )
-        self._draw_video_preview_timeline()
-        self._preview_audio_refresh_ticks = (
-            getattr(self, "_preview_audio_refresh_ticks", 0) + 1
-        )
-        if self._preview_audio_refresh_ticks % 4 == 0:
-            self._refresh_video_preview_audio_tracks()
-            self._refresh_video_preview_subtitle_tracks()
-        self._schedule_video_preview_poll()
+            if duration > 0 and player.is_seekable() and not self._preview_seeking:
+                self.preview_player_position.set(
+                    min(100, current_time * 100 / duration)
+                )
+            self._draw_video_preview_timeline()
+            self._preview_audio_refresh_ticks = (
+                getattr(self, "_preview_audio_refresh_ticks", 0) + 1
+            )
+            if self._preview_audio_refresh_ticks % 4 == 0:
+                self._refresh_video_preview_audio_tracks()
+                self._refresh_video_preview_subtitle_tracks()
+            self._schedule_video_preview_poll()
+    
+        except Exception:
+            # VLC native getters and track enumeration may fail temporarily.
+            # Keep the last valid preview UI and restart polling instead of
+            # letting this Tk callback permanently stop updating playback.
+            self._schedule_video_preview_poll()
+            return
 
     def _draw_video_preview_timeline(self) -> None:
         timeline = getattr(self, "preview_player_timeline", None)
