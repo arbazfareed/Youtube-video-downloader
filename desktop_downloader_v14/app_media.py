@@ -1660,15 +1660,33 @@ class MediaMixin:
         self._preview_audio_tracks = {}
         self._preview_subtitle_tracks = {}
         player = getattr(self, "_preview_vlc_player", None)
+        cleanup_failed = False
         if player is not None:
-            player.stop()
-            player.release()
+            # One failing native call must not prevent later resources from
+            # being released or the preview controls from being reset.
+            try:
+                player.stop()
+            except Exception:
+                cleanup_failed = True
+            try:
+                player.release()
+            except Exception:
+                cleanup_failed = True
         instance = getattr(self, "_preview_vlc_instance", None)
         if instance is not None:
-            instance.release()
+            try:
+                instance.release()
+            except Exception:
+                cleanup_failed = True
         self._preview_vlc_player = None
         self._preview_vlc_instance = None
         self._preview_vlc = None
+        status = getattr(self, "preview_video_status", None)
+        if status is not None:
+            status.set(
+                self._t("Preview cleanup encountered a VLC error; resources were reset")
+                if cleanup_failed else ""
+            )
         button = getattr(self, "preview_player_play_button", None)
         if button is not None:
             button.configure(text="▶")
