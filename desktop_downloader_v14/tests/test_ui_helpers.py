@@ -1943,7 +1943,7 @@ class MediaPlaybackTests(unittest.TestCase):
         app._in_app_player.set_time.assert_called_once_with(100_000)
         self.assertFalse(app._in_app_seeking)
 
-    def test_controls_hide_after_five_seconds_only_during_playback(self):
+    def test_controls_hide_after_three_and_half_seconds_only_during_playback(self):
         app = MediaMixin()
         app.root = Mock()
         app._in_app_player = Mock()
@@ -1954,7 +1954,7 @@ class MediaPlaybackTests(unittest.TestCase):
 
         MediaMixin._schedule_in_app_controls_hide(app)
 
-        app.root.after.assert_called_once_with(5000, app._hide_in_app_controls)
+        app.root.after.assert_called_once_with(3500, app._hide_in_app_controls)
 
         app._in_app_timeline_hover = True
         app.root.after.reset_mock()
