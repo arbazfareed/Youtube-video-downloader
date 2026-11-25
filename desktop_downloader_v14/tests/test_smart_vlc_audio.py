@@ -443,5 +443,61 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
 
 
 
+    def test_ab_loop_clears_when_initial_seek_fails(self):
+        player = _FakePlayer(is_playing=True)
+        player.get_length = lambda: 60000
+        player.set_time = MagicMock(return_value=-1)
+        self.mixin._in_app_player = player
+        self.mixin._in_app_player_window = MagicMock()
+        self.mixin._in_app_ab_loop = {"A": 10000, "B": None}
+        button = MagicMock()
+        self.mixin._in_app_ab_loop_button = button
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        self.mixin._toggle_in_app_ab_loop()
+
+        self.assertEqual(self.mixin._in_app_ab_loop, {"A": None, "B": None})
+        button.configure.assert_called_once_with(text="A-B", foreground="#FFFFFF")
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "Could not seek to loop point; A-B loop cleared"
+        )
+
+    def test_ab_loop_clears_when_boundary_seek_fails(self):
+        from types import SimpleNamespace
+
+        ended, playing, error = object(), object(), object()
+        player = _FakePlayer(is_playing=True)
+        player.get_state = lambda: playing
+        player.get_length = lambda: 60000
+        player._time = 25000
+        player.set_time = MagicMock(return_value=-1)
+        self.mixin._in_app_player = player
+        self.mixin._in_app_player_window = MagicMock()
+        self.mixin._in_app_vlc = SimpleNamespace(
+            State=SimpleNamespace(Ended=ended, Playing=playing, Error=error)
+        )
+        self.mixin._in_app_duration = _FakeTkVar("")
+        self.mixin._in_app_current_time = _FakeTkVar("")
+        self.mixin._in_app_position_var = _FakeTkVar(0)
+        self.mixin._in_app_seeking = False
+        self.mixin._in_app_ab_loop = {"A": 10000, "B": 20000}
+        button = MagicMock()
+        self.mixin._in_app_ab_loop_button = button
+        self.mixin._draw_in_app_timeline = MagicMock()
+        self.mixin._refresh_in_app_audio_tracks = MagicMock()
+        self.mixin._refresh_in_app_subtitle_tracks = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        self.mixin._poll_in_app_playback()
+
+        self.assertEqual(self.mixin._in_app_ab_loop, {"A": None, "B": None})
+        self.assertEqual(self.mixin._in_app_current_time.get(), "00:25")
+        button.configure.assert_called_once_with(text="A-B", foreground="#FFFFFF")
+        self.mixin._set_in_app_player_status.assert_called_once_with(
+            "A-B loop seek failed; loop cleared"
+        )
+        self.assertIsNotNone(self.mixin._in_app_playback_after)
+
+
 if __name__ == "__main__":
     unittest.main()
