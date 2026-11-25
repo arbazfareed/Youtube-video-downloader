@@ -1121,18 +1121,29 @@ class MediaMixin:
 
     def _seek_video_preview(self, event=None) -> None:
         player = getattr(self, "_preview_vlc_player", None)
-        if player is not None and self._preview_seeking:
-            if event is not None:
-                self._set_video_preview_seek_from_event(event)
-            duration = max(0, player.get_length())
-            if duration > 0 and player.is_seekable():
-                position = max(
-                    0.0,
-                    min(100.0, float(self.preview_player_position.get())),
-                )
-                player.set_time(round(duration * position / 100))
-        self._preview_seeking = False
-        self._draw_video_preview_timeline()
+        try:
+            if player is not None and self._preview_seeking:
+                if event is not None:
+                    self._set_video_preview_seek_from_event(event)
+                duration = max(0, player.get_length())
+                if duration > 0 and player.is_seekable():
+                    position = max(
+                        0.0,
+                        min(100.0, float(self.preview_player_position.get())),
+                    )
+                    player.set_time(round(duration * position / 100))
+        except Exception:
+            # Native VLC seek/status calls can fail transiently. Always release
+            # the drag state so the preview timeline remains usable.
+            pass
+        finally:
+            self._preview_seeking = False
+            try:
+                self._draw_video_preview_timeline()
+            except Exception:
+                # A transient canvas error must not keep the seek interaction
+                # latched after the mouse button is released.
+                pass
 
     def _nudge_video_preview_seek(self, seconds: int) -> None:
         player = getattr(self, "_preview_vlc_player", None)
