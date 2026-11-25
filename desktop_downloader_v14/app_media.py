@@ -2087,7 +2087,12 @@ class MediaMixin:
         ab_loop = getattr(self, "_in_app_ab_loop", None)
         if ab_loop and ab_loop.get("A") is not None and ab_loop.get("B") is not None:
             if current_time >= ab_loop["B"]:
-                if player.set_time(ab_loop["A"]) == -1:
+                try:
+                    boundary_seek_failed = player.set_time(ab_loop["A"]) == -1
+                except Exception:
+                    # VLC native bindings may raise instead of returning -1.
+                    boundary_seek_failed = True
+                if boundary_seek_failed:
                     ab_loop["A"] = None
                     ab_loop["B"] = None
                     loop_button = getattr(self, "_in_app_ab_loop_button", None)
@@ -2123,7 +2128,12 @@ class MediaMixin:
                         parent=window,
                     )
                     return
-                if player.set_time(ab_loop["A"]) == -1:
+                try:
+                    restart_seek_failed = player.set_time(ab_loop["A"]) == -1
+                except Exception:
+                    # A failed native seek must not abort playback polling.
+                    restart_seek_failed = True
+                if restart_seek_failed:
                     ab_loop["A"] = None
                     ab_loop["B"] = None
                     loop_button = getattr(self, "_in_app_ab_loop_button", None)
