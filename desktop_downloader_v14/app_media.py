@@ -597,7 +597,8 @@ class MediaMixin:
                 messagebox.showerror(f"{title} failed", str(error), parent=self.root)
                 return
             if result is None:
-                messagebox.showinfo(                    title,
+                messagebox.showinfo(
+                    title,
                     "This file type is not a supported archive.",
                     parent=self.root,
                 )
@@ -792,8 +793,7 @@ class MediaMixin:
             return
         if path.suffix.lower() not in VIDEO_MEDIA_EXTENSIONS:
             # A .part file is still being written by the downloader. Do not
-            # hand an incomplete file to VLC: it can fail noisily or display
-            # a truncated preview while the download is in progress.
+            # hand an incomplete file to VLC.
             self._clear_video_preview()
             status = getattr(self, "preview_video_status", None)
             if status is not None:
@@ -1204,7 +1204,8 @@ class MediaMixin:
                 if status is not None:
                     status.set(self._t("Preview seek failed; try again"))
         except Exception:
-            status = getattr(self, "preview_video_status", None)            if status is not None:
+            status = getattr(self, "preview_video_status", None)
+            if status is not None:
                 status.set(self._t("Preview seek temporarily unavailable; try again"))
 
     def _adjust_video_preview_volume(self, delta: int) -> None:
@@ -1803,7 +1804,8 @@ class MediaMixin:
                 status.set("")
         selected = getattr(self, "jobs", None)
         selection = selected.selection() if selected is not None else ()
-        if selection and self._selected_output_path() == path:            if not self._integrity_guard(selection[0]):
+        if selection and self._selected_output_path() == path:
+            if not self._integrity_guard(selection[0]):
                 return
         self._preserve_video_preview = True
         try:
@@ -2803,3 +2805,1395 @@ class MediaMixin:
         overlay_window.geometry(f"{width}x{height}{x:+d}{bottom_y:+d}")
         overlay_window.lift()
         if top_overlay is not None and top_window is not None:
+            if getattr(self, "_in_app_fullscreen", False):
+                top_height = max(1, top_overlay.winfo_reqheight())
+                top_window.geometry(f"{width}x{top_height}{x:+d}{surface_y:+d}")
+                top_window.lift()
+            else:
+                top_window.withdraw()
+
+    def _toggle_in_app_playback(self) -> None:
+        player = getattr(self, "_in_app_player", None)
+        if player is None:
+            return
+        try:
+            playing = player.is_playing()
+            if playing:
+                player.pause()
+            else:
+                play_result = player.play()
+        except Exception:
+            # python-vlc can raise while the native player is transitioning.
+            # Preserve button/timer state and let the polling loop retry.
+            self._set_in_app_player_status(self._t("Playback command failed"))
+            self._show_in_app_controls()
+            return
+
+        if playing:
+            label = self._t("Play")
+            status = self._t("Playback paused")
+            self._set_in_app_launcher_buttons(False)
+        else:
+            # VLC reports an immediate start failure with -1. Do not update
+            # controls or schedule polling as though playback had begun.
+            if play_result == -1:
+                self._set_in_app_launcher_buttons(False)
+                button = getattr(self, "_in_app_playback_button", None)
+                if button is not None:
+                    button.configure(text="▶")
+                self._set_in_app_player_status(self._t("Could not start playback"))
+                messagebox.showerror(
+                    self._t("Could not play media"),
+                    self._t("VLC could not start playback."),
+                    parent=getattr(self, "_in_app_player_window", None),
+                )
+                self._show_in_app_controls()
+                return
+            label = self._t("Pause")
+            status = self._t("Playback started")
+            self._set_in_app_launcher_buttons(True)
+            # Playback may have ended and stopped the polling loop.
+            if getattr(self, "_in_app_playback_after", None) is None:
+                self._in_app_playback_after = self.root.after(
+                    250, self._poll_in_app_playback
+                )
+            switch = getattr(self, "_in_app_audio_switch", None)
+            if isinstance(switch, dict) and switch.get("target") is not None:
+                self._choose_in_app_audio_track(switch["target"])
+        button = getattr(self, "_in_app_playback_button", None)
+        if button is not None:
+            button.configure(text="▶" if label == self._t("Play") else "Ⅱ")
+        self._set_in_app_player_status(status)
+        self._show_in_app_controls()
+
+    def _take_in_app_snapshot(self) -> None:
+        player = getattr(self, "_in_app_player", None)
+        window = getattr(self, "_in_app_player_window", None)
+        if player is None or window is None:
+            return
+        dest_folder = Path(self.destination.get().strip() or Path.home() / "Downloads")
+        snapshot_dir = dest_folder / "Screenshots"
+        try:
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            # Reserve the path atomically so concurrent snapshots never overwrite.
+            suffix = 0
+            while True:
+                suffix_text = f"_{suffix}" if suffix else ""
+                target_file = snapshot_dir / f"snapshot_{timestamp}{suffix_text}.png"
+                try:
+                    with target_file.open("xb"):
+                        pass
+                    break
+                except FileExistsError:
+                    suffix += 1
+
+            try:
+                result = player.video_take_snapshot(0, str(target_file), 0, 0)
+                if result == 0:
+                    self._set_in_app_player_status(f"Snapshot saved: {target_file.name}")
+                else:
+                    target_file.unlink(missing_ok=True)
+                    self._set_in_app_player_status("Could not take snapshot (no active video)")
+            except Exception:
+                target_file.unlink(missing_ok=True)
+                raise
+        except Exception as error:
+            self._set_in_app_player_status(f"Snapshot error: {error}")
+
+    def _toggle_in_app_ab_loop(self) -> None:
+        player = getattr(self, "_in_app_player", None)
+        window = getattr(self, "_in_app_player_window", None)
+        if player is None or window is None:
+            return
+        if not hasattr(self, "_in_app_ab_loop") or self._in_app_ab_loop is None:
+            self._in_app_ab_loop = {"A": None, "B": None}
+
+        loop = self._in_app_ab_loop
+        btn = getattr(self, "_in_app_ab_loop_button", None)
+
+        # Clearing an established loop does not require querying VLC.
+        if loop["A"] is not None and loop["B"] is not None:
+            loop["A"] = None
+            loop["B"] = None
+            if btn:
+                btn.configure(text="A-B", foreground="#FFFFFF")
+            self._set_in_app_player_status("A-B loop cleared")
+            return
+
+        try:
+            if not player.is_seekable():
+                self._set_in_app_player_status(
+                    "A-B loop is unavailable for non-seekable media."
+                )
+                return
+            current_time = max(0, player.get_time())
+        except Exception:
+            self._set_in_app_player_status(
+                "Could not read playback position; A-B loop unchanged"
+            )
+            return
+
+        if loop["A"] is None:
+            loop["A"] = current_time
+            loop["B"] = None
+            if btn:
+                btn.configure(
+                    text=f"A:[{self._format_in_app_time(current_time)}]",
+                    foreground="#3b82f6",
+                )
+            self._set_in_app_player_status(
+                f"Loop point A set at {self._format_in_app_time(current_time)}"
+            )
+            return
+
+        try:
+            duration = max(0, player.get_length())
+        except Exception:
+            self._set_in_app_player_status(
+                "Could not read media duration; A-B loop unchanged"
+            )
+            return
+
+        if current_time <= loop["A"]:
+            next_b = loop["A"] + 2000
+        else:
+            next_b = current_time
+
+        # Keep the B marker inside the media duration. If A is already
+        # at the end, there is no valid interval to loop.
+        if duration > 0:
+            next_b = min(next_b, duration)
+            if next_b <= loop["A"]:
+                self._set_in_app_player_status(
+                    "Loop point B must be after A; move A earlier."
+                )
+                return
+
+        loop["B"] = next_b
+        if btn:
+            btn.configure(text="🔁 A-B", foreground="#22c55e")
+        try:
+            seek_result = player.set_time(loop["A"])
+        except Exception:
+            seek_result = -1
+        if seek_result == -1:
+            loop["A"] = None
+            loop["B"] = None
+            if btn:
+                btn.configure(text="A-B", foreground="#FFFFFF")
+            self._set_in_app_player_status(
+                self._t("Could not seek to loop point; A-B loop cleared")
+            )
+            return
+        self._set_in_app_player_status(
+            f"Looping A-B ({self._format_in_app_time(loop['A'])} - {self._format_in_app_time(loop['B'])})"
+        )
+
+    def _set_in_app_launcher_buttons(self, playing: bool) -> None:
+        label = self._t("Pause in app") if playing else self._t("Play in app")
+        for name in ("_play_in_app_button", "_open_smart_vlc_button"):
+            button = getattr(self, name, None)
+            if button is not None:
+                button.configure(text=label)
+
+    def _toggle_in_app_playback_from_key(self, event=None) -> str:
+        widget = getattr(event, "widget", None)
+        if widget is not None:
+            try:
+                widget_class = widget.winfo_class()
+            except tk.TclError:
+                widget_class = ""
+            if widget_class in {
+                "Button", "TButton", "Scale", "TScale", "Entry", "TEntry",
+                "TCombobox", "Spinbox", "TSpinbox", "Text",
+            }:
+                return None
+        if getattr(self, "_in_app_player", None) is not None:
+            self._toggle_in_app_playback()
+            return "break"
+        return None
+
+    def _set_in_app_playback_rate(self, _event=None) -> None:
+        player = getattr(self, "_in_app_player", None)
+        rate_var = getattr(self, "_in_app_playback_rate", None)
+        if player is None or rate_var is None:
+            return
+        self._show_in_app_controls()
+        selected_rate = rate_var.get()
+        try:
+            rate = float(selected_rate.removesuffix("x"))
+        except ValueError:
+            messagebox.showerror(
+                self._t("Invalid playback speed"),
+                self._t("Choose one of the available playback speeds."),
+                parent=self._in_app_player_window,
+            )
+            return
+        if selected_rate not in _IN_APP_PLAYBACK_RATES:
+            messagebox.showerror(
+                self._t("Invalid playback speed"),
+                self._t("Choose one of the available playback speeds."),
+                parent=self._in_app_player_window,
+            )
+            return
+        native_exception = False
+        try:
+            result = player.set_rate(rate)
+        except Exception:
+            native_exception = True
+            result = -1
+        if result == -1:
+            current_rate = None
+            try:
+                current_rate = float(player.get_rate())
+            except Exception:
+                # A failed native query must not escape the UI callback.
+                pass
+            restored_rate = getattr(self, "_in_app_last_playback_rate", None)
+            if current_rate is not None:
+                restored_rate = next(
+                    (
+                        option
+                        for option in _IN_APP_PLAYBACK_RATES
+                        if float(option.removesuffix("x")) == current_rate
+                    ),
+                    f"{current_rate:g}x",
+                )
+            if restored_rate not in _IN_APP_PLAYBACK_RATES:
+                restored_rate = "1.0x"
+            rate_var.set(restored_rate)
+            if native_exception:
+                self._set_in_app_player_status(
+                    self._t("Playback speed change failed; try again")
+                )
+            else:
+                messagebox.showerror(
+                    self._t("Playback speed unavailable"),
+                    self._t("VLC could not change the playback speed."),
+                    parent=getattr(self, "_in_app_player_window", None),
+                )
+            return
+        self._in_app_last_playback_rate = selected_rate
+
+    def _set_in_app_player_status(self, text: str) -> None:
+        self._in_app_player_status_text = text
+        status = getattr(self, "_in_app_player_status", None)
+        if status is not None:
+            status.set(text)
+
+    def _bind_in_app_control_hint(self, widget, text: str) -> None:
+        widget.bind(
+            "<Enter>",
+            lambda _event: self._show_in_app_control_hint(text),
+            add="+",
+        )
+        widget.bind(
+            "<Leave>",
+            lambda _event: self._restore_in_app_player_status(),
+            add="+",
+        )
+        widget.bind(
+            "<FocusIn>",
+            lambda _event: self._show_in_app_control_hint(text),
+            add="+",
+        )
+        widget.bind(
+            "<FocusOut>",
+            lambda _event: self._restore_in_app_player_status(),
+            add="+",
+        )
+
+    def _show_in_app_control_hint(self, text: str) -> None:
+        status = getattr(self, "_in_app_player_status", None)
+        if status is not None:
+            status.set(text)
+
+    def _restore_in_app_player_status(self) -> None:
+        status = getattr(self, "_in_app_player_status", None)
+        if status is not None:
+            status_text = getattr(self, "_in_app_player_status_text", None)
+            if status_text is None:
+                status_text = self._t("Playback started")
+            status.set(status_text)
+
+    def _set_in_app_video_target(self, surface) -> None:
+        player = getattr(self, "_in_app_player", None)
+        if player is None:
+            return
+        try:
+            surface.update()
+            handle = surface.winfo_id()
+            if sys.platform == "win32":
+                player.set_hwnd(handle)
+            elif sys.platform == "darwin":
+                player.set_nsobject(handle)
+            else:
+                player.set_xwindow(handle)
+        except Exception:
+            # Tk surface operations and VLC's native window binding can fail
+            # transiently while the player window is being created/replaced.
+            self._set_in_app_player_status(
+                self._t("Video surface unavailable; playback can be retried")
+            )
+
+    def _set_in_app_volume(self, value: str) -> None:
+        player = getattr(self, "_in_app_player", None)
+        volume = max(0, min(100, round(float(value))))
+        volume_var = getattr(self, "_in_app_volume_var", None)
+        if player is not None:
+            try:
+                result = player.audio_set_volume(volume)
+            except Exception:
+                result = -1
+            if result == -1:
+                previous = getattr(self, "_in_app_last_volume", None)
+                if previous is not None:
+                    if volume_var is not None:
+                        volume_var.set(previous)
+                    volume_label = getattr(self, "_in_app_volume_label", None)
+                    if volume_label is not None:
+                        volume_label.set(f"{previous}%")
+                self._set_in_app_player_status(
+                    self._t("Volume change failed; try again")
+                )
+                return
+        self._in_app_last_volume = volume
+        # Keep the slider variable synchronized after every accepted command.
+        # Arrow-key changes otherwise read the stale slider value on the next key.
+        if volume_var is not None:
+            volume_var.set(volume)
+        volume_label = getattr(self, "_in_app_volume_label", None)
+        if volume_label is not None:
+            volume_label.set(f"{volume}%")
+
+    def _apply_vlc_audio_track(
+        self,
+        player,
+        track_id: int,
+        *,
+        player_attribute: str,
+        state_attribute: str,
+        refresh,
+        error_parent,
+    ) -> None:
+        """Switch the audio track and verify that VLC applied it.
+
+        VLC applies track changes asynchronously. We issue the switch once to
+        let VLC transition without restarting the decoder, then poll
+        audio_get_track() to verify success.
+        """
+        previous = getattr(self, state_attribute, None)
+        if isinstance(previous, dict) and previous.get("after") is not None:
+            try:
+                self.root.after_cancel(previous["after"])
+            except tk.TclError:
+                pass
+        target_id = int(track_id)
+        state = {"target": target_id, "after": None}
+        setattr(self, state_attribute, state)
+
+        # Update the UI selection immediately so the user gets instant visual confirmation
+        refresh(force=False)
+
+        def fail_switch() -> None:
+            state["target"] = None
+            state["after"] = None
+            refresh(force=True)
+            self._set_in_app_player_status(
+                self._t("Audio track switch failed; VLC rejected the selected track.")
+            )
+            messagebox.showerror(
+                self._t("Audio track unavailable"),
+                self._t("VLC could not select this audio track."),
+                parent=error_parent,
+            )
+
+        # libVLC returns -1 when the selected stream cannot be activated.
+        # Do not silently treat that as a pending asynchronous switch.
+        try:
+            result = player.audio_set_track(target_id)
+        except Exception:
+            fail_switch()
+            return
+        if result == -1:
+            fail_switch()
+            return
+
+        def step(remaining: int) -> None:
+            if getattr(self, state_attribute, None) is not state:
+                return
+            if getattr(self, player_attribute, None) is not player:
+                state["target"] = None
+                state["after"] = None
+                return
+            target = state.get("target")
+            if target is None:
+                return
+            active = None
+            try:
+                active = player.audio_get_track()
+            except Exception:
+                active = None
+            if active == target:
+                state["target"] = None
+                state["after"] = None
+                refresh(force=True)
+                return
+            is_playing = True
+            try:
+                is_playing = bool(player.is_playing())
+            except Exception:
+                pass
+            if not is_playing:
+                # When player is paused, VLC queues track changes until resumed.
+                # Keep the requested track pending; resume retries the switch.
+                refresh(force=False)
+                if remaining > _AUDIO_SWITCH_MAX_ATTEMPTS - 2:
+                    state["after"] = self.root.after(
+                        _AUDIO_SWITCH_VERIFY_DELAY_MS,
+                        lambda: step(remaining - 1),
+                    )
+                else:
+                    state["after"] = None
+                return
+
+            try:
+                result = player.audio_set_track(target)
+            except Exception:
+                fail_switch()
+                return
+            if result == -1:
+                fail_switch()
+                return
+
+            try:
+                active = player.audio_get_track()
+            except Exception:
+                active = None
+            if active == target:
+                state["target"] = None
+                state["after"] = None
+                refresh(force=True)
+                return
+
+            if remaining > 0:
+                state["after"] = self.root.after(
+                    _AUDIO_SWITCH_VERIFY_DELAY_MS,
+                    lambda: step(remaining - 1),
+                )
+                return
+            fail_switch()
+
+        state["after"] = self.root.after(
+            _AUDIO_SWITCH_VERIFY_DELAY_MS,
+            lambda: step(_AUDIO_SWITCH_MAX_ATTEMPTS),
+        )
+
+    def _refresh_in_app_audio_tracks(self, force: bool = False) -> None:
+        player = getattr(self, "_in_app_player", None)
+        variable = getattr(self, "_in_app_audio_track", None)
+        if player is None or variable is None:
+            return
+
+        descriptions = player.audio_get_track_description() or []
+        track_labels: dict[str, int] = {}
+        for track_id, description in descriptions:
+            track_id = int(track_id)
+            if track_id < 0:
+                continue
+            if isinstance(description, bytes):
+                name = description.decode("utf-8", errors="replace")
+            else:
+                name = str(description)
+            label = name or self._t("Audio track")
+            if label in track_labels:
+                label = f"{label} ({track_id})"
+            track_labels[label] = track_id
+
+        self._in_app_audio_tracks = track_labels
+        self._in_app_audio_tracks_loaded = bool(track_labels)
+        if not track_labels:
+            variable.set("")
+            button = getattr(self, "_in_app_audio_button", None)
+            if button is not None:
+                button.grid_remove()
+            return
+
+        switch = getattr(self, "_in_app_audio_switch", None)
+        target = switch.get("target") if isinstance(switch, dict) else None
+        if target is not None and not force:
+            pending_label = next(
+                (
+                    label
+                    for label, track_id in track_labels.items()
+                    if track_id == target
+                ),
+                None,
+            )
+            if pending_label is not None:
+                variable.set(pending_label)
+                button = getattr(self, "_in_app_audio_button", None)
+                if button is not None and len(track_labels) > 1:
+                    short = pending_label
+                    if len(short) > 14:
+                        short = short[:12] + "…"
+                    button.configure(text=f"🎧 {short}")
+                    button.grid()
+                return
+
+        active_track = player.audio_get_track()
+        selected = next(
+            (
+                label
+                for label, track_id in track_labels.items()
+                if track_id == active_track
+            ),
+            next(iter(track_labels)),
+        )
+        variable.set(selected)
+
+        button = getattr(self, "_in_app_audio_button", None)
+        if button is not None:
+            if len(track_labels) > 1:
+                short = selected
+                if len(short) > 14:
+                    short = short[:12] + "…"
+                button.configure(text=f"🎧 {short}")
+                button.grid()
+            elif len(track_labels) == 1:
+                button.configure(text="🎧 Audio")
+                button.grid()
+            else:
+                button.grid_remove()
+
+    def _refresh_in_app_subtitle_tracks(self) -> None:
+        player = getattr(self, "_in_app_player", None)
+        variable = getattr(self, "_in_app_subtitle_track", None)
+        button = getattr(self, "_in_app_cc_button", None)
+        if player is None or variable is None or button is None:
+            return
+
+        try:
+            descriptions = player.video_get_spu_description() or []
+            active_track = player.video_get_spu()
+        except Exception:
+            # Keep the last known subtitle choices when VLC's native query
+            # briefly fails; polling or the next user action can retry.
+            self._set_in_app_player_status(
+                self._t("Subtitle information temporarily unavailable")
+            )
+            return
+
+        subtitle_tracks: dict[str, int] = {}
+        for track_id, description in descriptions:
+            track_id = int(track_id)
+            if track_id < 0:
+                continue
+            if isinstance(description, bytes):
+                name = description.decode("utf-8", errors="replace")
+            else:
+                name = str(description)
+            label = name or self._t("Subtitles")
+            if label.strip().lower() in {"disable", "off", "none"}:
+                continue
+            if label in subtitle_tracks:
+                label = f"{label} ({track_id})"
+            subtitle_tracks[label] = track_id
+
+        self._in_app_subtitle_tracks = subtitle_tracks
+        self._in_app_subtitle_tracks_loaded = True
+        if not subtitle_tracks:
+            variable.set(self._t("Off"))
+            button.grid_remove()
+            return
+
+        button.grid()
+        selected = next(
+            (
+                label
+                for label, track_id in subtitle_tracks.items()
+                if track_id == active_track
+            ),
+            self._t("Off"),
+        )
+        variable.set(selected)
+        button.configure(
+            foreground="#FF3333" if active_track >= 0 else "#FFFFFF"
+        )
+
+    def _choose_in_app_audio_track(self, track_id: int) -> None:
+        player = getattr(self, "_in_app_player", None)
+        if player is None:
+            return
+        self._show_in_app_controls()
+        self._apply_vlc_audio_track(
+            player,
+            track_id,
+            player_attribute="_in_app_player",
+            state_attribute="_in_app_audio_switch",
+            refresh=self._refresh_in_app_audio_tracks,
+            error_parent=getattr(self, "_in_app_player_window", None),
+        )
+
+    def _select_in_app_audio_track(self, _event=None) -> None:
+        player = getattr(self, "_in_app_player", None)
+        variable = getattr(self, "_in_app_audio_track", None)
+        if player is None or variable is None:
+            return
+        self._show_in_app_controls()
+        track_id = (getattr(self, "_in_app_audio_tracks", None) or {}).get(
+            variable.get()
+        )
+        if track_id is None:
+            return
+        self._choose_in_app_audio_track(track_id)
+
+    def _set_in_app_subtitle_track(self, _event=None) -> None:
+        player = getattr(self, "_in_app_player", None)
+        variable = getattr(self, "_in_app_subtitle_track", None)
+        if player is None or variable is None:
+            return
+        self._show_in_app_controls()
+        if variable.get() == self._t("Off"):
+            self._disable_in_app_subtitles()
+            return
+        track_id = (getattr(self, "_in_app_subtitle_tracks", None) or {}).get(
+            variable.get()
+        )
+        if track_id is None:
+            return
+        try:
+            result = player.video_set_spu(track_id)
+        except Exception:
+            result = -1
+        if result == -1:
+            self._set_in_app_player_status(
+                self._t("Subtitle selection failed; try again")
+            )
+            self._refresh_in_app_subtitle_tracks()
+            return
+        self._refresh_in_app_subtitle_tracks()
+
+    def _disable_in_app_subtitles(self) -> None:
+        player = getattr(self, "_in_app_player", None)
+        variable = getattr(self, "_in_app_subtitle_track", None)
+        button = getattr(self, "_in_app_cc_button", None)
+        if player is None or variable is None:
+            return
+        self._show_in_app_controls()
+        try:
+            # Always send the disable command. Do not trust a possibly stale
+            # active-track query to decide whether subtitles need disabling.
+            # VLC uses SPU id -1 to turn subtitle rendering off.
+            result = player.video_set_spu(-1)
+            if result == -1:
+                raise RuntimeError("VLC rejected subtitle disable")
+            active_track = player.video_get_spu()
+            if active_track is not None and active_track >= 0:
+                raise RuntimeError("VLC subtitle track remained active")
+        except Exception:
+            self._set_in_app_player_status(
+                self._t("Subtitle toggle failed; try again")
+            )
+            return
+        variable.set(self._t("Off"))
+        if button is not None:
+            button.configure(foreground="#FFFFFF")
+
+    def _toggle_in_app_subtitles(self) -> None:
+        player = getattr(self, "_in_app_player", None)
+        variable = getattr(self, "_in_app_subtitle_track", None)
+        tracks = getattr(self, "_in_app_subtitle_tracks", {})
+        if player is None or variable is None or not tracks:
+            return
+        self._show_in_app_controls()
+        try:
+            active_track = player.video_get_spu()
+        except Exception:
+            self._set_in_app_player_status(
+                self._t("Subtitle information temporarily unavailable")
+            )
+            return
+        if active_track >= 0:
+            self._disable_in_app_subtitles()
+            return
+        selected = variable.get()
+        if selected not in tracks:
+            selected = next(iter(tracks))
+        variable.set(selected)
+        self._set_in_app_subtitle_track()
+
+    def _cleanup_in_app_settings_menu(self) -> None:
+        menu = getattr(self, "_in_app_settings_menu", None)
+        if menu is not None:
+            try:
+                menu.destroy()
+            except Exception:
+                pass
+            self._in_app_settings_menu = None
+
+    def _show_in_app_audio_menu(self, button=None) -> None:
+        if button is None or not getattr(self, "_in_app_player_window", None):
+            return
+        self._cleanup_in_app_settings_menu()
+        self._begin_in_app_control_interaction()
+        self._refresh_in_app_audio_tracks(force=True)
+        menu = tk.Menu(
+            self._in_app_player_window,
+            tearoff=False,
+            background="#202020",
+            foreground="#FFFFFF",
+            activebackground="#333333",
+            activeforeground="#FFFFFF",
+        )
+        self._in_app_settings_menu = menu
+        audio_tracks = getattr(self, "_in_app_audio_tracks", {})
+        if audio_tracks:
+            for label, track_id in audio_tracks.items():
+                menu.add_radiobutton(
+                    label=label,
+                    variable=self._in_app_audio_track,
+                    value=label,
+                    command=lambda bound_id=track_id: self._choose_in_app_audio_track(
+                        bound_id
+                    ),
+                )
+        else:
+            menu.add_command(
+                label=self._t("No audio tracks available"),
+                state="disabled",
+            )
+        menu.bind(
+            "<Unmap>",
+            lambda _event: self._end_in_app_control_interaction(),
+            add="+",
+        )
+        x = button.winfo_rootx()
+        y = button.winfo_rooty() - menu.winfo_reqheight() - 4
+        try:
+            # tk_popup establishes the menu grab so clicks on track entries
+            # are delivered reliably over the translucent VLC control overlay.
+            menu.tk_popup(x, max(0, y))
+        finally:
+            try:
+                menu.grab_release()
+            except tk.TclError:
+                pass
+            try:
+                menu.destroy()
+            except tk.TclError:
+                pass
+            if getattr(self, "_in_app_settings_menu", None) is menu:
+                self._in_app_settings_menu = None
+            self._end_in_app_control_interaction()
+
+    def _show_in_app_settings_menu(self, button=None) -> None:
+        if button is None or not getattr(self, "_in_app_player_window", None):
+            return
+        self._cleanup_in_app_settings_menu()
+        self._begin_in_app_control_interaction()
+        self._refresh_in_app_audio_tracks(force=True)
+        self._refresh_in_app_subtitle_tracks()
+        menu = tk.Menu(
+            self._in_app_player_window,
+            tearoff=False,
+            background="#202020",
+            foreground="#FFFFFF",
+            activebackground="#333333",
+            activeforeground="#FFFFFF",
+        )
+        self._in_app_settings_menu = menu
+        speed_menu = tk.Menu(
+            menu,
+            tearoff=False,
+            background="#202020",
+            foreground="#FFFFFF",
+            activebackground="#333333",
+            activeforeground="#FFFFFF",
+        )
+        for rate in _IN_APP_PLAYBACK_RATES:
+            speed_menu.add_radiobutton(
+                label=rate,
+                variable=self._in_app_playback_rate,
+                value=rate,
+                command=self._set_in_app_playback_rate,
+            )
+        menu.add_cascade(
+            label=self._t("Playback speed"),
+            menu=speed_menu,
+        )
+
+        audio_menu = tk.Menu(
+            menu,
+            tearoff=False,
+            background="#202020",
+            foreground="#FFFFFF",
+            activebackground="#333333",
+            activeforeground="#FFFFFF",
+        )
+        audio_tracks = getattr(self, "_in_app_audio_tracks", {})
+        if audio_tracks:
+            for label, track_id in audio_tracks.items():
+                audio_menu.add_radiobutton(
+                    label=label,
+                    variable=self._in_app_audio_track,
+                    value=label,
+                    command=lambda bound_id=track_id: self._choose_in_app_audio_track(
+                        bound_id
+                    ),
+                )
+        else:
+            audio_menu.add_command(
+                label=self._t("No audio tracks available"),
+                state="disabled",
+            )
+        menu.add_cascade(
+            label=self._t("Audio track"),
+            menu=audio_menu,
+        )
+
+        subtitle_menu = tk.Menu(
+            menu,
+            tearoff=False,
+            background="#202020",
+            foreground="#FFFFFF",
+            activebackground="#333333",
+            activeforeground="#FFFFFF",
+        )
+        subtitle_menu.add_radiobutton(
+            label=self._t("Off"),
+            variable=self._in_app_subtitle_track,
+            value=self._t("Off"),
+            command=self._disable_in_app_subtitles,
+        )
+        subtitle_tracks = getattr(self, "_in_app_subtitle_tracks", {})
+        for label in subtitle_tracks:
+            subtitle_menu.add_radiobutton(
+                label=label,
+                variable=self._in_app_subtitle_track,
+                value=label,
+                command=self._set_in_app_subtitle_track,
+            )
+        menu.add_cascade(
+            label=self._t("Subtitles"),
+            menu=subtitle_menu,
+        )
+
+        try:
+            menu.tk_popup(
+                button.winfo_rootx(),
+                max(0, button.winfo_rooty() - menu.winfo_reqheight()),
+            )
+        finally:
+            self._end_in_app_control_interaction()
+            menu.grab_release()
+            menu.destroy()
+
+    def _toggle_in_app_fullscreen(self, _event=None) -> str:
+        window = getattr(self, "_in_app_player_window", None)
+        if window is None:
+            return "break"
+        if getattr(self, "_in_app_fullscreen", False):
+            self._exit_in_app_fullscreen()
+            return "break"
+
+        try:
+            window.attributes("-fullscreen", True)
+        except Exception:
+            self._set_in_app_player_status(
+                self._t("Could not enter full screen; try again")
+            )
+            return "break"
+
+        self._in_app_fullscreen = True
+        try:
+            window.lift()
+            self._in_app_fullscreen_button.configure(text="⛶")
+            self._show_in_app_controls()
+            window.after(150, self._refresh_in_app_video_target)
+        except Exception:
+            # The fullscreen state was accepted by Tk; a delayed refresh or
+            # overlay update must not make the keyboard callback fail.
+            pass
+        return "break"
+
+    def _exit_in_app_fullscreen(self, _event=None) -> str:
+        if not getattr(self, "_in_app_fullscreen", False):
+            return "break"
+        window = getattr(self, "_in_app_player_window", None)
+        if window is not None:
+            try:
+                window.attributes("-fullscreen", False)
+            except Exception:
+                self._set_in_app_player_status(
+                    self._t("Could not exit full screen; try again")
+                )
+                return "break"
+
+        self._in_app_fullscreen = False
+        try:
+            if window is not None:
+                window.after(150, self._refresh_in_app_video_target)
+                self._show_in_app_controls()
+            button = getattr(self, "_in_app_fullscreen_button", None)
+            if button is not None:
+                button.configure(text="⛶")
+        except Exception:
+            # The window is already back in windowed mode.
+            pass
+        return "break"
+
+    def _refresh_in_app_video_target(self) -> None:
+        window = getattr(self, "_in_app_player_window", None)
+        surface = getattr(self, "_in_app_video_surface", None)
+        player = getattr(self, "_in_app_player", None)
+        if window is None or surface is None or player is None:
+            return
+        try:
+            if not window.winfo_exists() or not surface.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        window.update_idletasks()
+        self._set_in_app_video_target(surface)
+        self._raise_in_app_controls_overlay()
+
+    def _show_in_app_player_help(self) -> None:
+        messagebox.showinfo(
+            self._t("Media player help"),
+            self._t(
+                "Playback opens in a separate Smart VLC window, so the downloader "
+                "preview remains available. Use Full screen or F11 to expand the "
+                "player without changing the main app window. Press Escape or F11 "
+                "to return to windowed playback. Use the timeline to seek, and "
+                "the controls to pause, stop, or change volume. Select playback "
+                "speed, audio tracks, and subtitles from Settings. Close player "
+                "to stop playback and close the player window."
+            ),
+            parent=self.root,
+        )
+
+    def _stop_in_app_player(self) -> None:
+        # Stop the periodic UI poll as well; a stopped player must not keep
+        # scheduling callbacks until the window is closed.
+        after_id = getattr(self, "_in_app_playback_after", None)
+        if after_id is not None:
+            try:
+                self.root.after_cancel(after_id)
+            except tk.TclError:
+                pass
+        self._in_app_playback_after = None
+
+        # Stop is different from Pause: discard a queued audio-track change so
+        # it cannot be replayed unexpectedly by the next Play action.
+        switch = getattr(self, "_in_app_audio_switch", None)
+        if isinstance(switch, dict):
+            switch_after = switch.get("after")
+            if switch_after is not None:
+                try:
+                    self.root.after_cancel(switch_after)
+                except tk.TclError:
+                    pass
+        self._in_app_audio_switch = None
+
+        player = getattr(self, "_in_app_player", None)
+        if player is not None:
+            # Restore the selector to VLC's actual active track. A transient
+            # track-query error must not prevent the Stop command itself.
+            try:
+                self._refresh_in_app_audio_tracks(force=True)
+            except Exception:
+                pass
+            try:
+                player.stop()
+            except Exception:
+                # Native VLC can raise while transitioning. Keep the controls
+                # honest and resume polling so the user can retry Stop.
+                self._in_app_playback_after = self.root.after(
+                    250, self._poll_in_app_playback
+                )
+                self._set_in_app_player_status(
+                    self._t("Could not stop playback")
+                )
+                self._show_in_app_controls()
+                return
+        self._set_in_app_launcher_buttons(False)
+        playback_button = getattr(self, "_in_app_playback_button", None)
+        if playback_button is not None:
+            playback_button.configure(text="▶")
+        status = getattr(self, "_in_app_player_status", None)
+        if status is not None:
+            self._set_in_app_player_status(self._t("Playback stopped"))
+        self._show_in_app_controls()
+
+    def _close_in_app_player(self) -> None:
+        self._cleanup_in_app_settings_menu()
+        window = getattr(self, "_in_app_player_window", None)
+        if window is not None:
+            if getattr(self, "_in_app_fullscreen", False):
+                self._exit_in_app_fullscreen()
+        for attribute in (
+            "_in_app_playback_after",
+            "_in_app_controls_after",
+            "_in_app_controls_fade_after",
+            "_in_app_pointer_after",
+        ):
+            after_id = getattr(self, attribute, None)
+            if after_id is not None:
+                try:
+                    self.root.after_cancel(after_id)
+                except tk.TclError:
+                    pass
+            setattr(self, attribute, None)
+        switch = getattr(self, "_in_app_audio_switch", None)
+        if isinstance(switch, dict) and switch.get("after") is not None:
+            try:
+                self.root.after_cancel(switch["after"])
+            except tk.TclError:
+                pass
+        self._in_app_audio_switch = None
+        player = getattr(self, "_in_app_player", None)
+        if player is not None:
+            # Native VLC teardown may raise during a device/stream transition.
+            # Attempt each release independently so the Tk window and Python
+            # state are still cleaned up even when stop() fails.
+            for cleanup in (player.stop, player.release):
+                try:
+                    cleanup()
+                except Exception:
+                    pass
+        instance = getattr(self, "_in_app_vlc_instance", None)
+        if instance is not None:
+            try:
+                instance.release()
+            except Exception:
+                pass
+        self._in_app_player = None
+        self._in_app_vlc_instance = None
+        self._in_app_player_window = None
+        self._in_app_media_path = None
+        self._set_in_app_launcher_buttons(False)
+        controls_window = getattr(self, "_in_app_controls_overlay_window", None)
+        if controls_window is not None:
+            try:
+                controls_window.destroy()
+            except tk.TclError:
+                pass
+        self._in_app_controls_overlay_window = None
+        top_window = getattr(self, "_in_app_top_controls_overlay_window", None)
+        if top_window is not None:
+            try:
+                top_window.destroy()
+            except tk.TclError:
+                pass
+        self._in_app_top_controls_overlay_window = None
+        self._in_app_vlc = None
+        self._in_app_playback_after = None
+        self._in_app_audio_tracks = {}
+        self._in_app_audio_tracks_loaded = False
+        self._in_app_audio_track = None
+        self._in_app_subtitle_tracks = {}
+        self._in_app_subtitle_tracks_loaded = False
+        self._in_app_subtitle_track = None
+        self._in_app_audio_button = None
+        self._in_app_cc_button = None
+        self._in_app_snapshot_button = None
+        self._in_app_ab_loop_button = None
+        self._in_app_ab_loop = {"A": None, "B": None}
+        self._in_app_fullscreen = False
+        self._in_app_playback_button = None
+        self._in_app_player_status = None
+        self._in_app_player_status_text = None
+        self._in_app_fullscreen_button = None
+        self._in_app_video_surface = None
+        self._in_app_controls_overlay = None
+        self._in_app_top_controls_overlay = None
+        self._in_app_top_back_button = None
+        self._in_app_top_title_label = None
+        self._in_app_top_settings_button = None
+        self._in_app_settings_button = None
+        self._in_app_timeline = None
+        self._in_app_controls_visible = False
+        self._in_app_volume_var = None
+        self._in_app_position_var = None
+        self._in_app_seeking = False
+        self._in_app_control_interaction = False
+        if window is not None:
+            window.destroy()
+
+    def open_selected_media_in_system_player(self) -> None:
+        path = self._selected_media_path()
+        if path is not None:
+            self.open_media_in_system_player(path)
+
+    def open_media_in_system_player(self, path: Path) -> None:
+        try:
+            if sys.platform == "win32":
+                vlc = shutil.which("vlc")
+                if vlc is None:
+                    for candidate in (
+                        Path(os.environ.get("ProgramFiles", "C:/Program Files"))
+                        / "VideoLAN" / "VLC" / "vlc.exe",
+                        Path(os.environ.get("ProgramFiles(x86)", "C:/Program Files (x86)"))
+                        / "VideoLAN" / "VLC" / "vlc.exe",
+                    ):
+                        if candidate.is_file():
+                            vlc = str(candidate)
+                            break
+                if vlc:
+                    subprocess.Popen([vlc, str(path)])
+                else:
+                    os.startfile(path)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(path)])
+            else:
+                opener = shutil.which("xdg-open")
+                if opener is None:
+                    raise OSError("Could not find a media player or xdg-open.")
+                subprocess.Popen([opener, str(path)])
+        except OSError as error:
+            messagebox.showerror(
+                self._t("Could not play media"), str(error), parent=self.root
+            )
+
+    def browse_local_media(self) -> None:
+        path = self._choose_local_media()
+        if path is None:
+            return
+        self._local_media_path = path
+        self._show_local_media_details(path)
+
+    def _choose_local_media(self) -> Path | None:
+        media_types = " ".join(f"*{suffix}" for suffix in sorted(PLAYABLE_MEDIA_EXTENSIONS))
+        selected = filedialog.askopenfilename(
+            parent=self.root,
+            title=self._t("Choose an existing audio or video file"),
+            filetypes=(
+                (self._t("Audio and video files"), media_types),
+                (self._t("All files"), "*.*"),
+            ),
+        )
+        if not selected:
+            return None
+        path = Path(selected).expanduser()
+        if not path.is_file() or path.suffix.lower() not in PLAYABLE_MEDIA_EXTENSIONS:
+            messagebox.showerror(
+                self._t("Unsupported media"),
+                self._t("Choose an existing supported audio or video file."),
+                parent=self.root,
+            )
+            return None
+        return path
+
+    def _show_local_media_details(self, path: Path) -> None:
+        self.inspector_status.set(self._t("Local file"))
+        self._refresh_preview_video_choices()
+        media_kind = (
+            "VIDEO"
+            if path.suffix.lower() in VIDEO_MEDIA_EXTENSIONS
+            else "AUDIO"
+        )
+        try:
+            size_mb = path.stat().st_size / (1024 * 1024)
+        except OSError as error:
+            self._clear_thumbnail(f"Preview unavailable:\n{error}")
+            return
+        self.current_thumbnail = None
+        if media_kind == "VIDEO":
+            self._show_video_preview(path)
+        else:
+            self._clear_video_preview()
+            self.preview_image_label.configure(
+                image="",
+                text=f"{media_kind}\n{path.suffix.lstrip('.').upper()}",
+            )
+        self.preview_details.configure(
+            text=f"{path.name}\n{self._t('Existing local file')}\n{size_mb:.1f} MB"
+        )
+
+    def _select_image_gallery_mode(self) -> None:
+        self.mode.set("Image gallery")
+        self.url_entry.focus_set()
+        self.progress_summary.set(
+            "Paste a public webpage link, then click Add download to find its images."
+        )
+
+    def _open_clicked_row_action(self, event) -> None:
+        row_id = self.jobs.identify_row(event.y)
+        if not row_id:
+            return
+        self.jobs.selection_set(row_id)
+        if self.jobs.identify_column(event.x) == "#4":
+            if not self._integrity_guard(row_id):
+                return
+            location = self.jobs.set(row_id, "location").strip()
+            if location and not location.startswith(
+                ("Amazon S3 /", "Google Drive /", "Dropbox /")
+            ):
+                self._open_path(Path(location))
+            else:
+                self.open_selected_location()
+            return
+        path = self._selected_output_path()
+        if (
+            self.jobs.set(row_id, "status") == "Complete"
+            and path is not None
+            and path.suffix.lower() in PLAYABLE_MEDIA_EXTENSIONS
+        ):
+            self.play_selected_media()
+
+    def _show_selected_thumbnail(self, _event=None) -> None:
+        selected = self.jobs.selection()
+        self._local_media_path = None
+        self._clear_video_preview()
+        if not selected:
+            self._refresh_preview_video_choices()
+            self.inspector_status.set(self._t("No item selected"))
+            self._clear_thumbnail(
+                "Select a video task or choose Browse local media to preview a video."
+            )
+            return
+        job_id = selected[0]
+        path = self._selected_output_path()
+        if path is None:
+            path = self._download_paths.get(job_id)
+        values = self.jobs.item(job_id, "values")
+        status = values[0] if values else "Unknown"
+        progress = values[1] if len(values) > 1 else "—"
+        self.inspector_status.set(status)
+        video_paths = self._refresh_preview_video_choices()
+        if path is None or not path.is_file():
+            completed_videos = [
+                candidate
+                for candidate in video_paths
+                if candidate.suffix.lower() in VIDEO_MEDIA_EXTENSIONS
+            ]
+            if completed_videos:
+                path = completed_videos[0]
+            elif video_paths:
+                candidate = video_paths[0]
+                label = next(
+                    (
+                        label for label, choice_path
+                        in self._preview_video_choices.items()
+                        if choice_path == candidate
+                    ),
+                    "",
+                )
+                self.preview_video_choice.set(label)
+                self.preview_image_label.configure(
+                    image="",
+                    text=(
+                        f"{status}\n"
+                        f"{candidate.name}\n"
+                        f"{self._t('Video is still downloading')}"
+                    ),
+                )
+                self.preview_details.configure(text=str(candidate))
+                return
+        if path is None or not path.is_file():
+            self._clear_thumbnail(f"{status}\n{progress}\nFile is not available locally.")
+            return
+        if path.suffix.lower() not in {
+            ".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp",
+        }:
+            media_kind = (
+                "VIDEO"
+                if path.suffix.lower() in VIDEO_MEDIA_EXTENSIONS
+                else "AUDIO"
+                if path.suffix.lower() in AUDIO_MEDIA_EXTENSIONS
+                else "FILE"
+            )
+            self.current_thumbnail = None
+            if media_kind == "VIDEO":
+                self._show_video_preview(path)
+            else:
+                self.preview_image_label.configure(
+                    image="",
+                    text=f"{media_kind}\n{path.suffix.lstrip('.').upper()}",
+                )
+            try:
+                size_mb = path.stat().st_size / (1024 * 1024)
+            except OSError as error:
+                self._clear_thumbnail(f"Preview unavailable:\n{error}")
+                return
+            self.preview_details.configure(
+                text=f"{path.name}\n{status} · {progress}\n{size_mb:.1f} MB"
+            )
+            return
+        try:
+            from PIL import Image, ImageTk
+
+            try:
+                with Image.open(path) as image:
+                    image.thumbnail((200, 200), Image.Resampling.LANCZOS)
+                    thumbnail = image.copy()
+            except Image.DecompressionBombError as error:
+                raise ValueError(
+                    "Image dimensions exceed the safe preview limit."
+                ) from error
+            photo = ImageTk.PhotoImage(thumbnail, master=self.root)
+        except (OSError, ValueError, RuntimeError, tk.TclError) as error:
+            self._clear_thumbnail(f"Preview unavailable:\n{error}")
+            return
+        self.current_thumbnail = photo
+        self.preview_image_label.configure(image=photo, text="")
+        try:
+            size_mb = path.stat().st_size / (1024 * 1024)
+        except OSError as error:
+            self._clear_thumbnail(f"Preview unavailable:\n{error}")
+            return
+        self.preview_details.configure(
+            text=f"{path.name}\n{status} · {progress}\n{size_mb:.1f} MB"
+        )
+
+    def _clear_thumbnail(self, message: str) -> None:
+        self._clear_video_preview()
+        self.current_thumbnail = None
+        self.preview_image_label.configure(image="", text=message)
+        self.preview_details.configure(text="")
+
+    def _resize_selected_image(self, path: Path) -> None:
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Resize image")
+        dialog.transient(self.root)
+        width = tk.StringVar(value="1920")
+        height = tk.StringVar(value="1080")
+        ttk.Label(dialog, text="Maximum width").grid(row=0, column=0, padx=12, pady=8, sticky="w")
+        ttk.Entry(dialog, textvariable=width, width=12).grid(row=0, column=1, padx=12, pady=8)
+        ttk.Label(dialog, text="Maximum height").grid(row=1, column=0, padx=12, pady=8, sticky="w")
+        ttk.Entry(dialog, textvariable=height, width=12).grid(row=1, column=1, padx=12, pady=8)
+
+        def resize() -> None:
+            try:
+                max_width, max_height = int(width.get()), int(height.get())
+            except ValueError:
+                messagebox.showerror("Invalid size", "Enter whole-number width and height values.", parent=dialog)
+                return
+            self._process_image(
+                lambda: resize_image(path, max_width, max_height),
+                "Resize image",
+            )
+            dialog.destroy()
+
+        ttk.Button(dialog, text="Resize", command=resize, style="Accent.TButton").grid(
+            row=2, column=0, columnspan=2, padx=12, pady=12, sticky="e"
+        )
+        dialog.grab_set()
+
+    def _process_image(self, operation, description: str) -> None:
+        future = self.executor.submit(operation)
+
+        def check_result() -> None:
+            if not future.done():
+                self.root.after(100, check_result)
+                return
+            try:
+                result = future.result()
+            except (OSError, ValueError, RuntimeError, KeyError) as error:
+                messagebox.showerror(f"{description} failed", str(error))
+                return
+            messagebox.showinfo(description, f"Saved image:\n{result}")
+
+        self.root.after(100, check_result)
