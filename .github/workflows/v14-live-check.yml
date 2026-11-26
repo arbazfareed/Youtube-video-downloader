@@ -1,11 +1,13 @@
 name: v14 live site check
 
 # Downloads real public videos with the app's own engine on GitHub's servers,
-# so nothing is downloaded to your computer. Start it from the Actions tab
-# (or the GitHub mobile app): Actions > "v14 live site check" > Run workflow.
+# so nothing is downloaded to your computer. It runs weekly automatically;
+# you can also start it manually from Actions > "v14 live site check".
 # The result table appears on the run's Summary page.
 
 on:
+  schedule:
+    - cron: "17 5 * * 1"  # Weekly Monday at 05:17 UTC
   workflow_dispatch:
     inputs:
       urls:
