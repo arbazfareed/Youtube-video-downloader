@@ -1027,7 +1027,7 @@ class MediaMixin:
             # A completed preview must not keep polling VLC forever.
             # Reuse the normal teardown/reset path so controls and native
             # resources return to the same state as an explicit Stop.
-            if vlc is not None and state == vlc.State.Ended:
+            if vlc is not None and state == getattr(vlc.State, "Ended", None):
                 self._stop_video_preview()
                 return
             if vlc is not None and state == vlc.State.Error:
