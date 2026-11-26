@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import sqlite3
+import threading
 from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -65,6 +66,8 @@ class DownloadHistory:
             )
             database_path = Path(data_root) / "SmartDownloader14" / "history.sqlite3"
         self.database_path = database_path
+        # Protect writes when worker threads share this history instance.
+        self._write_lock = threading.RLock()
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self.recovery_backup_path: Path | None = None
         try:
@@ -155,55 +158,57 @@ class DownloadHistory:
         return connection
 
     def add(
-        self,
-        url: str,
-        status: str,
-        destination: str,
-        options: dict | None = None,
-    ) -> int:
-        now = datetime.now().astimezone().isoformat(timespec="seconds")
-        with closing(self._connect()) as connection:
-            cursor = connection.execute(
-                """
-                INSERT INTO downloads
-                    (url, status, destination, created_at, updated_at, options_json)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (url, status, destination, now, now, json.dumps(options or {})),
-            )
-            connection.commit()
-            return int(cursor.lastrowid)
+        with self._write_lock:
+            self,
+            url: str,
+            status: str,
+            destination: str,
+            options: dict | None = None,
+        ) -> int:
+            now = datetime.now().astimezone().isoformat(timespec="seconds")
+            with closing(self._connect()) as connection:
+                cursor = connection.execute(
+                    """
+                    INSERT INTO downloads
+                        (url, status, destination, created_at, updated_at, options_json)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (url, status, destination, now, now, json.dumps(options or {})),
+                )
+                connection.commit()
+                return int(cursor.lastrowid)
 
     def update(
-        self,
-        record_id: int,
-        status: str,
-        progress: str,
-        details: str,
-        destination: str,
-        options: dict | None = None,
-    ) -> None:
-        now = datetime.now().astimezone().isoformat(timespec="seconds")
-        with closing(self._connect()) as connection:
-            connection.execute(
-                """
-                UPDATE downloads
-                SET status = ?, progress = ?, details = ?, destination = ?,
-                    updated_at = ?,
-                    options_json = COALESCE(?, options_json)
-                WHERE id = ?
-                """,
-                (
-                    status,
-                    progress,
-                    details,
-                    destination,
-                    now,
-                    json.dumps(options) if options is not None else None,
-                    record_id,
-                ),
-            )
-            connection.commit()
+        with self._write_lock:
+            self,
+            record_id: int,
+            status: str,
+            progress: str,
+            details: str,
+            destination: str,
+            options: dict | None = None,
+        ) -> None:
+            now = datetime.now().astimezone().isoformat(timespec="seconds")
+            with closing(self._connect()) as connection:
+                connection.execute(
+                    """
+                    UPDATE downloads
+                    SET status = ?, progress = ?, details = ?, destination = ?,
+                        updated_at = ?,
+                        options_json = COALESCE(?, options_json)
+                    WHERE id = ?
+                    """,
+                    (
+                        status,
+                        progress,
+                        details,
+                        destination,
+                        now,
+                        json.dumps(options) if options is not None else None,
+                        record_id,
+                    ),
+                )
+                connection.commit()
 
     def list_records(self, include_hidden: bool = False) -> list[DownloadRecord]:
         where_clause = "" if include_hidden else "WHERE hidden = 0"
