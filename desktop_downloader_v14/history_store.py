@@ -158,13 +158,13 @@ class DownloadHistory:
         return connection
 
     def add(
+        self,
+        url: str,
+        status: str,
+        destination: str,
+        options: dict | None = None,
+    ) -> int:
         with self._write_lock:
-            self,
-            url: str,
-            status: str,
-            destination: str,
-            options: dict | None = None,
-        ) -> int:
             now = datetime.now().astimezone().isoformat(timespec="seconds")
             with closing(self._connect()) as connection:
                 cursor = connection.execute(
@@ -179,15 +179,15 @@ class DownloadHistory:
                 return int(cursor.lastrowid)
 
     def update(
+        self,
+        record_id: int,
+        status: str,
+        progress: str,
+        details: str,
+        destination: str,
+        options: dict | None = None,
+    ) -> None:
         with self._write_lock:
-            self,
-            record_id: int,
-            status: str,
-            progress: str,
-            details: str,
-            destination: str,
-            options: dict | None = None,
-        ) -> None:
             now = datetime.now().astimezone().isoformat(timespec="seconds")
             with closing(self._connect()) as connection:
                 connection.execute(
