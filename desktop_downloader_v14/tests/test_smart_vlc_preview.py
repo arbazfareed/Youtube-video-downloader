@@ -112,6 +112,26 @@ class SmartVlcPreviewLifecycleTests(unittest.TestCase):
         )
         self.mixin._set_in_app_player_status.assert_not_called()
 
+    def test_preview_timeline_uses_active_theme_palette(self):
+        canvas = MagicMock()
+        canvas.winfo_width.return_value = 240
+        canvas.winfo_height.return_value = 20
+        self.mixin.preview_player_timeline = canvas
+        self.mixin.preview_player_position = MagicMock()
+        self.mixin.preview_player_position.get.return_value = 40
+        self.mixin._preview_timeline_colors = {
+            "track": "#334455", "played": "#1ba987", "handle": "#ffffff"
+        }
+        self.mixin._preview_timeline_hover = True
+        self.mixin._preview_seeking = False
+
+        self.mixin._draw_video_preview_timeline()
+
+        line_calls = canvas.create_line.call_args_list
+        self.assertEqual(line_calls[0].kwargs["fill"], "#334455")
+        self.assertEqual(line_calls[1].kwargs["fill"], "#1ba987")
+        self.assertEqual(canvas.create_oval.call_args.kwargs["fill"], "#ffffff")
+
     def test_playing_preview_continues_polling(self):
         self.mixin._preview_vlc_player.get_state.return_value = 3
         self.mixin.preview_video_placeholder = MagicMock()

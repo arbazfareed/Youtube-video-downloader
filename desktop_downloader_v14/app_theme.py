@@ -155,9 +155,14 @@ class ThemeMixin:
         # Premium Smart VLC preview styles. The video stage stays cinematic,
         # while the surrounding controls follow the active app theme.
         preview_stage = "#000000" if self.high_contrast.get() else "#081426"
-        preview_accent = "#ffff00" if self.high_contrast.get() else (
-            "#55c5ff" if self.dark_mode.get() else "#1769aa"
-        )
+        preview_accent = accent
+        self._preview_timeline_colors = {
+            "track": muted if self.high_contrast.get() else (
+                "#536273" if self.dark_mode.get() else "#b7c5d5"
+            ),
+            "played": preview_accent,
+            "handle": "#ffffff" if not self.high_contrast.get() else "#ffff00",
+        }
         preview_toolbar = "#000000" if self.high_contrast.get() else (
             "#202b3c" if self.dark_mode.get() else "#edf3fa"
         )
@@ -186,6 +191,11 @@ class ThemeMixin:
             font=("Segoe UI", card_font_size, "bold"),
         )
         style.configure(
+            "Preview.Count.TLabel",
+            background=surface, foreground=muted,
+            font=("Segoe UI", hint_font_size, "bold"),
+        )
+        style.configure(
             "Preview.Section.TLabel",
             background=surface,
             foreground=foreground,
@@ -207,7 +217,7 @@ class ThemeMixin:
             "Preview.Icon.TButton",
             background=preview_toolbar,
             foreground=foreground,
-            padding=(7, 7),
+            padding=(11, 9),
             borderwidth=0,
             focuscolor=preview_accent,
             font=("Segoe UI Symbol", 12, "bold"),
@@ -218,10 +228,24 @@ class ThemeMixin:
             foreground=[("disabled", muted), ("active", preview_accent)],
         )
         style.configure(
+            "Preview.Action.TButton",
+            background=preview_toolbar,
+            foreground=foreground,
+            padding=(8, 7),
+            borderwidth=0,
+            focuscolor=preview_accent,
+            font=("Segoe UI", hint_font_size, "bold"),
+        )
+        style.map(
+            "Preview.Action.TButton",
+            background=[("pressed", button_active), ("active", button_active)],
+            foreground=[("disabled", muted), ("active", preview_accent)],
+        )
+        style.configure(
             "Preview.Play.TButton",
             background=preview_accent,
             foreground="#ffffff" if not self.high_contrast.get() else "#000000",
-            padding=(9, 8),
+            padding=(12, 10),
             borderwidth=0,
             focuscolor=preview_accent,
             font=("Segoe UI Symbol", 12, "bold"),

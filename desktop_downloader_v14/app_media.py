@@ -737,6 +737,13 @@ class MediaMixin:
         selector = getattr(self, "preview_video_selector", None)
         variable = getattr(self, "preview_video_choice", None)
         self._preview_video_choices = labels
+        count_var = getattr(self, "preview_video_count", None)
+        if count_var is not None:
+            downloading = sum(path.name.casefold().endswith(".part") for path in labels.values())
+            count_text = f"{len(labels)} item" if len(labels) == 1 else f"{len(labels)} items"
+            if downloading:
+                count_text += f" · {downloading} downloading"
+            count_var.set(count_text)
         if selector is not None and variable is not None:
             values = tuple(labels)
             current_path = getattr(self, "_preview_media_path", None)
@@ -888,7 +895,7 @@ class MediaMixin:
             surface.grid_remove()
         play_btn = getattr(self, "preview_player_play_button", None)
         if play_btn is not None:
-            play_btn.configure(text="▶")
+            play_btn.configure(text=self._t("Play"))
         cur_time = getattr(self, "preview_player_current_time", None)
         if cur_time is not None:
             cur_time.set("00:00")
@@ -901,6 +908,7 @@ class MediaMixin:
         self._draw_video_preview_timeline()
         preview = getattr(self, "preview_image_label", None)
         if preview is not None:
+            preview.configure(text=self._t("Select a video to preview"))
             preview.grid()
 
     def _toggle_video_preview(self) -> None:
@@ -913,12 +921,12 @@ class MediaMixin:
                     result = player.pause()
                     if result == -1:
                         raise RuntimeError("VLC could not pause preview")
-                    self.preview_player_play_button.configure(text="▶")
+                    self.preview_player_play_button.configure(text=self._t("Play"))
                 else:
                     result = player.play()
                     if result == -1:
                         raise RuntimeError("VLC could not resume preview")
-                    self.preview_player_play_button.configure(text="Ⅱ")
+                    self.preview_player_play_button.configure(text=self._t("Pause"))
                     self._schedule_video_preview_poll()
                     switch = getattr(self, "_preview_audio_switch", None)
                     if isinstance(switch, dict) and switch.get("target") is not None:
@@ -1106,7 +1114,7 @@ class MediaMixin:
             midpoint,
             end,
             midpoint,
-            fill="#777777",
+            fill=getattr(self, "_preview_timeline_colors", {}).get("track", "#777777"),
             width=line_width,
             capstyle="round",
         )
@@ -1115,7 +1123,7 @@ class MediaMixin:
             midpoint,
             played_end,
             midpoint,
-            fill="#FF3333",
+            fill=getattr(self, "_preview_timeline_colors", {}).get("played", "#FF3333"),
             width=line_width,
             capstyle="round",
         )
@@ -1126,8 +1134,8 @@ class MediaMixin:
                 midpoint - radius,
                 played_end + radius,
                 midpoint + radius,
-                fill="#FFFFFF",
-                outline="#FFFFFF",
+                fill=getattr(self, "_preview_timeline_colors", {}).get("handle", "#FFFFFF"),
+                outline=getattr(self, "_preview_timeline_colors", {}).get("handle", "#FFFFFF"),
             )
 
     def _set_video_preview_seek_from_event(self, event) -> None:
