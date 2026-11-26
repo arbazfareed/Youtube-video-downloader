@@ -1,0 +1,49 @@
+name: v14 live site check
+
+# Downloads real public videos with the app's own engine on GitHub's servers,
+# so nothing is downloaded to your computer. Start it from the Actions tab
+# (or the GitHub mobile app): Actions > "v14 live site check" > Run workflow.
+# The result table appears on the run's Summary page.
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: "Optional: your own links to test, one per line (leave empty for the built-in list)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  live-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: desktop_downloader_v14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: desktop_downloader_v14/requirements.txt
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Install app dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Download real videos
+        env:
+          INPUT_URLS: ${{ github.event.inputs.urls }}
+        run: |
+          set -f   # keep "?" and "*" in links from being treated as file patterns
+          if [ -n "$INPUT_URLS" ]; then
+            # shellcheck disable=SC2086
+            python live_check.py $(printf '%s' "$INPUT_URLS" | tr '\n' ' ')
+          else
+            python live_check.py
+          fi
