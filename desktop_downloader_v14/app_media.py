@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from app_support import (
     datetime,
     os,
@@ -38,6 +40,7 @@ _VLC_DLL_DIRECTORY = None
 _IN_APP_PLAYBACK_RATES = ("0.5x", "1.0x", "1.5x", "2.0x")
 _AUDIO_SWITCH_VERIFY_DELAY_MS = 250
 _AUDIO_SWITCH_MAX_ATTEMPTS = 8
+END_MARGIN_MS_FOR_RESUME = 5000
 # Keys the Smart Player handles: arrows seek/volume, B = next audio track,
 # V = subtitles on/off (same letters VLC uses).
 _PLAYBACK_KEY_SEQUENCES = (
@@ -1366,6 +1369,62 @@ class MediaMixin:
             label = next((l for l, i in tracks.items() if i == target), "")
             status.set(f"{self._t('Audio')}: {label}")
 
+    def _resume_store(self):
+        store = getattr(self, "_resume_positions", None)
+        if store is None:
+            from resume_positions import ResumeStore
+
+            store = self._resume_positions = ResumeStore()
+        return store
+
+    def _resume_lookup(self, path) -> int | None:
+        try:
+            return self._resume_store().get(path)
+        except Exception:
+            return None   # remembering a position must never stop a video from playing
+
+    def _resume_playback_tick(self, player, current_ms, duration_ms, seekable, ended) -> None:
+        """Called by the playback poll: continue from the saved spot once, then keep saving."""
+        path = getattr(self, "_in_app_media_path", None)
+        if path is None:
+            return
+        try:
+            pending = getattr(self, "_in_app_resume_pending", None)
+            if pending is not None and seekable and duration_ms > 0:
+                self._in_app_resume_pending = None
+                target = min(pending, max(0, duration_ms - END_MARGIN_MS_FOR_RESUME))
+                if player.set_time(target) != -1:
+                    current_ms = target
+                    self._set_in_app_player_status(
+                        f"{self._t('Continuing from')} {self._format_in_app_time(target)}"
+                    )
+            elif pending is not None:
+                return          # not seekable yet: wait, do not overwrite the saved spot
+            self._in_app_last_time_ms = current_ms
+            self._in_app_last_duration_ms = duration_ms
+            if ended:
+                self._resume_store().forget(path)
+                return
+            now = time.monotonic()
+            if now - getattr(self, "_in_app_resume_saved_at", 0.0) >= 5.0:
+                self._in_app_resume_saved_at = now
+                self._resume_store().save(path, current_ms, duration_ms)
+        except Exception:
+            pass
+
+    def _resume_save_now(self) -> None:
+        path = getattr(self, "_in_app_media_path", None)
+        if path is None or getattr(self, "_in_app_resume_pending", None) is not None:
+            return
+        try:
+            self._resume_store().save(
+                path,
+                int(getattr(self, "_in_app_last_time_ms", 0) or 0),
+                int(getattr(self, "_in_app_last_duration_ms", 0) or 0),
+            )
+        except Exception:
+            pass
+
     def _nudge_in_app_player_seek(self, seconds: int) -> None:
         player = getattr(self, "_in_app_player", None)
         if player is None:
@@ -1999,6 +2058,10 @@ class MediaMixin:
         self._in_app_player_window = window
         self._in_app_media_title = path.name
         self._in_app_media_path = path.resolve()
+        self._in_app_resume_pending = self._resume_lookup(path)
+        self._in_app_last_time_ms = 0
+        self._in_app_last_duration_ms = 0
+        self._in_app_resume_saved_at = 0.0
 
         self._in_app_player_status = tk.StringVar(value=self._t("Playback started"))
         self._in_app_controls_visible = False
@@ -2481,6 +2544,7 @@ class MediaMixin:
                 500, self._poll_in_app_playback
             )
             return
+        self._resume_playback_tick(player, current_time, duration, seekable, state == vlc.State.Ended)
         if seekable and not self._in_app_seeking:
             self._in_app_position_var.set(min(100, current_time * 100 / duration))
         self._draw_in_app_timeline()
@@ -3940,6 +4004,7 @@ class MediaMixin:
             except tk.TclError:
                 pass
         self._in_app_audio_switch = None
+        self._resume_save_now()
         player = getattr(self, "_in_app_player", None)
         if player is not None:
             # Native VLC teardown may raise during a device/stream transition.
