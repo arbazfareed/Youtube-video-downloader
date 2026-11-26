@@ -633,6 +633,31 @@ class TestNewV14Features(unittest.TestCase):
             self.assertEqual(list(root.glob(".shared-cache.thumbnail-*")), [])
 
 
+    def test_refresh_preview_clears_file_removed_during_playback(self) -> None:
+        from app_media import MediaMixin
+
+        app = MagicMock(spec=MediaMixin)
+        # `jobs` belongs to the application, not MediaMixin's spec.
+        app.jobs = MagicMock()
+        app.jobs.selection.return_value = ()
+        app._local_media_path = None
+        app._preview_media_path = Path("deleted-preview-video.mp4")
+        app._clear_video_preview = MagicMock()
+        app.preview_details = MagicMock()
+        app.preview_video_status = MagicMock()
+        app._t = lambda message: message
+
+        result = MediaMixin._refresh_preview_video_choices(app)
+
+        self.assertEqual(result, [])
+        app._clear_video_preview.assert_called_once_with()
+        app.preview_details.configure.assert_called_once_with(text="")
+        app.preview_video_status.set.assert_called_with(
+            "The selected video is no longer available. Choose another video."
+        )
+        self.assertIsNone(app._local_media_path)
+        self.assertIsNone(app.current_thumbnail)
+
     def test_select_preview_video_clears_stale_file(self) -> None:
         from app_media import MediaMixin
 
