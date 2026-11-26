@@ -1550,6 +1550,26 @@ class MediaMixin:
             )
             self._refresh_video_preview_subtitle_tracks()
             return
+        # Keep the last selected language so turning subtitles off and back
+        # on does not unexpectedly switch to the first available track.
+        selected = self._preview_subtitle_track.get()
+        try:
+            active_track_id = player.video_get_spu()
+        except Exception:
+            active_track_id = -1
+        if active_track_id >= 0:
+            selected = next(
+                (
+                    label
+                    for label, track_id in getattr(
+                        self, "_preview_subtitle_tracks", {}
+                    ).items()
+                    if track_id == active_track_id
+                ),
+                selected,
+            )
+        if selected != self._t("Off"):
+            self._preview_last_subtitle_track = selected
         self._preview_subtitle_track.set(self._t("Off"))
 
     def _toggle_video_preview_subtitles(self) -> None:
@@ -1571,6 +1591,8 @@ class MediaMixin:
             self._disable_video_preview_subtitles()
             return
         selected = self._preview_subtitle_track.get()
+        if selected not in tracks:
+            selected = getattr(self, "_preview_last_subtitle_track", None)
         if selected not in tracks:
             selected = next(iter(tracks))
         self._preview_subtitle_track.set(selected)

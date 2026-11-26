@@ -1212,6 +1212,26 @@ class SmartVlcAudioTrackTest(unittest.TestCase):
             "Subtitle information temporarily unavailable",
         )
 
+    def test_video_preview_subtitle_toggle_restores_last_selected_track(self):
+        player = MagicMock()
+        # First toggle sees the selected track; disabling also reads VLC's
+        # active track. The second toggle sees subtitles disabled.
+        player.video_get_spu.side_effect = [7, 7, -1]
+        player.video_set_spu.return_value = 0
+        self.mixin._preview_vlc_player = player
+        self.mixin._preview_subtitle_track = _FakeTkVar("English")
+        self.mixin._preview_subtitle_tracks = {"English": 7, "Spanish": 8}
+        self.mixin._refresh_video_preview_subtitle_tracks = MagicMock()
+
+        self.mixin._toggle_video_preview_subtitles()
+        self.assertEqual(self.mixin._preview_subtitle_track.get(), "Off")
+        self.assertEqual(self.mixin._preview_last_subtitle_track, "English")
+
+        self.mixin._toggle_video_preview_subtitles()
+
+        player.video_set_spu.assert_called_with(7)
+        self.assertEqual(self.mixin._preview_subtitle_track.get(), "English")
+
     def test_video_preview_subtitle_disable_exception_keeps_selection(self):
         player = MagicMock()
         player.video_set_spu.side_effect = RuntimeError("VLC subtitle disable error")
