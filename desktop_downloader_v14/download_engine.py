@@ -704,8 +704,9 @@ def _requested_audio_languages(audio_languages: str) -> set[str]:
     )
     requested = set()
     for token in tokens:
-        cleaned = re.sub(r"\\bonly\\b", "", token).strip()
-        cleaned = re.sub(r"^only\\s+", "", cleaned).strip()
+        cleaned = token.removesuffix(" only").strip()
+        if cleaned.startswith("only "):
+            cleaned = cleaned[5:].strip()
         if cleaned:
             code = _normalize_audio_language_code(cleaned)
             if re.fullmatch(r"[a-z]{2,3}", code):
