@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from cookies import cookie_source_error, normalize_cookie_source
 from app_support import (
     os,
     re,
@@ -212,8 +213,8 @@ class DownloadsMixin:
             )
             return
         browser_cookie_setting = getattr(self, "browser_cookies", None)
-        browser_cookies = (
-            browser_cookie_setting.get().lower() if browser_cookie_setting else "none"
+        browser_cookies = normalize_cookie_source(
+            browser_cookie_setting.get() if browser_cookie_setting else "none"
         )
         proxy_setting = getattr(self, "proxy_list", None)
         proxy_value = proxy_setting.get().strip() if proxy_setting else ""
@@ -222,8 +223,9 @@ class DownloadsMixin:
         if geo_bypass_country and not re.fullmatch(r"[A-Z]{2}", geo_bypass_country):
             messagebox.showerror("Invalid geo-bypass country", "Enter a two-letter ISO country code, such as US or GB.")
             return
-        if browser_cookies != "none" and browser_cookies not in SUPPORTED_BROWSERS:
-            messagebox.showerror("Invalid browser", "Choose a supported browser for cookies.")
+        cookie_problem = cookie_source_error(browser_cookies)
+        if cookie_problem:
+            messagebox.showerror("Browser cookies", cookie_problem)
             return
         if (torrent_selected or torrent_url) and (
             proxy_value or browser_cookies != "none"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from cookies import cookie_source_error, normalize_cookie_source
 from app_support import (
     Path,
     RetryPolicy,
@@ -252,7 +253,7 @@ class QueueMixin:
             "checksum_algorithm": saved.get("checksum_algorithm", "sha256"),
             "expected_checksum": saved.get("expected_checksum", ""),
             "proxy": self.proxy_list.get().strip(),
-            "browser_cookies": self.browser_cookies.get().lower(),
+            "browser_cookies": normalize_cookie_source(self.browser_cookies.get()),
             "geo_bypass_country": (
                 getattr(self, "geo_bypass_country", None).get().strip().upper()
                 if getattr(self, "geo_bypass_country", None) is not None
