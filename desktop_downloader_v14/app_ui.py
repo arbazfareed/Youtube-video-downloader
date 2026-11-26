@@ -1045,27 +1045,35 @@ class UiMixin:
             style="Preview.Value.TLabel",
         ).grid(row=1, column=3, sticky="w")
 
+        # Keep secondary actions on their own row so they never squeeze the
+        # volume slider or timeline in a narrow inspector pane.
+        self.preview_player_action_controls = ttk.Frame(
+            preview, style="Preview.Toolbar.TFrame", padding=(8, 6),
+        )
+        self.preview_player_action_controls.grid(
+            row=2, column=0, sticky="ew", pady=(0, 10),
+        )
+        self.preview_player_action_controls.columnconfigure(0, weight=1)
+        self.preview_player_action_controls.columnconfigure(1, weight=1)
         self.preview_player_settings_button = ttk.Button(
-            self.preview_player_controls,
+            self.preview_player_action_controls,
             text=self._t("Settings"),
             command=lambda: self._show_video_preview_settings(
                 self.preview_player_settings_button
             ),
-            style="Preview.Icon.TButton",
-            width=9,
+            style="Preview.Action.TButton",
         )
         self.preview_player_settings_button.grid(
-            row=0, column=4, rowspan=2, padx=(2, 4),
+            row=0, column=0, sticky="ew", padx=(0, 5),
         )
         self.preview_player_fullscreen_button = ttk.Button(
-            self.preview_player_controls,
+            self.preview_player_action_controls,
             text=self._t("Fullscreen"),
             command=self._open_preview_fullscreen,
-            style="Preview.Icon.TButton",
-            width=11,
+            style="Preview.Action.TButton",
         )
         self.preview_player_fullscreen_button.grid(
-            row=0, column=5, rowspan=2, padx=(0, 0),
+            row=0, column=1, sticky="ew", padx=(5, 0),
         )
 
         videos_header = ttk.Frame(preview, style="Card.TFrame")
