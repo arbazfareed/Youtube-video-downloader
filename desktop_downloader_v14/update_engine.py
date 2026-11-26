@@ -188,7 +188,7 @@ def update_ytdlp() -> tuple[str, str]:
     # "[default]" keeps yt-dlp's recommended helpers current: yt-dlp-ejs (solves
     # YouTube's JavaScript challenge), pycryptodomex (encrypted HLS streams),
     # mutagen (tags and thumbnails), brotli and websockets.
-    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp[default]"]
+    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp[default,curl-cffi]"]
     try:
         process = subprocess.run(
             cmd,
