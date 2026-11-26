@@ -296,6 +296,10 @@ class UiStartupWiringTests(unittest.TestCase):
                 "<Right>",
                 "<Up>",
                 "<Down>",
+                "<KeyPress-b>",
+                "<KeyPress-B>",
+                "<KeyPress-v>",
+                "<KeyPress-V>",
             ],
         )
         self.assertTrue(

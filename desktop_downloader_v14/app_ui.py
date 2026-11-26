@@ -115,6 +115,10 @@ class UiMixin:
             ("<Right>", self._handle_playback_arrow_key),
             ("<Up>", self._handle_playback_arrow_key),
             ("<Down>", self._handle_playback_arrow_key),
+            ("<KeyPress-b>", self._handle_playback_arrow_key),
+            ("<KeyPress-B>", self._handle_playback_arrow_key),
+            ("<KeyPress-v>", self._handle_playback_arrow_key),
+            ("<KeyPress-V>", self._handle_playback_arrow_key),
         )
         for sequence, callback in shortcuts:
             self.root.bind_all(sequence, callback, add="+")
