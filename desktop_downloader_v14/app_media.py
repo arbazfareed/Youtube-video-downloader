@@ -1062,7 +1062,11 @@ class MediaMixin:
             if self._preview_audio_refresh_ticks % 4 == 0:
                 self._refresh_video_preview_audio_tracks()
                 self._refresh_video_preview_subtitle_tracks()
-            self._schedule_video_preview_poll()
+            # A paused preview has no changing playback position. Stop the
+            # 250 ms polling loop while paused; _toggle_video_preview starts
+            # it again when playback resumes.
+            if vlc is None or state != getattr(vlc.State, "Paused", None):
+                self._schedule_video_preview_poll()
     
         except Exception:
             # VLC native getters and track enumeration may fail temporarily.
