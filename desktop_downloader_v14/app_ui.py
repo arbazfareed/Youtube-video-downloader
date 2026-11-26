@@ -884,121 +884,123 @@ class UiMixin:
         self.jobs.bind("<space>", self._toggle_pause_from_queue)
         self.jobs.bind("<<TreeviewSelect>>", self._show_selected_thumbnail)
 
+        preview_header = ttk.Frame(inspector, style="Card.TFrame")
+        preview_header.grid(row=0, column=0, columnspan=2, sticky="ew")
+        preview_header.columnconfigure(0, weight=1)
         ttk.Label(
-            inspector,
+            preview_header,
             text=self._t("Media preview"),
             style="Card.TLabel",
-            font=("Segoe UI", 12, "bold"),
+            font=("Segoe UI", 13, "bold"),
         ).grid(row=0, column=0, sticky="w")
         self.inspector_status = tk.StringVar(value=self._t("No item selected"))
         ttk.Label(
-            inspector,
+            preview_header,
             textvariable=self.inspector_status,
-            style="SidebarHint.TLabel",
+            style="Preview.Status.TLabel",
+            anchor="e",
         ).grid(row=0, column=1, sticky="e", padx=(8, 0))
-        inspector.columnconfigure(1, weight=0)
         ttk.Separator(inspector).grid(
             row=1, column=0, columnspan=2, sticky="ew", pady=(10, 12)
         )
-        preview = ttk.Frame(inspector, style="Card.TFrame", padding=6)
+
+        preview = ttk.Frame(inspector, style="Card.TFrame", padding=10)
         self.preview_container = preview
         preview.configure(takefocus=True)
-        preview.bind(
-            "<Button-1>",
-            lambda _event: preview.focus_set(),
-            add="+",
-        )
+        preview.bind("<Button-1>", lambda _event: preview.focus_set(), add="+")
         preview.grid(row=2, column=0, columnspan=2, sticky="nsew")
         preview.columnconfigure(0, weight=1)
-        preview.rowconfigure(0, weight=0, minsize=140)
-        preview.rowconfigure(1, weight=0)
-        preview.rowconfigure(2, weight=0)
-        preview.rowconfigure(3, weight=0)
-        preview.rowconfigure(4, weight=0)
-        preview.rowconfigure(5, weight=0)
-        preview.rowconfigure(6, weight=0)
+        preview.rowconfigure(0, weight=1, minsize=172)
+
+        # Cinematic preview stage: a consistent dark surface in both app themes.
         self.preview_video_surface = tk.Frame(
-            preview, background="#000000", height=140, takefocus=True,
+            preview, background="#081426", height=172, takefocus=True,
+            highlightthickness=1, highlightbackground="#24466d",
         )
         self.preview_video_surface.grid(
-            row=0, column=0, sticky="nsew", pady=(0, 4),
+            row=0, column=0, sticky="nsew", pady=(0, 10),
         )
         self.preview_video_surface.grid_remove()
         self.preview_video_placeholder = tk.Label(
             self.preview_video_surface,
-            text=self._t("Choose a video to preview"),
-            background="#000000",
-            foreground="#ffffff",
+            text=self._t("Select a file to preview"),
+            background="#081426",
+            foreground="#dcecff",
+            font=("Segoe UI", 12, "bold"),
             anchor="center",
             justify="center",
-            wraplength=240,
+            wraplength=260,
+            padx=18,
+            pady=18,
         )
         self.preview_video_placeholder.place(
             relx=0.5, rely=0.5, anchor="center",
         )
-        preview_player_controls = ttk.Frame(preview, style="Card.TFrame")
-        preview_player_controls.grid(
-            row=1, column=0, sticky="ew", pady=(4, 6),
+
+        self.preview_player_controls = ttk.Frame(
+            preview, style="Preview.Toolbar.TFrame", padding=(8, 8),
         )
-        self.preview_player_controls = preview_player_controls
-        for column in range(9):
-            preview_player_controls.columnconfigure(column, weight=0)
-        preview_player_controls.columnconfigure(5, weight=1)
+        self.preview_player_controls.grid(
+            row=1, column=0, sticky="ew", pady=(0, 10),
+        )
+        for column in range(7):
+            self.preview_player_controls.columnconfigure(column, weight=0)
+        self.preview_player_controls.columnconfigure(2, weight=1)
+
         self.preview_player_play_button = ttk.Button(
-            preview_player_controls,
+            self.preview_player_controls,
             text="▶",
             command=self._toggle_video_preview,
-            width=2,
+            style="Preview.Play.TButton",
+            width=3,
         )
         self.preview_player_play_button.grid(
-            row=0, column=0, sticky="ew",
+            row=0, column=0, rowspan=2, sticky="ns", padx=(0, 8),
         )
         ttk.Label(
-            preview_player_controls,
-            text="🔊",
-            style="Card.TLabel",
+            self.preview_player_controls,
+            text="VOL",
+            style="Preview.Muted.TLabel",
             takefocus=False,
-        ).grid(row=0, column=1, padx=(3, 1))
+        ).grid(row=0, column=1, sticky="w", padx=(0, 5))
         self.preview_player_volume = tk.IntVar(value=80)
         ttk.Scale(
-            preview_player_controls,
+            self.preview_player_controls,
             from_=0,
             to=100,
             variable=self.preview_player_volume,
             command=self._set_video_preview_volume,
             takefocus=True,
-            length=36,
-        ).grid(row=0, column=2, sticky="ew")
+            length=72,
+        ).grid(row=0, column=2, sticky="ew", padx=(0, 6))
         self.preview_player_volume_label = ttk.Label(
-            preview_player_controls,
+            self.preview_player_controls,
             text="80%",
-            style="Card.TLabel",
+            style="Preview.Value.TLabel",
             width=4,
             anchor="e",
             takefocus=False,
         )
-        self.preview_player_volume_label.grid(
-            row=0, column=3, padx=(1, 3),
-        )
+        self.preview_player_volume_label.grid(row=0, column=3, padx=(0, 8))
         self.preview_player_current_time = tk.StringVar(value="00:00")
         ttk.Label(
-            preview_player_controls,
+            self.preview_player_controls,
             textvariable=self.preview_player_current_time,
-            width=4,
+            width=5,
             anchor="e",
-            style="Card.TLabel",
-        ).grid(row=0, column=4, padx=(1, 3))
+            style="Preview.Value.TLabel",
+        ).grid(row=1, column=1, padx=(0, 4), sticky="w")
         self.preview_player_position = tk.DoubleVar(value=0)
         self.preview_player_timeline = tk.Canvas(
-            preview_player_controls,
+            self.preview_player_controls,
             width=20,
-            height=16,
-            background="#202020",
+            height=18,
+            background="#14243a",
             highlightthickness=0,
             cursor="hand2",
         )
         self.preview_player_timeline.grid(
-            row=0, column=5, sticky="ew", padx=2,
+            row=1, column=2, sticky="ew", padx=(0, 4),
         )
         self.preview_player_timeline.bind(
             "<Configure>", lambda _event: self._draw_video_preview_timeline(),
@@ -1023,34 +1025,44 @@ class UiMixin:
         )
         self.preview_player_duration = tk.StringVar(value="00:00")
         ttk.Label(
-            preview_player_controls,
+            self.preview_player_controls,
             textvariable=self.preview_player_duration,
-            width=4,
+            width=5,
             anchor="w",
-            style="Card.TLabel",
-        ).grid(row=0, column=6, padx=(3, 1))
+            style="Preview.Value.TLabel",
+        ).grid(row=1, column=3, sticky="w")
+
         self.preview_player_settings_button = ttk.Button(
-            preview_player_controls,
+            self.preview_player_controls,
             text="⚙",
             command=lambda: self._show_video_preview_settings(
                 self.preview_player_settings_button
             ),
-            width=2,
+            style="Preview.Icon.TButton",
+            width=3,
         )
         self.preview_player_settings_button.grid(
-            row=0, column=7, padx=(1, 1),
+            row=0, column=4, rowspan=2, padx=(2, 4),
         )
-        ttk.Button(
-            preview_player_controls,
+        self.preview_player_fullscreen_button = ttk.Button(
+            self.preview_player_controls,
             text="⛶",
             command=self._open_preview_fullscreen,
-            width=2,
-        ).grid(row=0, column=8, padx=(1, 0))
+            style="Preview.Icon.TButton",
+            width=3,
+        )
+        self.preview_player_fullscreen_button.grid(
+            row=0, column=5, rowspan=2, padx=(0, 0),
+        )
+
+        videos_header = ttk.Frame(preview, style="Card.TFrame")
+        videos_header.grid(row=2, column=0, sticky="ew", pady=(0, 4))
+        videos_header.columnconfigure(0, weight=1)
         ttk.Label(
-            preview,
+            videos_header,
             text=self._t("Available videos"),
-            style="Card.TLabel",
-        ).grid(row=2, column=0, sticky="w", pady=(4, 1))
+            style="Preview.Section.TLabel",
+        ).grid(row=0, column=0, sticky="w")
         self.preview_video_choice = tk.StringVar(value="")
         self.preview_video_selector = ttk.Combobox(
             preview,
@@ -1059,18 +1071,20 @@ class UiMixin:
             takefocus=True,
         )
         self.preview_video_selector.grid(
-            row=3, column=0, sticky="ew",
+            row=3, column=0, sticky="ew", pady=(0, 8),
         )
         self.preview_video_selector.bind(
             "<<ComboboxSelected>>",
             self._select_preview_video,
             add="+",
         )
-        ttk.Label(
+
+        audio_header = ttk.Label(
             preview,
             text=self._t("Audio track"),
-            style="Card.TLabel",
-        ).grid(row=4, column=0, sticky="w", pady=(6, 1))
+            style="Preview.Section.TLabel",
+        )
+        audio_header.grid(row=4, column=0, sticky="w", pady=(0, 4))
         self._preview_audio_track = tk.StringVar(value="")
         self.preview_audio_selector = ttk.Combobox(
             preview,
@@ -1079,7 +1093,7 @@ class UiMixin:
             takefocus=True,
         )
         self.preview_audio_selector.grid(
-            row=5, column=0, sticky="ew",
+            row=5, column=0, sticky="ew", pady=(0, 8),
         )
         self.preview_audio_selector.bind(
             "<<ComboboxSelected>>",
@@ -1092,9 +1106,11 @@ class UiMixin:
         ttk.Label(
             preview,
             textvariable=self.preview_video_status,
-            style="SidebarHint.TLabel",
-            wraplength=240,
-        ).grid(row=6, column=0, sticky="w", pady=(2, 0))
+            style="Preview.StatusText.TLabel",
+            wraplength=260,
+            justify="left",
+        ).grid(row=6, column=0, sticky="ew", pady=(2, 0))
+
         self._preview_video_choices = {}
         self._preview_video_refresh_after = None
         self._preview_playback_rate = tk.StringVar(value="1.0x")
@@ -1109,13 +1125,13 @@ class UiMixin:
         self.preview_image_label = ttk.Label(
             preview,
             text=self._t("Select a file to preview"),
-            style="Card.TLabel",
+            style="Preview.Empty.TLabel",
             anchor="center",
             justify="center",
-            wraplength=240,
-            padding=8,
+            wraplength=260,
+            padding=(16, 22),
         )
-        self.preview_image_label.grid(row=0, column=0, sticky="nsew", pady=(0, 4))
+        self.preview_image_label.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
         self.preview_video_surface.bind(
             "<Double-Button-1>", lambda _event: self._open_preview_fullscreen(),
         )

@@ -152,6 +152,85 @@ class ThemeMixin:
             background=[("disabled", muted), ("pressed", select_background), ("active", select_background)],
             foreground=[("disabled", background), ("!disabled", "#ffffff")],
         )
+        # Premium Smart VLC preview styles. The video stage stays cinematic,
+        # while the surrounding controls follow the active app theme.
+        preview_stage = "#000000" if self.high_contrast.get() else "#081426"
+        preview_accent = "#ffff00" if self.high_contrast.get() else (
+            "#55c5ff" if self.dark_mode.get() else "#1769aa"
+        )
+        preview_toolbar = "#000000" if self.high_contrast.get() else (
+            "#202b3c" if self.dark_mode.get() else "#edf3fa"
+        )
+        style.configure(
+            "Preview.Status.TLabel",
+            background=surface,
+            foreground=preview_accent,
+            padding=(9, 4),
+            font=("Segoe UI", hint_font_size, "bold"),
+        )
+        style.configure(
+            "Preview.Toolbar.TFrame",
+            background=preview_toolbar,
+            relief="flat",
+        )
+        style.configure(
+            "Preview.Muted.TLabel",
+            background=preview_toolbar,
+            foreground=muted,
+            font=("Segoe UI", hint_font_size, "bold"),
+        )
+        style.configure(
+            "Preview.Value.TLabel",
+            background=preview_toolbar,
+            foreground=foreground,
+            font=("Segoe UI", card_font_size, "bold"),
+        )
+        style.configure(
+            "Preview.Section.TLabel",
+            background=surface,
+            foreground=foreground,
+            font=("Segoe UI", card_font_size, "bold"),
+        )
+        style.configure(
+            "Preview.StatusText.TLabel",
+            background=surface,
+            foreground=muted,
+            font=("Segoe UI", hint_font_size),
+        )
+        style.configure(
+            "Preview.Empty.TLabel",
+            background=preview_stage,
+            foreground="#dcecff" if not self.high_contrast.get() else "#ffff00",
+            font=("Segoe UI", card_font_size, "bold"),
+        )
+        style.configure(
+            "Preview.Icon.TButton",
+            background=preview_toolbar,
+            foreground=foreground,
+            padding=(7, 7),
+            borderwidth=0,
+            focuscolor=preview_accent,
+            font=("Segoe UI Symbol", 12, "bold"),
+        )
+        style.map(
+            "Preview.Icon.TButton",
+            background=[("pressed", button_active), ("active", button_active)],
+            foreground=[("disabled", muted), ("active", preview_accent)],
+        )
+        style.configure(
+            "Preview.Play.TButton",
+            background=preview_accent,
+            foreground="#ffffff" if not self.high_contrast.get() else "#000000",
+            padding=(9, 8),
+            borderwidth=0,
+            focuscolor=preview_accent,
+            font=("Segoe UI Symbol", 12, "bold"),
+        )
+        style.map(
+            "Preview.Play.TButton",
+            background=[("disabled", muted), ("pressed", select_background), ("active", select_background)],
+            foreground=[("disabled", background)],
+        )
         style.configure("TCheckbutton", background=background, foreground=foreground)
         style.map(
             "TCheckbutton",
