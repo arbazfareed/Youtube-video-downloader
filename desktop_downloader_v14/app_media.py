@@ -796,6 +796,18 @@ class MediaMixin:
             choice.get() if choice is not None else ""
         )
         if path is None or not path.is_file():
+            # The selected item may have been deleted or moved since the list
+            # was populated. Never leave the previous file playing as though it
+            # were the newly selected preview.
+            self._clear_video_preview()
+            self._local_media_path = None
+            self.current_thumbnail = None
+            self.preview_details.configure(text="")
+            status = getattr(self, "preview_video_status", None)
+            if status is not None:
+                status.set(
+                    self._t("The selected video is no longer available. Choose another video.")
+                )
             self._refresh_preview_video_choices()
             return
         if path.suffix.lower() not in VIDEO_MEDIA_EXTENSIONS:
