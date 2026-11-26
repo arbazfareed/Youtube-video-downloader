@@ -34,6 +34,28 @@ class SmartVlcPreviewLifecycleTests(unittest.TestCase):
         self.mixin._schedule_video_preview_poll.assert_not_called()
         self.assertIsNone(self.mixin._preview_playback_after)
 
+    def test_paused_preview_updates_once_without_restarting_polling(self):
+        self.mixin._preview_vlc_player.get_state.return_value = 4
+        self.mixin.preview_video_placeholder = MagicMock()
+        self.mixin.preview_player_duration = MagicMock()
+        self.mixin.preview_player_current_time = MagicMock()
+        self.mixin.preview_player_position = MagicMock()
+        self.mixin._preview_duration_ms = 0
+        self.mixin._preview_seeking = False
+        self.mixin._preview_audio_refresh_ticks = 0
+        self.mixin._draw_video_preview_timeline = MagicMock()
+        self.mixin._refresh_video_preview_audio_tracks = MagicMock()
+        self.mixin._refresh_video_preview_subtitle_tracks = MagicMock()
+        self.mixin._format_in_app_time = lambda value: str(value)
+        self.mixin._preview_vlc_player.get_length.return_value = 1000
+        self.mixin._preview_vlc_player.get_time.return_value = 100
+        self.mixin._preview_vlc_player.is_seekable.return_value = True
+
+        self.mixin._poll_video_preview()
+
+        self.mixin.preview_player_current_time.set.assert_called_once_with("100")
+        self.mixin._schedule_video_preview_poll.assert_not_called()
+
     def test_preview_seek_failure_reports_to_preview_status_not_smart_vlc(self):
         player = MagicMock()
         player.is_seekable.return_value = True
