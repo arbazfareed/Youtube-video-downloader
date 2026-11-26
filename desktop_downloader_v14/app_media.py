@@ -1189,13 +1189,13 @@ class MediaMixin:
                 target_time = min(target_time, duration)
             result = player.set_time(target_time)
             if result == -1:
-                self._set_in_app_player_status(
-                    self._t("Seek failed; try again")
-                )
+                status = getattr(self, "preview_video_status", None)
+                if status is not None:
+                    status.set(self._t("Preview seek failed; try again"))
         except Exception:
-            self._set_in_app_player_status(
-                self._t("Seek temporarily unavailable; try again")
-            )
+            status = getattr(self, "preview_video_status", None)
+            if status is not None:
+                status.set(self._t("Preview seek temporarily unavailable; try again"))
 
     def _adjust_video_preview_volume(self, delta: int) -> None:
         volume = max(
