@@ -228,6 +228,20 @@ class ThemeMixin:
             foreground=[("disabled", muted), ("active", preview_accent)],
         )
         style.configure(
+            "Preview.Action.TButton",
+            background=preview_toolbar,
+            foreground=foreground,
+            padding=(8, 7),
+            borderwidth=0,
+            focuscolor=preview_accent,
+            font=("Segoe UI", hint_font_size, "bold"),
+        )
+        style.map(
+            "Preview.Action.TButton",
+            background=[("pressed", button_active), ("active", button_active)],
+            foreground=[("disabled", muted), ("active", preview_accent)],
+        )
+        style.configure(
             "Preview.Play.TButton",
             background=preview_accent,
             foreground="#ffffff" if not self.high_contrast.get() else "#000000",
