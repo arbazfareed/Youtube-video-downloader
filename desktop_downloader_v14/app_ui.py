@@ -1077,7 +1077,7 @@ class UiMixin:
         )
 
         videos_header = ttk.Frame(preview, style="Card.TFrame")
-        videos_header.grid(row=2, column=0, sticky="ew", pady=(0, 4))
+        videos_header.grid(row=3, column=0, sticky="ew", pady=(0, 4))
         videos_header.columnconfigure(0, weight=1)
         videos_header.columnconfigure(1, weight=0)
         ttk.Label(
@@ -1098,7 +1098,7 @@ class UiMixin:
             takefocus=True,
         )
         self.preview_video_selector.grid(
-            row=3, column=0, sticky="ew", pady=(0, 8),
+            row=4, column=0, sticky="ew", pady=(0, 8),
         )
         preview.bind("<Configure>", self._resize_preview_text, add="+")
         self.preview_video_selector.bind(
@@ -1112,7 +1112,7 @@ class UiMixin:
             text=self._t("Audio track"),
             style="Preview.Section.TLabel",
         )
-        audio_header.grid(row=4, column=0, sticky="w", pady=(0, 4))
+        audio_header.grid(row=5, column=0, sticky="w", pady=(0, 4))
         self._preview_audio_track = tk.StringVar(value="")
         self.preview_audio_selector = ttk.Combobox(
             preview,
@@ -1121,7 +1121,7 @@ class UiMixin:
             takefocus=True,
         )
         self.preview_audio_selector.grid(
-            row=5, column=0, sticky="ew", pady=(0, 8),
+            row=6, column=0, sticky="ew", pady=(0, 8),
         )
         self.preview_audio_selector.bind(
             "<<ComboboxSelected>>",
@@ -1137,7 +1137,7 @@ class UiMixin:
             style="Preview.StatusText.TLabel",
             wraplength=260,
             justify="left",
-        ).grid(row=6, column=0, sticky="ew", pady=(2, 0))
+        ).grid(row=7, column=0, sticky="ew", pady=(2, 0))
 
         self._preview_video_choices = {}
         self._preview_video_refresh_after = None
@@ -1152,7 +1152,7 @@ class UiMixin:
         self._preview_seeking = False
         self.preview_image_label = ttk.Label(
             preview,
-            text=self._t("Select a file to preview"),
+            text=self._t("Select a video to preview"),
             style="Preview.Empty.TLabel",
             anchor="center",
             justify="center",
