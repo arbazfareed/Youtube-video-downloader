@@ -1,0 +1,174 @@
+"""Download real videos with the app's own engine and report what worked.
+
+Run by the "v14 live site check" GitHub workflow (nothing is downloaded to the
+user's computer), or by hand:
+
+    python live_check.py                       # built-in list of public test videos
+    python live_check.py URL [URL ...]         # your own links
+    LIVE_CHECK_URLS="name|mode|url" python live_check.py
+
+Each job uses the same download engine, three-at-a-time scheduler, history
+database and media health check as the app. Every finished file is probed with
+ffprobe so "Complete" means a playable file with the expected streams.
+
+Exit code: 1 only if a *required* check fails. Sites such as YouTube can refuse
+datacenter addresses, so they are reported but never fail the run by themselves.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+from download_engine import RetryPolicy, download_url
+from download_scheduler import DownloadScheduler
+from history_store import DownloadHistory
+from media_health import inspect_download
+
+
+@dataclass
+class Check:
+    name: str
+    mode: str
+    url: str
+    required: bool = False   # a failure here fails the whole run
+    expect_video: bool = True
+
+
+DEFAULT_CHECKS = [
+    # Plain files: no site can block these, so they must always work.
+    Check("Direct MP4 (MDN flower, CC0)", "video",
+          "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4", True),
+    Check("Direct MP4 (w3schools sample)", "video",
+          "https://www.w3schools.com/html/mov_bbb.mp4", True),
+    Check("Direct MP4 as MP3 audio", "mp3 audio",
+          "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4", True,
+          expect_video=False),
+    # Real video sites: informational, the site may refuse a cloud address.
+    Check("YouTube: Me at the zoo", "video", "https://www.youtube.com/watch?v=jNQXAC9IVRw"),
+    Check("YouTube: yt-dlp test clip", "video", "https://www.youtube.com/watch?v=BaW_jenozKc"),
+    Check("YouTube audio as MP3", "mp3 audio", "https://www.youtube.com/watch?v=BaW_jenozKc",
+          expect_video=False),
+    Check("Vimeo test video", "video", "https://vimeo.com/56015672"),
+]
+
+
+def parse_checks(argv: list[str]) -> list[Check]:
+    if argv:
+        return [Check(url, "video", url) for url in argv]
+    raw = os.environ.get("LIVE_CHECK_URLS", "").strip()
+    if not raw:
+        return list(DEFAULT_CHECKS)
+    checks = []
+    for line in raw.splitlines():
+        parts = [part.strip() for part in line.split("|")]
+        if len(parts) == 3 and parts[2]:
+            checks.append(Check(parts[0], parts[1], parts[2], required=True,
+                                expect_video=parts[1].lower() == "video"))
+        elif line.strip().startswith("http"):
+            checks.append(Check(line.strip(), "video", line.strip()))
+    return checks
+
+
+def probe_streams(path: Path) -> tuple[set[str], float]:
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe or not path.is_file():
+        return set(), 0.0
+    result = subprocess.run(
+        [ffprobe, "-v", "error", "-show_entries",
+         "stream=codec_type:format=duration", "-of", "json", str(path)],
+        capture_output=True, text=True, check=False,
+    )
+    try:
+        data = json.loads(result.stdout or "{}")
+        kinds = {stream["codec_type"] for stream in data.get("streams", [])}
+        return kinds, float(data.get("format", {}).get("duration") or 0)
+    except (ValueError, KeyError):
+        return set(), 0.0
+
+
+def run_check(check: Check, index: int, history: DownloadHistory, folder: Path,
+              scheduler: DownloadScheduler) -> dict:
+    history_id = history.add(check.url, "Queued", str(folder))
+    job_id = str(history_id)
+    user_event = threading.Event()
+    user_event.set()
+    gate = scheduler.gate(job_id, user_event)
+    started = time.monotonic()
+
+    def job() -> dict:
+        outcome = {"check": check, "status": "Failed", "detail": "", "seconds": 0.0}
+        try:
+            saved = download_url(
+                check.url, folder / f"{index:02d}", "auto", check.mode, "720p",
+                "single video", threading.Event(), lambda *_a: None, "fast", gate,
+                None, None, job_id, "", "none",
+                retry_policy=RetryPolicy(3, 1.0, 5.0),
+            )
+            healthy, message = inspect_download(saved)
+            if not healthy:
+                raise RuntimeError(message)
+            saved_path = Path(saved)
+            files = [saved_path] if saved_path.is_file() else sorted(
+                p for p in saved_path.rglob("*") if p.is_file())
+            kinds, seconds = probe_streams(files[0]) if files else (set(), 0.0)
+            if shutil.which("ffprobe"):
+                if "audio" not in kinds:
+                    raise RuntimeError(f"saved file has no audio stream ({sorted(kinds)})")
+                if check.expect_video and "video" not in kinds:
+                    raise RuntimeError(f"saved file has no video stream ({sorted(kinds)})")
+                if not check.expect_video and "video" in kinds:
+                    raise RuntimeError("audio mode saved a file that still has video")
+            history.update(history_id, "Complete", "100%", str(saved), str(folder))
+            outcome.update(status="Complete",
+                           detail=f"{Path(files[0]).name if files else saved} "
+                                  f"({'+'.join(sorted(kinds)) or 'unprobed'}, {seconds:.0f}s)")
+        except BaseException as error:  # noqa: BLE001 - report every failure
+            text = " ".join(str(error).split())[:240]
+            history.update(history_id, "Failed", "-", text, str(folder))
+            outcome["detail"] = text
+        outcome["seconds"] = time.monotonic() - started
+        return outcome
+
+    return scheduler.submit(job_id, job)
+
+
+def main(argv: list[str]) -> int:
+    checks = parse_checks(argv)
+    folder = Path(tempfile.mkdtemp(prefix="live-check-"))
+    history = DownloadHistory(folder / "history.db")
+    scheduler = DownloadScheduler(3)   # same default as the app: 3 at a time
+    futures = [run_check(c, i, history, folder, scheduler) for i, c in enumerate(checks, 1)]
+    results = [future.result() for future in futures]
+
+    lines = ["| Result | Check | Mode | Detail |", "|---|---|---|---|"]
+    for item in results:
+        check = item["check"]
+        icon = "PASS" if item["status"] == "Complete" else ("FAIL" if check.required else "BLOCKED/FAILED")
+        lines.append(f"| {icon} | {check.name} | {check.mode} | {item['detail'] or '-'} |")
+    reloaded = DownloadHistory(folder / "history.db").list_records()
+    done = sum(1 for record in reloaded if record.status == "Complete")
+    lines.append("")
+    lines.append(f"History after reload: {done} complete of {len(reloaded)} recorded. "
+                 f"Parallel limit: {scheduler.max_parallel}.")
+    table = "\n".join(lines)
+    print(table)
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as handle:
+            handle.write("## v14 live site check\n\n" + table + "\n")
+
+    failed_required = [i for i in results if i["check"].required and i["status"] != "Complete"]
+    return 1 if failed_required else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
