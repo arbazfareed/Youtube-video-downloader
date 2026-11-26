@@ -687,6 +687,36 @@ def _all_audio_tracks_selector(downloader, quality: str, audio_languages: str = 
     return select_formats
 
 
+AUDIO_LANGUAGE_ALIASES = {
+        "english": "en", "eng": "en", "en": "en",
+        "hindi": "hi", "hin": "hi", "hi": "hi",
+        "urdu": "ur", "urd": "ur", "ur": "ur",
+        "spanish": "es", "spa": "es", "es": "es",
+        "french": "fr", "fra": "fr", "fre": "fr", "fr": "fr",
+        "german": "de", "deu": "de", "ger": "de", "de": "de",
+        "arabic": "ar", "ara": "ar", "ar": "ar",
+        "bengali": "bn", "bangla": "bn", "ben": "bn", "bn": "bn",
+        "japanese": "ja", "jpn": "ja", "ja": "ja",
+        "korean": "ko", "kor": "ko", "ko": "ko",
+        "portuguese": "pt", "por": "pt", "pt": "pt",
+        "italian": "it", "ita": "it", "it": "it",
+        "chinese": "zh", "zho": "zh", "chi": "zh", "zh": "zh",
+        "russian": "ru", "rus": "ru", "ru": "ru",
+        "punjabi": "pa", "pan": "pa", "pa": "pa",
+        "tamil": "ta", "tam": "ta", "ta": "ta",
+        "telugu": "te", "tel": "te", "te": "te",
+        "gujarati": "gu", "guj": "gu", "gu": "gu",
+        "indonesian": "id", "ind": "id", "id": "id",
+        "kannada": "kn", "kan": "kn", "kn": "kn",
+        "malayalam": "ml", "mal": "ml", "ml": "ml",
+        "marathi": "mr", "mar": "mr", "mr": "mr",
+        "dutch": "nl", "nld": "nl", "dut": "nl", "nl": "nl",
+        "polish": "pl", "pol": "pl", "pl": "pl",
+        "turkish": "tr", "tur": "tr", "tr": "tr",
+        "ukrainian": "uk", "ukr": "uk", "uk": "uk",
+        "vietnamese": "vi", "vie": "vi", "vi": "vi",
+}
+
 def _normalize_audio_language_code(language: str) -> str:
     """Normalize language names and ISO 639-1/639-2 codes to one selector code."""
     value = str(language or "").strip().lower().replace("_", "-").split("-", 1)[0]
