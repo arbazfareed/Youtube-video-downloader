@@ -40,6 +40,19 @@ _AUDIO_SWITCH_VERIFY_DELAY_MS = 250
 _AUDIO_SWITCH_MAX_ATTEMPTS = 8
 
 
+def _preferred_audio_language_matches(preferred: str, language: str, title: str) -> bool:
+    """Match preferred English/Hindi tracks across ISO 639-1 and 639-2 tags."""
+    preference = (preferred or "").casefold()
+    language_tag = (language or "").casefold().replace("_", "-").split("-", 1)[0]
+    track_title = (title or "").casefold()
+
+    if "hin" in preference or "hindi" in preference:
+        return language_tag in {"hi", "hin"} or "hindi" in track_title
+    if "eng" in preference or "english" in preference:
+        return language_tag in {"en", "eng"} or "english" in track_title
+    return False
+
+
 class MediaMixin:
     def _integrity_guard(self, job_id: str) -> bool:
         baseline = getattr(self, "_integrity_baselines", {}).get(job_id)
@@ -112,11 +125,10 @@ class MediaMixin:
             options_map[label] = stream
             display_names.append(label)
 
-            if default_choice is None:
-                if "hin" in preferred and ("hin" in lang.lower() or "hindi" in title.lower()):
-                    default_choice = label
-                elif "eng" in preferred and ("eng" in lang.lower() or "english" in title.lower()):
-                    default_choice = label
+            if default_choice is None and _preferred_audio_language_matches(
+                preferred, lang, title
+            ):
+                default_choice = label
 
         if default_choice is None and display_names:
             default_choice = display_names[0]
