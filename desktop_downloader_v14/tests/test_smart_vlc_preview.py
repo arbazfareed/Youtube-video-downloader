@@ -1,6 +1,7 @@
 """Regression tests for Smart VLC dashboard preview lifecycle."""
 import sys
 import unittest
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -26,6 +27,29 @@ class SmartVlcPreviewLifecycleTests(unittest.TestCase):
         self.mixin._preview_vlc_player.get_state.return_value = 7
         self.mixin._stop_video_preview = MagicMock()
         self.mixin._schedule_video_preview_poll = MagicMock()
+
+    def test_incomplete_download_is_not_opened_in_vlc_preview(self):
+        with tempfile.NamedTemporaryFile(suffix=".mp4.part") as partial:
+            path = Path(partial.name)
+            self.mixin.preview_video_choice = MagicMock()
+            self.mixin.preview_video_choice.get.return_value = "unfinished"
+            self.mixin._preview_video_choices = {"unfinished": path}
+            self.mixin._clear_video_preview = MagicMock()
+            self.mixin.preview_video_status = MagicMock()
+            self.mixin.inspector_status = MagicMock()
+            self.mixin._show_video_preview = MagicMock()
+            self.mixin.current_thumbnail = object()
+
+            self.mixin._select_preview_video()
+
+            self.mixin._clear_video_preview.assert_called_once_with()
+            self.mixin._show_video_preview.assert_not_called()
+            self.mixin.preview_video_status.set.assert_called_once_with(
+                "This video is still downloading. Preview is available "
+                "after the download finishes."
+            )
+            self.mixin.inspector_status.set.assert_called_once_with("Downloading")
+            self.assertIsNone(self.mixin.current_thumbnail)
 
     def test_ended_preview_is_cleaned_up_and_polling_stops(self):
         self.mixin._poll_video_preview()

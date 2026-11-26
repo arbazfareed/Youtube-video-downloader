@@ -792,14 +792,21 @@ class MediaMixin:
             self._refresh_preview_video_choices()
             return
         if path.suffix.lower() not in VIDEO_MEDIA_EXTENSIONS:
+            # A .part file is still being written by the downloader. Do not
+            # hand an incomplete file to VLC.
+            self._clear_video_preview()
             status = getattr(self, "preview_video_status", None)
             if status is not None:
                 status.set(
                     self._t(
-                        "This video is still downloading. Preview may not work "
-                        "until the download has finished."
+                        "This video is still downloading. Preview is available "
+                        "after the download finishes."
                     )
                 )
+            self._local_media_path = path
+            self.current_thumbnail = None
+            self.inspector_status.set(self._t("Downloading"))
+            return
         self._local_media_path = path
         self.current_thumbnail = None
         self.inspector_status.set(

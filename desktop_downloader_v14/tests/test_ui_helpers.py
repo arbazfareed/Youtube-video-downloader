@@ -446,19 +446,21 @@ class UiStartupWiringTests(unittest.TestCase):
             app._preview_video_choices = {
                 "video.mp4.part (Downloading)": path,
             }
-            app.current_thumbnail = None
+            app.current_thumbnail = object()
             app.inspector_status = Mock()
             app.preview_video_status = Mock()
+            app._clear_video_preview = Mock()
             app._show_video_preview = Mock()
             app.preview_details = Mock()
 
             MediaMixin._select_preview_video(app)
 
-        app._show_video_preview.assert_called_once_with(path)
+        app._clear_video_preview.assert_called_once_with()
+        app._show_video_preview.assert_not_called()
+        self.assertIsNone(app.current_thumbnail)
         app.inspector_status.set.assert_called_once_with("Downloading")
         app.preview_video_status.set.assert_called_once()
         self.assertEqual(app._local_media_path, path)
-        self.assertIn(str(path), app.preview_details.configure.call_args.kwargs["text"])
 
     def test_active_playlist_preview_uses_finished_entry_and_lists_partial_entry(self):
         with tempfile.TemporaryDirectory() as directory:
