@@ -1379,7 +1379,81 @@ def _parallel_range_download(
         _release_target(target)
 
 
+_AUDIO_CODEC_EXTENSIONS = {
+    "aac": ".m4a", "alac": ".m4a", "mp3": ".mp3", "opus": ".opus",
+    "vorbis": ".ogg", "flac": ".flac", "ac3": ".ac3", "eac3": ".eac3",
+}
+
+
+def _extract_best_audio(target: Path) -> Path:
+    """"Best audio" on a plain video file: keep only the sound, without re-encoding.
+
+    Best effort: if FFmpeg/FFprobe are missing, the file has no video, or anything
+    fails, the original download is returned untouched so nothing is ever lost.
+    """
+    import subprocess
+
+    ffmpeg_dir = _ffmpeg_directory()
+    if not ffmpeg_dir or not target.is_file():
+        return target
+    exe = ".exe" if os.name == "nt" else ""
+    ffmpeg_bin, ffprobe_bin = ffmpeg_dir / f"ffmpeg{exe}", ffmpeg_dir / f"ffprobe{exe}"
+    if not ffprobe_bin.is_file():
+        found = shutil.which("ffprobe")
+        if not found:
+            return target
+        ffprobe_bin = Path(found)
+    try:
+        probe = subprocess.run(
+            [str(ffprobe_bin), "-v", "error", "-show_entries", "stream=codec_type,codec_name",
+             "-of", "json", str(target)],
+            capture_output=True, text=True, check=True, timeout=60,
+        )
+        streams = json.loads(probe.stdout or "{}").get("streams", [])
+        has_video = any(
+            item.get("codec_type") == "video"
+            and item.get("codec_name") not in {"mjpeg", "png", "bmp"}  # cover art only
+            for item in streams
+        )
+        audio = next((item for item in streams if item.get("codec_type") == "audio"), None)
+        if not has_video or audio is None:
+            return target
+        extension = _AUDIO_CODEC_EXTENSIONS.get(audio.get("codec_name", ""), ".mka")
+        audio_target = _claim_target(target.parent, target.stem + extension)
+    except Exception:
+        return target
+    try:
+        import tempfile
+
+        with tempfile.TemporaryDirectory(
+            prefix=f".{target.stem}.audio-", dir=target.parent
+        ) as temporary_directory:
+            temporary = Path(temporary_directory) / f"audio{extension}"
+            subprocess.run(
+                [str(ffmpeg_bin), "-n", "-i", str(target), "-vn", "-map", "0:a:0",
+                 "-c:a", "copy", str(temporary)],
+                capture_output=True, text=True, check=True, timeout=600,
+            )
+            if not temporary.is_file() or temporary.stat().st_size == 0:
+                return target
+            while True:
+                try:
+                    os.link(temporary, audio_target)
+                    break
+                except FileExistsError:
+                    _release_target(audio_target)
+                    audio_target = _final_target(audio_target)
+        target.unlink(missing_ok=True)
+        return audio_target
+    except Exception:
+        return target
+    finally:
+        _release_target(audio_target)
+
+
 def _convert_to_mp3_if_needed(target: Path, mode: str) -> Path:
+    if mode == "best audio":
+        return _extract_best_audio(target)
     if mode != "mp3 audio" or target.suffix.lower() == ".mp3":
         return target
     ffmpeg_dir = _ffmpeg_directory()
