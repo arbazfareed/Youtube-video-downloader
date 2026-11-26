@@ -102,6 +102,21 @@ def probe_streams(path: Path) -> tuple[set[str], float]:
         return set(), 0.0
 
 
+def _resolve_case_insensitive_output(saved: str | Path, search_root: Path) -> Path:
+    """Resolve filename casing differences reported by remote extractors."""
+    expected = Path(saved)
+    if expected.is_file() or not expected.parent.is_dir():
+        return expected
+    try:
+        matches = [
+            item for item in expected.parent.iterdir()
+            if item.is_file() and item.name.casefold() == expected.name.casefold()
+        ]
+    except OSError:
+        return expected
+    return matches[0] if len(matches) == 1 else expected
+
+
 def run_check(check: Check, index: int, history: DownloadHistory, folder: Path,
               scheduler: DownloadScheduler) -> dict:
     history_id = history.add(check.url, "Queued", str(folder))
@@ -131,6 +146,7 @@ def run_check(check: Check, index: int, history: DownloadHistory, folder: Path,
                 None, None, job_id, "", "none",
                 retry_policy=RetryPolicy(3, 1.0, 5.0),
             )
+            saved = str(_resolve_case_insensitive_output(saved, folder / f"{index:02d}"))
             healthy, message = inspect_download(saved)
             if not healthy:
                 raise RuntimeError(message)
