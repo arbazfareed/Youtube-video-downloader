@@ -643,6 +643,7 @@ class TestNewV14Features(unittest.TestCase):
         app._clear_video_preview = MagicMock()
         app._refresh_preview_video_choices = MagicMock()
         app.preview_video_status = MagicMock()
+        app.preview_details = MagicMock()
         app._t = lambda message: message
 
         MediaMixin._select_preview_video(app)
