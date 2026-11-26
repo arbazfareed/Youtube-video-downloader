@@ -28,7 +28,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from download_engine import RetryPolicy, download_url
+from download_engine import RetryPolicy, download_url, resolve_saved_file
 from download_scheduler import DownloadScheduler
 from history_store import DownloadHistory
 from media_health import inspect_download
@@ -102,19 +102,8 @@ def probe_streams(path: Path) -> tuple[set[str], float]:
         return set(), 0.0
 
 
-def _resolve_case_insensitive_output(saved: str | Path) -> Path:
-    """Resolve filename casing differences reported by remote extractors."""
-    expected = Path(saved)
-    if expected.is_file() or not expected.parent.is_dir():
-        return expected
-    try:
-        matches = [
-            item for item in expected.parent.iterdir()
-            if item.is_file() and item.name.casefold() == expected.name.casefold()
-        ]
-    except OSError:
-        return expected
-    return matches[0] if len(matches) == 1 else expected
+# The engine now resolves case differences itself; the name is kept for existing tests.
+_resolve_case_insensitive_output = resolve_saved_file
 
 
 def run_check(check: Check, index: int, history: DownloadHistory, folder: Path,

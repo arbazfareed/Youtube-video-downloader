@@ -2195,7 +2195,30 @@ def _download_with_ytdlp(
     result_path = Path(filepath)
     if not result_path.is_absolute():
         result_path = directory / result_path
-    return str(result_path.resolve())
+    return str(resolve_saved_file(result_path).resolve())
+
+
+def resolve_saved_file(reported: str | Path) -> Path:
+    """Return the file that really exists for the path an extractor reported.
+
+    Some sites report a name whose letters differ in case from the file written
+    (for example "E2E tests [id].mp4" reported, "e2e tests [id].mp4" saved). That
+    is invisible on Windows and macOS, but on Linux the reported name does not
+    exist, so a finished download was shown as failed. A single case-insensitive
+    match in the same folder is used; with none or several, the reported path is
+    returned unchanged.
+    """
+    expected = Path(reported)
+    if expected.exists() or not expected.parent.is_dir():
+        return expected
+    try:
+        matches = [
+            item for item in expected.parent.iterdir()
+            if item.is_file() and item.name.casefold() == expected.name.casefold()
+        ]
+    except OSError:
+        return expected
+    return matches[0] if len(matches) == 1 else expected
 
 
 def _uses_direct_download(source: str, url: str, mode: str) -> bool:
