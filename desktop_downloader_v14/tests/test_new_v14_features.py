@@ -34,7 +34,7 @@ class TestNewV14Features(unittest.TestCase):
             old_ver, new_ver = update_ytdlp()
             mock_run.assert_called_once()
             cmd = mock_run.call_args[0][0]
-            self.assertEqual(cmd[1:], ["-m", "pip", "install", "--upgrade", "yt-dlp"])
+            self.assertEqual(cmd[1:], ["-m", "pip", "install", "--upgrade", "yt-dlp[default]"])
             self.assertEqual(new_ver, "2026.01.01")
 
     def test_export_history_to_csv(self) -> None:
