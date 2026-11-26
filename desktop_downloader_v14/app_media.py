@@ -38,6 +38,12 @@ _VLC_DLL_DIRECTORY = None
 _IN_APP_PLAYBACK_RATES = ("0.5x", "1.0x", "1.5x", "2.0x")
 _AUDIO_SWITCH_VERIFY_DELAY_MS = 250
 _AUDIO_SWITCH_MAX_ATTEMPTS = 8
+# Keys the Smart Player handles: arrows seek/volume, B = next audio track,
+# V = subtitles on/off (same letters VLC uses).
+_PLAYBACK_KEY_SEQUENCES = (
+    "<Left>", "<Right>", "<Up>", "<Down>",
+    "<KeyPress-b>", "<KeyPress-B>", "<KeyPress-v>", "<KeyPress-V>",
+)
 
 
 def _preferred_audio_language_matches(preferred: str, language: str, title: str) -> bool:
@@ -1273,6 +1279,10 @@ class MediaMixin:
                 self._adjust_in_app_volume(5)
             elif key == "Down":
                 self._adjust_in_app_volume(-5)
+            elif key in ("b", "B"):
+                self._cycle_in_app_audio_track()
+            elif key in ("v", "V"):
+                self._toggle_in_app_subtitles()
             else:
                 return None
             self._show_in_app_controls()
@@ -1292,10 +1302,69 @@ class MediaMixin:
                 self._adjust_video_preview_volume(5)
             elif key == "Down":
                 self._adjust_video_preview_volume(-5)
+            elif key in ("b", "B"):
+                self._cycle_video_preview_audio_track()
+            elif key in ("v", "V"):
+                self._toggle_video_preview_subtitles()
             else:
                 return None
             return "break"
         return None
+
+    @staticmethod
+    def _next_track_id(tracks: dict, active) -> int | None:
+        """Id of the track after `active` (wraps around); None if nothing to switch to."""
+        ids = list(tracks.values())
+        if len(ids) < 2:
+            return None
+        if active in ids:
+            return ids[(ids.index(active) + 1) % len(ids)]
+        return ids[0]
+
+    def _cycle_in_app_audio_track(self) -> None:
+        """B key: switch to the next audio track."""
+        player = getattr(self, "_in_app_player", None)
+        if player is None:
+            return
+        self._refresh_in_app_audio_tracks(force=True)
+        tracks = getattr(self, "_in_app_audio_tracks", {}) or {}
+        switch = getattr(self, "_in_app_audio_switch", None)
+        pending = switch.get("target") if isinstance(switch, dict) else None
+        try:
+            active = pending if pending is not None else player.audio_get_track()
+        except Exception:
+            active = None
+        target = self._next_track_id(tracks, active)
+        if target is None:
+            self._set_in_app_player_status(self._t("Only one audio track in this video"))
+            return
+        self._choose_in_app_audio_track(target)
+        label = next((l for l, i in tracks.items() if i == target), "")
+        self._set_in_app_player_status(f"{self._t('Audio')}: {label}")
+
+    def _cycle_video_preview_audio_track(self) -> None:
+        """B key in the preview pane: switch to the next audio track."""
+        player = getattr(self, "_preview_vlc_player", None)
+        if player is None:
+            return
+        self._refresh_video_preview_audio_tracks(force=True)
+        tracks = getattr(self, "_preview_audio_tracks", {}) or {}
+        switch = getattr(self, "_preview_audio_switch", None)
+        pending = switch.get("target") if isinstance(switch, dict) else None
+        try:
+            active = pending if pending is not None else player.audio_get_track()
+        except Exception:
+            active = None
+        target = self._next_track_id(tracks, active)
+        status = getattr(self, "preview_video_status", None)
+        if target is None:
+            if status is not None:
+                status.set(self._t("Only one audio track in this video"))
+            return
+        self._choose_video_preview_audio_track(target)
+        if status is not None:
+            label = next((l for l, i in tracks.items() if i == target), "")
+            status.set(f"{self._t('Audio')}: {label}")
 
     def _nudge_in_app_player_seek(self, seconds: int) -> None:
         player = getattr(self, "_in_app_player", None)
@@ -1921,7 +1990,7 @@ class MediaMixin:
         window.bind("<space>", self._toggle_in_app_playback_from_key, add="+")
         # Bind media navigation/volume directly to the player toplevel too.
         # bind_all alone can be bypassed by VLC/Tk focus and menu grabs.
-        for sequence in ("<Left>", "<Right>", "<Up>", "<Down>"):
+        for sequence in _PLAYBACK_KEY_SEQUENCES:
             window.bind(sequence, self._handle_playback_arrow_key, add="+")
         window.bind("<KeyPress>", self._show_in_app_controls, add="+")
         window.bind("<Motion>", self._show_in_app_controls, add="+")
@@ -1947,10 +2016,8 @@ class MediaMixin:
         video_surface = tk.Frame(window, background="#101820")
         video_surface.grid(row=0, column=0, sticky="nsew")
         self._in_app_video_surface = video_surface
-        video_surface.bind("<Left>", self._handle_playback_arrow_key, add="+")
-        video_surface.bind("<Right>", self._handle_playback_arrow_key, add="+")
-        video_surface.bind("<Up>", self._handle_playback_arrow_key, add="+")
-        video_surface.bind("<Down>", self._handle_playback_arrow_key, add="+")
+        for sequence in _PLAYBACK_KEY_SEQUENCES:
+            video_surface.bind(sequence, self._handle_playback_arrow_key, add="+")
         video_surface.focus_set()
         video_surface.bind("<Configure>", self._raise_in_app_controls_overlay, add="+")
         video_surface.bind("<Motion>", self._show_in_app_controls, add="+")
@@ -1965,7 +2032,7 @@ class MediaMixin:
         controls_window.bind("<F11>", self._toggle_in_app_fullscreen, add="+")
         controls_window.bind("<Escape>", self._exit_in_app_fullscreen, add="+")
         controls_window.bind("<space>", self._toggle_in_app_playback_from_key, add="+")
-        for sequence in ("<Left>", "<Right>", "<Up>", "<Down>"):
+        for sequence in _PLAYBACK_KEY_SEQUENCES:
             controls_window.bind(sequence, self._handle_playback_arrow_key, add="+")
         controls_window.bind("<KeyPress>", self._show_in_app_controls, add="+")
         self._in_app_controls_overlay_window = controls_window
@@ -1977,7 +2044,7 @@ class MediaMixin:
         top_controls_window.bind("<F11>", self._toggle_in_app_fullscreen, add="+")
         top_controls_window.bind("<Escape>", self._exit_in_app_fullscreen, add="+")
         top_controls_window.bind("<space>", self._toggle_in_app_playback_from_key, add="+")
-        for sequence in ("<Left>", "<Right>", "<Up>", "<Down>"):
+        for sequence in _PLAYBACK_KEY_SEQUENCES:
             top_controls_window.bind(sequence, self._handle_playback_arrow_key, add="+")
         top_controls_window.bind("<KeyPress>", self._show_in_app_controls, add="+")
         self._in_app_top_controls_overlay_window = top_controls_window
