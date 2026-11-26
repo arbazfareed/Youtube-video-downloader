@@ -1609,11 +1609,17 @@ class UiMixin:
         ttk.Label(connection, text=self._t("Browser cookies")).grid(
             row=2, column=0, sticky="w", pady=7
         )
+        cookie_row = ttk.Frame(connection)
+        cookie_row.grid(row=2, column=1, sticky="w", padx=10, pady=7)
         ttk.Combobox(
-            connection, textvariable=self.browser_cookies,
+            cookie_row, textvariable=self.browser_cookies,
             values=("None", "Chrome", "Firefox", "Edge", "Brave"),
             state="readonly", width=18,
-        ).grid(row=2, column=1, sticky="w", padx=10, pady=7)
+        ).pack(side="left")
+        ttk.Button(
+            cookie_row, text=self._t("Use cookies.txt file..."),
+            command=self._choose_cookies_file,
+        ).pack(side="left", padx=(8, 0))
         ttk.Label(connection, text="Geo-bypass country code (optional)").grid(
             row=3, column=0, sticky="w", pady=7
         )

@@ -115,7 +115,9 @@ class EventsMixin:
                 "More settings > Connection, choose the browser where you are signed "
                 "in under Browser cookies, then retry the download. Cookie access is "
                 "only used for the browser you select. If the browser's cookie database "
-                "is locked, close that browser and retry. Only download content you are "
+                "is locked, or Chrome/Edge/Brave cannot be read (common on Windows), close "
+                "the browser and retry, pick Firefox, or export a cookies.txt file and use "
+                "the 'Use cookies.txt file...' button next to Browser cookies. Only download content you are "
                 f"authorized to access. Details: {detail}"
             )
         if "403" in folded and "forbidden" in folded:

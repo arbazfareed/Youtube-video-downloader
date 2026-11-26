@@ -25,6 +25,7 @@ from app_support import (
     APP_VERSION,
     translate,
 )
+from cookies import cookie_source_error
 from download_scheduler import (
     MAX_PARALLEL_DOWNLOADS,
     MIN_PARALLEL_DOWNLOADS,
@@ -32,6 +33,20 @@ from download_scheduler import (
 )
 
 class PreferencesMixin:
+    def _choose_cookies_file(self) -> None:
+        """Pick an exported cookies.txt; the browser setting then shows file:<path>."""
+        path = filedialog.askopenfilename(
+            title=self._t("Choose a cookies.txt file"),
+            filetypes=[("Cookies file", "*.txt"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        problem = cookie_source_error("file:" + path)
+        if problem:
+            messagebox.showerror(self._t("Browser cookies"), problem)
+            return
+        self.browser_cookies.set("file:" + path)
+
     def _save_language_preference(self, *_args: object) -> None:
         language = self.language.get()
         if language not in LANGUAGES:

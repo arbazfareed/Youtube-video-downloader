@@ -17,7 +17,13 @@ from typing import Callable
 from urllib.parse import unquote, urljoin, urlsplit
 
 from bandwidth import GlobalBandwidthLimiter
-from cookies import load_cookies
+from cookies import (
+    cookie_file_path,
+    cookie_source_error,
+    is_cookie_file,
+    load_cookies,
+    normalize_cookie_source,
+)
 from plugins import emit as emit_plugin_event
 from proxy import ProxyRotator
 import requests
@@ -2115,8 +2121,11 @@ def _download_with_ytdlp(
         options["http_headers"] = dict(custom_headers)
     if proxy:
         options["proxy"] = proxy
-    if browser_cookies.lower() not in {"", "none", "off"}:
-        options["cookiesfrombrowser"] = (browser_cookies.lower(), None, None, None)
+    cookie_source = normalize_cookie_source(browser_cookies)
+    if is_cookie_file(cookie_source):
+        options["cookiefile"] = str(Path(cookie_file_path(cookie_source)).expanduser())
+    elif cookie_source != "none":
+        options["cookiesfrombrowser"] = (cookie_source, None, None, None)
     if max_speed is not None and max_speed > 0:
         options["ratelimit"] = max_speed
     if ffmpeg_directory:
@@ -2370,10 +2379,9 @@ def download_url(
         progress(status, percent, _clean_terminal_text(details))
 
     try:
-        if browser_cookies.lower() not in {"", "none", "off"} and browser_cookies.lower() not in {
-            "chrome", "firefox", "edge", "brave"
-        }:
-            raise ValueError(f"Unsupported browser cookie source: {browser_cookies}")
+        cookie_problem = cookie_source_error(browser_cookies)
+        if cookie_problem:
+            raise ValueError(cookie_problem)
         proxy_rotator = ProxyRotator(proxy)
         if job_id:
             emit_plugin_event("on_start", job_id, url)
