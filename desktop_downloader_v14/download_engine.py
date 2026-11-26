@@ -660,29 +660,11 @@ def _all_audio_tracks_selector(downloader, quality: str, audio_languages: str = 
             if pref in {"original", "original only", "default", "none"}:
                 downloader.params["merge_output_format"] = "mp4/mkv"
                 return default_selector(context)
-            raw_tokens = [
-                token.strip()
-                for token in pref.replace(";", ",").replace("+", ",").replace("&", ",").split(",")
-                if token.strip()
-            ]
-            wanted = set()
-            for token in raw_tokens:
-                t = token.replace("only", "").strip()
-                if not t:
-                    continue
-                wanted.add(t)
-                if t.startswith("eng") or t == "en":
-                    wanted.update({"en", "eng", "english"})
-                elif t.startswith("hin") or t == "hi":
-                    wanted.update({"hi", "hin", "hindi"})
-                elif t.startswith("urd") or t == "ur":
-                    wanted.update({"ur", "urd", "urdu"})
-                elif t.startswith("spa") or t == "es":
-                    wanted.update({"es", "spa", "spanish"})
+            wanted = _requested_audio_languages(audio_languages)
             filtered = [
                 (lang, fid)
                 for lang, fid in tracks
-                if lang in wanted or any(lang.startswith(w) or w.startswith(lang) for w in wanted)
+                if _audio_language_matches(lang, wanted)
             ]
             if filtered:
                 tracks = filtered
@@ -705,6 +687,39 @@ def _all_audio_tracks_selector(downloader, quality: str, audio_languages: str = 
     return select_formats
 
 
+def _normalize_audio_language_code(language: str) -> str:
+    """Normalize language names and ISO 639-1/639-2 codes to one selector code."""
+    value = str(language or "").strip().lower().replace("_", "-").split("-", 1)[0]
+    return AUDIO_LANGUAGE_ALIASES.get(value, value)
+
+
+def _requested_audio_languages(audio_languages: str) -> set[str]:
+    """Parse the UI's language preference using the same aliases everywhere."""
+    pref = str(audio_languages or "").strip().lower()
+    if pref in {"", "all", "auto", "all languages", "original", "original only", "default", "none"}:
+        return set()
+    tokens = (
+        token.strip()
+        for token in pref.replace(";", ",").replace("+", ",").replace("&", ",").split(",")
+    )
+    requested = set()
+    for token in tokens:
+        cleaned = re.sub(r"\\bonly\\b", "", token).strip()
+        cleaned = re.sub(r"^only\\s+", "", cleaned).strip()
+        if cleaned:
+            code = _normalize_audio_language_code(cleaned)
+            if re.fullmatch(r"[a-z]{2,3}", code):
+                requested.add(code)
+    return requested
+
+
+def _audio_language_matches(language: str, requested: set[str]) -> bool:
+    if not requested:
+        return True
+    normalized = _normalize_audio_language_code(language)
+    return normalized in requested
+
+
 def _audio_format_selector(audio_languages: str = "all") -> str:
     pref = audio_languages.strip().lower()
     if pref in {"", "all", "auto", "all languages", "original", "original only", "default", "none"}:
@@ -712,35 +727,7 @@ def _audio_format_selector(audio_languages: str = "all") -> str:
 
     # Match whole language tokens, not substrings: "French" contains "en",
     # which previously caused French requests to select English audio.
-    aliases = {
-        "english": "en", "eng": "en", "en": "en",
-        "hindi": "hi", "hin": "hi", "hi": "hi",
-        "urdu": "ur", "urd": "ur", "ur": "ur",
-        "spanish": "es", "spa": "es", "es": "es",
-        "french": "fr", "fra": "fr", "fre": "fr", "fr": "fr",
-        "german": "de", "deu": "de", "ger": "de", "de": "de",
-        "arabic": "ar", "ara": "ar", "ar": "ar",
-        "bengali": "bn", "bangla": "bn", "ben": "bn", "bn": "bn",
-        "japanese": "ja", "jpn": "ja", "ja": "ja",
-        "korean": "ko", "kor": "ko", "ko": "ko",
-        "portuguese": "pt", "por": "pt", "pt": "pt",
-        "italian": "it", "ita": "it", "it": "it",
-        "chinese": "zh", "zho": "zh", "chi": "zh", "zh": "zh",
-        "russian": "ru", "rus": "ru", "ru": "ru",
-        "punjabi": "pa", "pan": "pa", "pa": "pa",
-        "tamil": "ta", "tam": "ta", "ta": "ta",
-        "telugu": "te", "tel": "te", "te": "te",
-        "gujarati": "gu", "guj": "gu", "gu": "gu",
-        "indonesian": "id", "ind": "id", "id": "id",
-        "kannada": "kn", "kan": "kn", "kn": "kn",
-        "malayalam": "ml", "mal": "ml", "ml": "ml",
-        "marathi": "mr", "mar": "mr", "mr": "mr",
-        "dutch": "nl", "nld": "nl", "dut": "nl", "nl": "nl",
-        "polish": "pl", "pol": "pl", "pl": "pl",
-        "turkish": "tr", "tur": "tr", "tr": "tr",
-        "ukrainian": "uk", "ukr": "uk", "uk": "uk",
-        "vietnamese": "vi", "vie": "vi", "vi": "vi",
-    }
+    aliases = AUDIO_LANGUAGE_ALIASES
     tokens = [
         token.strip().replace("only", "").strip()
         for token in pref.replace(";", ",").replace("+", ",").replace("&", ",").split(",")
@@ -768,28 +755,9 @@ def _single_audio_track_selector(downloader, audio_languages: str = "all"):
         if not tracks:
             return default_selector(context)
 
-        raw_tokens = [
-            token.strip()
-            for token in pref.replace(";", ",").replace("+", ",").replace("&", ",").split(",")
-            if token.strip()
-        ]
-        wanted = set()
-        for token in raw_tokens:
-            t = token.replace("only", "").strip()
-            if not t:
-                continue
-            wanted.add(t)
-            if t.startswith("eng") or t == "en":
-                wanted.update({"en", "eng", "english"})
-            elif t.startswith("hin") or t == "hi":
-                wanted.update({"hi", "hin", "hindi"})
-            elif t.startswith("urd") or t == "ur":
-                wanted.update({"ur", "urd", "urdu"})
-            elif t.startswith("spa") or t == "es":
-                wanted.update({"es", "spa", "spanish"})
-
+        wanted = _requested_audio_languages(audio_languages)
         for lang, fid in tracks:
-            if lang in wanted or any(lang.startswith(w) or w.startswith(lang) for w in wanted):
+            if _audio_language_matches(lang, wanted):
                 selector = downloader.build_format_selector(fid)
                 return selector(context)
         return default_selector(context)
