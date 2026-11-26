@@ -15,6 +15,9 @@ from app_media import MediaMixin
 class SmartVlcPreviewLifecycleTests(unittest.TestCase):
     def setUp(self):
         self.mixin = MediaMixin()
+        # The production app mixin receives its translator from the main UI;
+        # provide the identity translator when testing the mixin in isolation.
+        self.mixin._t = lambda text: text
         self.mixin._preview_playback_after = "previous-timer"
         self.mixin._preview_vlc_player = MagicMock()
         self.mixin._preview_vlc = SimpleNamespace(
@@ -30,6 +33,38 @@ class SmartVlcPreviewLifecycleTests(unittest.TestCase):
         self.mixin._stop_video_preview.assert_called_once_with()
         self.mixin._schedule_video_preview_poll.assert_not_called()
         self.assertIsNone(self.mixin._preview_playback_after)
+
+    def test_preview_seek_failure_reports_to_preview_status_not_smart_vlc(self):
+        player = MagicMock()
+        player.is_seekable.return_value = True
+        player.get_time.return_value = 12000
+        player.get_length.return_value = 60000
+        player.set_time.return_value = -1
+        self.mixin._preview_vlc_player = player
+        self.mixin.preview_video_status = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        self.mixin._nudge_video_preview_seek(5)
+
+        player.set_time.assert_called_once_with(17000)
+        self.mixin.preview_video_status.set.assert_called_once_with(
+            "Preview seek failed; try again"
+        )
+        self.mixin._set_in_app_player_status.assert_not_called()
+
+    def test_preview_seek_native_exception_reports_preview_status(self):
+        player = MagicMock()
+        player.is_seekable.side_effect = RuntimeError("temporary VLC query failure")
+        self.mixin._preview_vlc_player = player
+        self.mixin.preview_video_status = MagicMock()
+        self.mixin._set_in_app_player_status = MagicMock()
+
+        self.mixin._nudge_video_preview_seek(-5)
+
+        self.mixin.preview_video_status.set.assert_called_once_with(
+            "Preview seek temporarily unavailable; try again"
+        )
+        self.mixin._set_in_app_player_status.assert_not_called()
 
     def test_playing_preview_continues_polling(self):
         self.mixin._preview_vlc_player.get_state.return_value = 3
