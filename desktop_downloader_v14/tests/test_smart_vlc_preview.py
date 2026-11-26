@@ -15,6 +15,9 @@ from app_media import MediaMixin
 class SmartVlcPreviewLifecycleTests(unittest.TestCase):
     def setUp(self):
         self.mixin = MediaMixin()
+        # The production app mixin receives its translator from the main UI;
+        # provide the identity translator when testing the mixin in isolation.
+        self.mixin._t = lambda text: text
         self.mixin._preview_playback_after = "previous-timer"
         self.mixin._preview_vlc_player = MagicMock()
         self.mixin._preview_vlc = SimpleNamespace(
