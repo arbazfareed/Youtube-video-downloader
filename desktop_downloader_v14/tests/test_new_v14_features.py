@@ -637,6 +637,8 @@ class TestNewV14Features(unittest.TestCase):
         from app_media import MediaMixin
 
         app = MagicMock(spec=MediaMixin)
+        # `jobs` belongs to the application, not MediaMixin's spec.
+        app.jobs = MagicMock()
         app.jobs.selection.return_value = ()
         app._local_media_path = None
         app._preview_media_path = Path("deleted-preview-video.mp4")
