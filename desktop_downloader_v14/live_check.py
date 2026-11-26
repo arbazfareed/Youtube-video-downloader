@@ -5,7 +5,7 @@ user's computer), or by hand:
 
     python live_check.py                       # built-in list of public test videos
     python live_check.py URL [URL ...]         # your own links
-    LIVE_CHECK_URLS="name|mode|url" python live_check.py
+    LIVE_CHECK_URLS="name|mode|url[|timeout seconds]" python live_check.py
 
 Each job uses the same download engine, three-at-a-time scheduler, history
 database and media health check as the app. Every finished file is probed with
@@ -41,6 +41,7 @@ class Check:
     url: str
     required: bool = False   # a failure here fails the whole run
     expect_video: bool = True
+    timeout: int = 150       # seconds before the check is cancelled and reported
 
 
 DEFAULT_CHECKS = [
@@ -58,6 +59,11 @@ DEFAULT_CHECKS = [
     Check("YouTube audio as MP3", "mp3 audio", "https://www.youtube.com/watch?v=BaW_jenozKc",
           expect_video=False),
     Check("Vimeo test video", "video", "https://vimeo.com/56015672"),
+    # Small public items from other sites (taken from yt-dlp's own extractor tests).
+    Check("Bandcamp test song (audio)", "video",
+          "http://youtube-dl.bandcamp.com/track/youtube-dl-test-song", expect_video=False),
+    Check("PeerTube test video", "video",
+          "https://peertube2.cpy.re/w/122d093a-1ede-43bd-bd34-59d2931ffc5e"),
 ]
 
 
@@ -70,9 +76,10 @@ def parse_checks(argv: list[str]) -> list[Check]:
     checks = []
     for line in raw.splitlines():
         parts = [part.strip() for part in line.split("|")]
-        if len(parts) == 3 and parts[2]:
+        if len(parts) in (3, 4) and parts[2]:
+            limit = int(parts[3]) if len(parts) == 4 and parts[3].isdigit() else 150
             checks.append(Check(parts[0], parts[1], parts[2], required=True,
-                                expect_video=parts[1].lower() == "video"))
+                                expect_video=parts[1].lower() == "video", timeout=limit))
         elif line.strip().startswith("http"):
             checks.append(Check(line.strip(), "video", line.strip()))
     return checks
@@ -106,10 +113,21 @@ def run_check(check: Check, index: int, history: DownloadHistory, folder: Path,
 
     def job() -> dict:
         outcome = {"check": check, "status": "Failed", "detail": "", "seconds": 0.0}
+        cancel_event = threading.Event()
+        timed_out = threading.Event()
+
+        def give_up() -> None:
+            timed_out.set()
+            cancel_event.set()
+
+        timer = threading.Timer(check.timeout, give_up)
+        timer.daemon = True
+        timer.start()
+        print(f"START  {check.name} ({check.mode})", flush=True)
         try:
             saved = download_url(
                 check.url, folder / f"{index:02d}", "auto", check.mode, "720p",
-                "single video", threading.Event(), lambda *_a: None, "fast", gate,
+                "single video", cancel_event, lambda *_a: None, "fast", gate,
                 None, None, job_id, "", "none",
                 retry_policy=RetryPolicy(3, 1.0, 5.0),
             )
@@ -133,21 +151,35 @@ def run_check(check: Check, index: int, history: DownloadHistory, folder: Path,
                                   f"({'+'.join(sorted(kinds)) or 'unprobed'}, {seconds:.0f}s)")
         except BaseException as error:  # noqa: BLE001 - report every failure
             text = " ".join(str(error).split())[:240]
+            if timed_out.is_set():
+                text = f"Timed out after {check.timeout}s (no finish); last error: {text}"
             history.update(history_id, "Failed", "-", text, str(folder))
             outcome["detail"] = text
+        finally:
+            timer.cancel()
         outcome["seconds"] = time.monotonic() - started
+        label = "PASS" if outcome["status"] == "Complete" else "FAIL"
+        print(f"{label}   {check.name}: {outcome['detail'] or '-'} ({outcome['seconds']:.0f}s)", flush=True)
         return outcome
 
     return scheduler.submit(job_id, job)
 
 
 def main(argv: list[str]) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
     checks = parse_checks(argv)
     folder = Path(tempfile.mkdtemp(prefix="live-check-"))
     history = DownloadHistory(folder / "history.db")
     scheduler = DownloadScheduler(3)   # same default as the app: 3 at a time
     futures = [run_check(c, i, history, folder, scheduler) for i, c in enumerate(checks, 1)]
-    results = [future.result() for future in futures]
+    results = []
+    for check, future in zip(checks, futures):
+        try:
+            results.append(future.result(timeout=check.timeout + 120))
+        except Exception as error:  # a worker that never came back
+            results.append({"check": check, "status": "Failed", "seconds": 0.0,
+                            "detail": f"Did not stop after {check.timeout + 120}s: {error!r}"[:240]})
 
     lines = ["| Result | Check | Mode | Detail |", "|---|---|---|---|"]
     for item in results:
@@ -171,4 +203,7 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    code = main(sys.argv[1:])
+    sys.stdout.flush()
+    # A stuck download thread must not keep the run alive after the report is written.
+    os._exit(code)
