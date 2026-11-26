@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from urllib.parse import parse_qs, urlsplit
 
@@ -19,9 +20,50 @@ class LinkAnalysis:
     message: str = ""
 
 
+_LINK_START = re.compile(r"(?:https?://|magnet:\?)", re.IGNORECASE)
+# A web address pasted without "https://", such as "www.site.com/..." or "youtu.be/id".
+_SCHEMELESS_LINK = re.compile(
+    r"(?:www\.(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:[/?#]\S*)?"
+    r"|(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?[/?#]\S*)",
+    re.IGNORECASE,
+)
+
+
+def normalize_link_text(text: str) -> str:
+    """Add https:// to a pasted web address that has no scheme; leave anything else alone."""
+    value = (text or "").strip()
+    if not value or _LINK_START.match(value):
+        return value
+    if _SCHEMELESS_LINK.fullmatch(value):
+        return "https://" + value
+    return value
+
+
+def split_pasted_links(text: str) -> list[str]:
+    """Return the links in pasted text when it holds two or more.
+
+    Links may be separated by spaces or new lines. Text that mixes links with
+    ordinary words returns an empty list, so a single odd link still reaches the
+    normal validation message instead of being split apart.
+    """
+    tokens = (text or "").split()
+    if len(tokens) < 2:
+        return []
+    links = [normalize_link_text(token) for token in tokens]
+    return links if all(_LINK_START.match(link) for link in links) else []
+
+
 def analyze_link(url: str) -> LinkAnalysis:
     """Classify a link offline; never requests or downloads the remote URL."""
-    value = (url or "").strip()
+    value = normalize_link_text(url)
+    if re.search(r"\s", value):
+        return LinkAnalysis(
+            False,
+            message=(
+                "This text contains spaces or more than one link. Check one link at "
+                "a time, or click Add download to queue several pasted links."
+            ),
+        )
     try:
         parsed = urlsplit(value)
         host = (parsed.hostname or "").lower().rstrip(".")
@@ -58,6 +100,20 @@ def analyze_link(url: str) -> LinkAnalysis:
         kind = "playlist/page" if playlist else "media page"
         return LinkAnalysis(True, host, kind, extractor_name, playlist, message=f"yt-dlp recognizes this page ({extractor_name}).")
     return LinkAnalysis(True, host, "generic web page", playlist=playlist, message="No extractor matched locally. It may still be a supported stream or plugin URL.")
+
+
+def format_multi_link_summary(links: list[str], limit: int = 12) -> str:
+    """Describe several pasted links without contacting any of them."""
+    lines = [f"{len(links)} links detected. Click Add download to queue them all."]
+    for index, link in enumerate(links[:limit], start=1):
+        analysis = analyze_link(link)
+        what = analysis.kind if analysis.valid else analysis.message
+        lines.append(f"{index}. {analysis.host or link[:50]} - {what}")
+    if len(links) > limit:
+        lines.append(f"...and {len(links) - limit} more.")
+    lines.append("")
+    lines.append("This is a local compatibility hint, not a live availability check.")
+    return "\n".join(lines)
 
 
 def format_analysis(analysis: LinkAnalysis) -> str:

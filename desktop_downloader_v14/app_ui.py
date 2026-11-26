@@ -1623,6 +1623,26 @@ class UiMixin:
             text="Exponential backoff; attempts 1-20, base delay 0-60 seconds, maximum at most 300.",
             wraplength=540,
         ).grid(row=8, column=1, sticky="w", padx=10, pady=(0, 8))
+        ttk.Label(connection, text=self._t("Parallel downloads")).grid(
+            row=9, column=0, sticky="w", pady=7
+        )
+        parallel_spinbox = ttk.Spinbox(
+            connection, from_=1, to=10, textvariable=self.max_parallel_downloads,
+            width=6, command=self._save_parallel_downloads,
+        )
+        parallel_spinbox.grid(row=9, column=1, sticky="w", padx=10, pady=7)
+        parallel_spinbox.bind("<FocusOut>", self._normalize_parallel_downloads)
+        parallel_spinbox.bind("<Return>", self._normalize_parallel_downloads)
+        if not getattr(self, "_parallel_downloads_trace_added", False):
+            self.max_parallel_downloads.trace_add(
+                "write", self._save_parallel_downloads
+            )
+            self._parallel_downloads_trace_added = True
+        ttk.Label(
+            connection,
+            text="How many downloads run at the same time (1-10). Extra links wait in the queue; paused downloads free their place.",
+            wraplength=540,
+        ).grid(row=10, column=1, sticky="w", padx=10, pady=(0, 8))
 
         automation = ttk.Frame(notebook, padding=16)
         automation.columnconfigure(1, weight=1)

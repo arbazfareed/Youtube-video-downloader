@@ -466,5 +466,8 @@ class EventsMixin:
             cancel_event.set()
         for resume_event in self.resume_events.values():
             resume_event.set()
+        scheduler = getattr(self, "download_scheduler", None)
+        if scheduler is not None:
+            scheduler.shutdown()
         self.executor.shutdown(wait=False, cancel_futures=True)
         self.root.destroy()

@@ -45,6 +45,8 @@ DIRECT_FILE_EXTENSIONS = {
     # Documents, data and common image/audio formats.
     ".bmp", ".epub", ".json", ".mobi", ".rtf", ".svg", ".tif", ".tiff",
     ".wma", ".xml",
+    # Every format the Smart Player can open must also download as a plain file.
+    ".3gp", ".flv", ".mka", ".mts", ".ogv", ".weba",
 }
 FFMPEG_LANGUAGE_TAGS = {
     "ar": "ara",
