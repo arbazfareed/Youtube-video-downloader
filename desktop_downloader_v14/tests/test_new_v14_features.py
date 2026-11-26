@@ -633,6 +633,29 @@ class TestNewV14Features(unittest.TestCase):
             self.assertEqual(list(root.glob(".shared-cache.thumbnail-*")), [])
 
 
+    def test_select_preview_video_clears_stale_file(self) -> None:
+        from app_media import MediaMixin
+
+        app = MagicMock(spec=MediaMixin)
+        app.preview_video_choice = MagicMock()
+        app.preview_video_choice.get.return_value = "removed-video.mp4"
+        app._preview_video_choices = {"removed-video.mp4": Path("removed-video.mp4")}
+        app._clear_video_preview = MagicMock()
+        app._refresh_preview_video_choices = MagicMock()
+        app.preview_video_status = MagicMock()
+        app._t = lambda message: message
+
+        MediaMixin._select_preview_video(app)
+
+        app._clear_video_preview.assert_called_once_with()
+        app._refresh_preview_video_choices.assert_called_once_with()
+        app.preview_video_status.set.assert_called_once_with(
+            "The selected video is no longer available. Choose another video."
+        )
+        app.preview_details.configure.assert_called_once_with(text="")
+        self.assertIsNone(app._local_media_path)
+
+
 if __name__ == "__main__":
     unittest.main()
 
