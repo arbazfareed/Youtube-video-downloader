@@ -99,6 +99,20 @@ class TestNewV14Features(unittest.TestCase):
         self.assertIn("a_en", audio_ids_en)
         self.assertNotIn("a_hi", audio_ids_en)
 
+        # The all-tracks path must normalize the same full-name and ISO aliases.
+        extended = [
+            {"format_id": "a_fr", "vcodec": "none", "acodec": "mp4a", "language": "fra"},
+            {"format_id": "a_de", "vcodec": "none", "acodec": "mp4a", "language": "deu"},
+        ]
+        for preference, expected_id in (("French only", "a_fr"), ("German only", "a_de")):
+            with self.subTest(all_tracks_preference=preference):
+                selected = list(_all_audio_tracks_selector(
+                    mock_downloader, quality="Best available", audio_languages=preference
+                )({"formats": extended, "requested_formats": []}))
+                selected_ids = [item["format_id"] for item in selected if item.get("acodec") != "none"]
+                self.assertIn(expected_id, selected_ids)
+                self.assertNotIn("a_fr" if expected_id == "a_de" else "a_de", selected_ids)
+
         # Test selecting English + Hindi
         ctx3 = {"formats": formats, "requested_formats": []}
         selector_both = _all_audio_tracks_selector(
@@ -313,6 +327,30 @@ class TestNewV14Features(unittest.TestCase):
         chosen_en = selector_en({"formats": formats})
         self.assertEqual(len(chosen_en), 1)
         self.assertEqual(chosen_en[0]["format_id"], "a_en")
+
+        # All supported UI aliases must also match yt-dlp's ISO 639-2 tags.
+        extended_formats = [
+            {"format_id": "a_fr", "vcodec": "none", "acodec": "mp4a", "language": "fra"},
+            {"format_id": "a_de", "vcodec": "none", "acodec": "mp4a", "language": "deu"},
+            {"format_id": "a_ar", "vcodec": "none", "acodec": "mp4a", "language": "ara"},
+            {"format_id": "a_bn", "vcodec": "none", "acodec": "mp4a", "language": "ben"},
+            {"format_id": "a_nl", "vcodec": "none", "acodec": "mp4a", "language": "nld"},
+        ]
+        for preference, expected_id in (
+            ("French only", "a_fr"),
+            ("German only", "a_de"),
+            ("Arabic only", "a_ar"),
+            ("Bengali only", "a_bn"),
+            ("Dutch only", "a_nl"),
+            ("fra", "a_fr"),
+            ("de", "a_de"),
+        ):
+            with self.subTest(preference=preference):
+                selector = _single_audio_track_selector(
+                    mock_downloader, audio_languages=preference
+                )
+                chosen = selector({"formats": extended_formats})
+                self.assertEqual([item["format_id"] for item in chosen], [expected_id])
 
     def test_audio_metadata_pp_respects_preferred_language(self) -> None:
         from download_engine import _AudioLanguageMetadataPP
