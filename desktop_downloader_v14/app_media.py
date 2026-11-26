@@ -743,6 +743,24 @@ class MediaMixin:
         selector = getattr(self, "preview_video_selector", None)
         variable = getattr(self, "preview_video_choice", None)
         self._preview_video_choices = labels
+
+        # A scheduled refresh can discover that the currently playing file
+        # was deleted or moved. Clear it immediately; otherwise VLC keeps
+        # showing stale media even though the selector has refreshed.
+        active_path = getattr(self, "_preview_media_path", None)
+        if active_path is not None and not active_path.is_file():
+            self._clear_video_preview()
+            self._local_media_path = None
+            self.current_thumbnail = None
+            details = getattr(self, "preview_details", None)
+            if details is not None:
+                details.configure(text="")
+            status = getattr(self, "preview_video_status", None)
+            if status is not None:
+                status.set(
+                    self._t("The selected video is no longer available. Choose another video.")
+                )
+
         count_var = getattr(self, "preview_video_count", None)
         if count_var is not None:
             downloading = sum(path.name.casefold().endswith(".part") for path in labels.values())
