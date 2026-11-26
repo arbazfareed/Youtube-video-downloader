@@ -75,22 +75,20 @@ MAX_SPEEDS = {
     "2 MB/s": 2 * 1024 * 1024,
     "5 MB/s": 5 * 1024 * 1024,
 }
-PLAYABLE_MEDIA_EXTENSIONS = {
-    ".aac", ".avi", ".flac", ".m4a", ".mkv", ".mov", ".mp3", ".mp4",
-    ".mpeg", ".mpg", ".ogg", ".wav", ".webm", ".wmv",
-}
+# Everything yt-dlp and ffmpeg commonly save must be playable from History and
+# the Smart Player. ".opus" is YouTube's usual best-audio format; ".ts", ".flv"
+# and ".m4v" come from live and streaming sources.
 VIDEO_MEDIA_EXTENSIONS = {
-    ".avi", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
+    ".3gp", ".avi", ".flv", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg",
+    ".mpg", ".mts", ".ogv", ".ts", ".webm", ".wmv",
 }
 AUDIO_MEDIA_EXTENSIONS = {
-    ".aac", ".flac", ".m4a", ".mp3", ".ogg", ".wav",
+    ".aac", ".flac", ".m4a", ".mka", ".mp3", ".ogg", ".opus", ".wav", ".weba",
+    ".wma",
 }
+PLAYABLE_MEDIA_EXTENSIONS = VIDEO_MEDIA_EXTENSIONS | AUDIO_MEDIA_EXTENSIONS
 FINISHED_STATUSES = {"Complete", "Partial", "Failed", "Cancelled", "Interrupted"}
-MEDIA_EXTENSIONS = {
-    ".aac", ".avi", ".flac", ".gif", ".jpeg", ".jpg", ".m4a", ".mkv",
-    ".mov", ".mp3", ".mp4", ".mpeg", ".mpg", ".ogg", ".png", ".wav",
-    ".webm", ".webp", ".wmv",
-}
+MEDIA_EXTENSIONS = PLAYABLE_MEDIA_EXTENSIONS | {".gif", ".jpeg", ".jpg", ".png", ".webp"}
 
 
 def probe_audio_streams(source: Path, ffmpeg_directory: Path | None = None) -> list[dict]:

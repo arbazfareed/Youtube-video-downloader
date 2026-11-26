@@ -65,6 +65,7 @@ from app_preferences import PreferencesMixin
 from app_queue import QueueMixin
 from app_theme import ThemeMixin
 from app_ui import UiMixin
+from download_scheduler import DEFAULT_PARALLEL_DOWNLOADS, DownloadScheduler
 
 class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, DownloadsMixin, MediaMixin, EventsMixin):
     def __init__(self, root: tk.Tk) -> None:
@@ -136,6 +137,14 @@ class DownloaderApp(UiMixin, ThemeMixin, PreferencesMixin, QueueMixin, Downloads
         self.geo_bypass_country = tk.StringVar(
             value=self.history.get_setting("geo_bypass_country", "")
         )
+        # Downloads run on their own scheduler so searches, update checks and
+        # conversions on self.executor are never stuck behind long downloads.
+        self.max_parallel_downloads = tk.StringVar(
+            value=self.history.get_setting(
+                "max_parallel_downloads", str(DEFAULT_PARALLEL_DOWNLOADS)
+            )
+        )
+        self.download_scheduler = DownloadScheduler(self.max_parallel_downloads.get())
         self.retry_attempts = tk.StringVar(
             value=self.history.get_setting("retry_attempts", "10")
         )

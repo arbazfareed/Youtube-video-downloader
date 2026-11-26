@@ -29,6 +29,7 @@ from app_support import (
     is_torrent_url,
     MAX_SPEEDS,
 )
+from link_compatibility import normalize_link_text, split_pasted_links
 
 class DownloadsMixin:
     @staticmethod
@@ -86,8 +87,17 @@ class DownloadsMixin:
             feedback.set(message)
 
     def inspect_link(self) -> None:
-        from link_compatibility import analyze_link, format_analysis
+        from link_compatibility import (
+            analyze_link,
+            format_analysis,
+            format_multi_link_summary,
+            split_pasted_links,
+        )
 
+        pasted_links = split_pasted_links(self.url_entry.get())
+        if pasted_links:
+            self._set_link_feedback(format_multi_link_summary(pasted_links))
+            return
         result = analyze_link(self.url_entry.get())
         if not result.valid:
             self._set_link_feedback(
@@ -143,6 +153,17 @@ class DownloadsMixin:
         if mode is not None and mode.get().lower() == "image gallery":
             self._start_gallery_scan(url)
             return
+        pasted_links = split_pasted_links(url)
+        if pasted_links:
+            # Several links were pasted at once: queue each as its own download.
+            accepted, _valid = self._add_batch_urls(pasted_links)
+            self.url_entry.delete(0, "end")
+            self._set_link_feedback(
+                f"Added {accepted} of {len(pasted_links)} pasted links to the queue. "
+                "Each one downloads and appears in history on its own."
+            )
+            return
+        url = normalize_link_text(url)
         selected_destination = Path(self.destination.get()).expanduser()
         provider_setting = getattr(self, "cloud_provider", None)
         provider_label = provider_setting.get() if provider_setting else "Local folder"
@@ -369,7 +390,18 @@ class DownloadsMixin:
         resume_event = self.resume_events.get(job_id)
         if options is None or cancel_event is None or resume_event is None or cancel_event.is_set():
             return
-        future = self.executor.submit(
+        scheduler = getattr(self, "download_scheduler", None)
+        if scheduler is not None:
+            # The gate hands this download's slot to the next queued download
+            # while it is paused, and waits for a free slot after Resume.
+            engine_resume_event = scheduler.gate(job_id, resume_event)
+
+            def submit(fn, *args, **kwargs):
+                return scheduler.submit(job_id, fn, *args, **kwargs)
+        else:
+            engine_resume_event = resume_event
+            submit = self.executor.submit
+        future = submit(
             download_url,
             options["url"],
             options["destination"],
@@ -382,7 +414,7 @@ class DownloadsMixin:
                 job_id, status, percent, details
             ),
             options["speed_mode"],
-            resume_event,
+            engine_resume_event,
             options["max_speed"],
             self.bandwidth_limiter,
             job_id,

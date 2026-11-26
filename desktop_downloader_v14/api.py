@@ -10,7 +10,6 @@ import threading
 import tempfile
 import time
 from contextlib import asynccontextmanager
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -22,6 +21,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from bandwidth import GlobalBandwidthLimiter
+from download_scheduler import DEFAULT_PARALLEL_DOWNLOADS, DownloadScheduler
 from download_engine import (
     DownloadCancelled,
     RetryPolicy,
@@ -42,7 +42,8 @@ except ModuleNotFoundError as error:
 _TOKEN = os.environ.get("SMART_DOWNLOADER_API_TOKEN") or secrets.token_urlsafe(32)
 _SECURITY = HTTPBearer(auto_error=False)
 _HANDOFF_SECURITY = HTTPBearer(auto_error=False)
-_EXECUTOR = ThreadPoolExecutor(max_workers=3, thread_name_prefix="download-api")
+# Paused API downloads hand their slot to the next queued job (see download_scheduler).
+_EXECUTOR = DownloadScheduler(DEFAULT_PARALLEL_DOWNLOADS)
 _JOBS: dict[str, "ApiJob"] = {}
 _JOBS_LOCK = threading.Lock()
 _BANDWIDTH_LIMITER = GlobalBandwidthLimiter()
@@ -163,7 +164,7 @@ def _run_job(job: ApiJob) -> None:
             job.cancel_event,
             report,
             request.speed,
-            job.resume_event,
+            _EXECUTOR.gate(job.id, job.resume_event),
             request.cap,
             _BANDWIDTH_LIMITER,
             f"api:{job.id}",
@@ -333,7 +334,7 @@ def create_job(request: JobRequest) -> dict[str, Any]:
     job.resume_event.set()
     with _JOBS_LOCK:
         _JOBS[job.id] = job
-    _EXECUTOR.submit(_run_job, job)
+    _EXECUTOR.submit(job.id, _run_job, job)
     return job.public_record()
 
 

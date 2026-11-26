@@ -25,6 +25,11 @@ from app_support import (
     APP_VERSION,
     translate,
 )
+from download_scheduler import (
+    MAX_PARALLEL_DOWNLOADS,
+    MIN_PARALLEL_DOWNLOADS,
+    clamp_parallel_downloads,
+)
 
 class PreferencesMixin:
     def _save_language_preference(self, *_args: object) -> None:
@@ -54,6 +59,29 @@ class PreferencesMixin:
         country = self.geo_bypass_country.get().strip().upper()
         self.geo_bypass_country.set(country)
         self.history.set_setting("geo_bypass_country", country)
+
+    def _save_parallel_downloads(self, *_args: object) -> None:
+        """Apply the Parallel downloads setting as soon as a valid number is entered."""
+        try:
+            requested = int(self.max_parallel_downloads.get().strip())
+        except ValueError:
+            return  # Still typing; FocusOut restores a valid value.
+        if not MIN_PARALLEL_DOWNLOADS <= requested <= MAX_PARALLEL_DOWNLOADS:
+            return
+        self.history.set_setting("max_parallel_downloads", str(requested))
+        scheduler = getattr(self, "download_scheduler", None)
+        if scheduler is not None:
+            scheduler.set_max_parallel(requested)
+
+    def _normalize_parallel_downloads(self, *_args: object) -> None:
+        value = clamp_parallel_downloads(
+            self.max_parallel_downloads.get(),
+            default=clamp_parallel_downloads(
+                self.history.get_setting("max_parallel_downloads", "")
+            ),
+        )
+        self.max_parallel_downloads.set(str(value))
+        self._save_parallel_downloads()
 
     def _save_media_preferences(self, *_args: object) -> None:
         if hasattr(self, "audio_languages"):
