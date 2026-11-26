@@ -1982,7 +1982,10 @@ def _download_with_ytdlp(
         "progress_hooks": [progress_hook],
         "quiet": True,
         "no_warnings": False,
-        "wait_for_video": (0, 0),
+        # Do not enable yt-dlp's wait_for_video option here. With (0, 0) it re-requests any
+        # page that has no formats (for example YouTube's "Sign in to confirm you're
+        # not a bot" answer) with no delay and no cancel check, forever, until the
+        # site rate-limits the user. Without it yt-dlp reports the real reason once.
     }
     if shutil.which("node"):
         options["js_runtimes"] = {"node": {}}

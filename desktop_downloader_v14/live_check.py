@@ -153,6 +153,13 @@ def run_check(check: Check, index: int, history: DownloadHistory, folder: Path,
             text = " ".join(str(error).split())[:240]
             if timed_out.is_set():
                 text = f"Timed out after {check.timeout}s (no finish); last error: {text}"
+            if "was not created" in text:
+                # Show what the download really left on disk, to spot a name or format mismatch.
+                saved = sorted(
+                    str(item.relative_to(folder / f"{index:02d}"))
+                    for item in (folder / f"{index:02d}").rglob("*") if item.is_file()
+                )
+                text += f" | files on disk: {saved[:6] or 'none'}"
             history.update(history_id, "Failed", "-", text, str(folder))
             outcome["detail"] = text
         finally:
